@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 import { decodeBinaryNode, encodeBinaryNode } from "../../src/binary";
 import type { BinaryNode } from "../../src/binary/types";
 
@@ -23,5 +23,6 @@ const nodeCases: {
 test.each(nodeCases)("Encode/Decode: $description", async ({ node }) => {
   const encoded = encodeBinaryNode(node);
   const decoded = await decodeBinaryNode(encoded);
+
   expect(decoded).toEqual(node);
 });

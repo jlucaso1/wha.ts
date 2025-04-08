@@ -36,7 +36,7 @@ class ConnectionManager extends EventTarget {
   private config: WebSocketConfig;
   private state: "connecting" | "open" | "handshaking" | "closing" | "closed" =
     "closed";
-  private keepAliveInterval: number | null = null;
+  private keepAliveInterval?: ReturnType<typeof setInterval>;
   private lastReceivedDataTime: number = 0;
   private staticKeyPair: KeyPair;
   private routingInfo?: Uint8Array;
@@ -72,10 +72,6 @@ class ConnectionManager extends EventTarget {
 
   private setState(newState: typeof this.state, error?: Error): void {
     if (this.state !== newState) {
-      this.logger.info(
-        { from: this.state, to: newState, err: error?.message },
-        "Connection state changed",
-      );
       this.state = newState;
       this.dispatchEvent(
         new CustomEvent("state.change", { detail: { state: newState, error } }),
@@ -85,28 +81,34 @@ class ConnectionManager extends EventTarget {
 
   private setupWsListeners(): void {
     this.ws.addEventListener("open", this.handleWsOpen);
-    this.ws.addEventListener("message", ((event: Event) => {
-      if (event instanceof CustomEvent) {
-        this.handleWsMessage(event.detail);
-      }
-    }) as EventListener);
-    this.ws.addEventListener("error", ((event: Event) => {
-      if (event instanceof CustomEvent) {
-        this.handleWsError(event.detail);
-      }
-    }) as EventListener);
-    this.ws.addEventListener("close", ((event: Event) => {
-      if (event instanceof CustomEvent) {
-        this.handleWsClose(event.detail.code, event.detail.reason);
-      }
-    }) as EventListener);
+    this.ws.addEventListener(
+      "message",
+      ((event: Event) => {
+        if (event instanceof CustomEvent) {
+          this.handleWsMessage(event.detail);
+        }
+      }) as EventListener,
+    );
+    this.ws.addEventListener(
+      "error",
+      ((event: Event) => {
+        if (event instanceof CustomEvent) {
+          this.handleWsError(event.detail);
+        }
+      }) as EventListener,
+    );
+    this.ws.addEventListener(
+      "close",
+      ((event: Event) => {
+        if (event instanceof CustomEvent) {
+          this.handleWsClose(event.detail.code, event.detail.reason);
+        }
+      }) as EventListener,
+    );
   }
 
   private removeWsListeners(): void {
     this.ws.removeEventListener("open", this.handleWsOpen);
-    // For the other event handlers, we need to keep a reference to the wrapper functions
-    // The current approach won't work because anonymous functions create new references each time
-    // Instead, we'll store the wrapper functions as instance properties and use those references
   }
 
   async connect(): Promise<void> {
@@ -133,7 +135,9 @@ class ConnectionManager extends EventTarget {
     this.lastReceivedDataTime = Date.now();
 
     try {
-      const handshakeMsg = this.noiseProcessor.generateInitialHandshakeMessage(this.ephemeralKeys);
+      const handshakeMsg = this.noiseProcessor.generateInitialHandshakeMessage(
+        this.ephemeralKeys,
+      );
 
       const frame = await this.noiseProcessor.encodeFrame(handshakeMsg);
       await this.ws.send(frame);
@@ -166,7 +170,9 @@ class ConnectionManager extends EventTarget {
           clientPayload,
         );
 
-        const payloadEnc = await this.noiseProcessor.encryptMessage(clientPayloadBytes);
+        const payloadEnc = await this.noiseProcessor.encryptMessage(
+          clientPayloadBytes,
+        );
 
         const clientFinishMsg = create(
           HandshakeMessageSchema,
@@ -306,7 +312,7 @@ class ConnectionManager extends EventTarget {
   private stopKeepAlive(): void {
     if (this.keepAliveInterval) {
       clearInterval(this.keepAliveInterval);
-      this.keepAliveInterval = null;
+      this.keepAliveInterval = undefined;
       this.logger.info("Stopped keep-alive interval");
     }
   }
@@ -331,7 +337,9 @@ class ConnectionManager extends EventTarget {
     );
     this.stopKeepAlive();
     this.removeWsListeners();
-    this.dispatchEvent(new CustomEvent("ws.close", { detail: { code, reason } }));
+    this.dispatchEvent(
+      new CustomEvent("ws.close", { detail: { code, reason } }),
+    );
     if (error) this.dispatchEvent(new CustomEvent("error", { detail: error }));
   };
 
@@ -342,12 +350,15 @@ class ConnectionManager extends EventTarget {
     this.setState("closing", error);
     this.stopKeepAlive();
     try {
-      await this.ws.close(
-        error ? 1011 : 1000,
-        error?.message || "User initiated close",
-      );
+      const closeCode = 1000;
+      const closeReason = error?.message || "User initiated close";
+
+      await this.ws.close(closeCode, closeReason);
     } catch (wsError: any) {
-      this.logger.warn({ err: wsError }, "Error during WebSocket close");
+      this.logger.error(
+        { err: wsError },
+        "Error explicitly closing WebSocket in ConnectionManager",
+      );
       this.handleWsClose(
         wsError.code || 1011,
         wsError.message || "Forced close after error",

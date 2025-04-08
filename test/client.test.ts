@@ -1,45 +1,44 @@
-import { test, expect, mock, beforeEach, spyOn } from "bun:test";
-import { WhaTSClient, MemoryAuthState } from "../src/client";
-import { ConnectionManager } from "../src/core/connection";
-import { Authenticator } from "../src/core/authenticator";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { MemoryAuthState, WhaTSClient } from "../src/client";
 
-mock.module("../src/core/connection", () => ({
-    ConnectionManager: mock(() => ({
-        connect: mock(async () => {}),
-        close: mock(async () => {}),
-        sendNode: mock(async () => {}),
-        addEventListener: mock(),
-        removeEventListener: mock(),
+vi.mock("../src/core/connection", () => ({
+    ConnectionManager: vi.fn(() => ({
+        connect: vi.fn(async () => {}),
+        close: vi.fn(async () => {}),
+        sendNode: vi.fn(async () => {}),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
     })),
 }));
-mock.module("../src/core/authenticator", () => ({
-    Authenticator: mock(() => ({
-        initiateAuthentication: mock(() => ({})),
-        addEventListener: mock((event: string, cb: (e: any) => void) => {
+
+vi.mock("../src/core/authenticator", () => ({
+    Authenticator: vi.fn(() => ({
+        initiateAuthentication: vi.fn(() => ({})),
+        addEventListener: vi.fn((event: string, cb: (e: any) => void) => {
         }),
-        removeEventListener: mock(),
+        removeEventListener: vi.fn(),
     })),
 }));
 
-
+let client: WhaTSClient;
+let authState: MemoryAuthState;
 
 beforeEach(() => {
-    mock.restore();
-
-    const client = new WhaTSClient({ auth: new MemoryAuthState() });
-
-
+    authState = new MemoryAuthState();
+    client = new WhaTSClient({ auth: authState });
 });
 
-test("constructor initializes components", () => {
-    const authState = new MemoryAuthState();
-    const client = new WhaTSClient({ auth: authState });
+afterEach(() => {
+    vi.restoreAllMocks();
+});
+
+test("constructor initializes components correctly", () => {
+    expect(client).toBeDefined();
     expect(client.auth).toBe(authState);
 });
 
 test("connect calls ConnectionManager.connect", async () => {
-    const client = new WhaTSClient({ auth: new MemoryAuthState() });
-    const connectMock = client['conn'].connect;
+    const connectMock = vi.mocked(client["conn"].connect);
 
     await client.connect();
 
@@ -47,11 +46,19 @@ test("connect calls ConnectionManager.connect", async () => {
 });
 
 test("logout calls ConnectionManager.close", async () => {
-    const client = new WhaTSClient({ auth: new MemoryAuthState() });
-     const closeMock = client['conn'].close;
+    const closeMock = vi.mocked(client["conn"].close);
 
     await client.logout();
 
     expect(closeMock).toHaveBeenCalledTimes(1);
 });
 
+test("logout with reason calls ConnectionManager.close with corresponding error", async () => {
+    const closeMock = vi.mocked(client["conn"].close);
+    const reason = "Test Reason";
+
+    await client.logout(reason);
+
+    expect(closeMock).toHaveBeenCalledTimes(1);
+    expect(closeMock).toHaveBeenCalledWith(new Error(reason));
+});

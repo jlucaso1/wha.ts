@@ -3,9 +3,14 @@
   "module": "example.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "coverage": "vitest run --coverage"
+  },
   "devDependencies": {
-    "@types/bun": "^1.2.8",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.1.1"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",

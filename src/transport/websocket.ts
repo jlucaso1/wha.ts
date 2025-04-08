@@ -120,7 +120,6 @@ export class NativeWebSocketClient extends IWebSocketClient {
       return Promise.resolve();
     }
 
-    this.config.logger.info({ code, reason }, "Closing WebSocket");
     return new Promise((resolve) => {
       this.once("close", resolve);
       this.socket?.close(code, reason);
@@ -128,7 +127,6 @@ export class NativeWebSocketClient extends IWebSocketClient {
   }
 
   private handleOpen = (): void => {
-    this.config.logger.info({}, "WebSocket opened");
     this.connectionPromise?.resolve();
     this.connectionPromise = null;
     this.dispatchEvent(new CustomEvent("open"));
@@ -161,7 +159,6 @@ export class NativeWebSocketClient extends IWebSocketClient {
 
   private handleClose = (event: any): void => {
     const { code, reason } = event;
-    this.config.logger.info({ code, reason }, "WebSocket closed");
     const error = this.connectionPromise
       ? new Error(`WebSocket closed before opening: ${code} ${reason}`)
       : undefined;
