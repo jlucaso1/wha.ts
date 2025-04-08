@@ -3,11 +3,7 @@
   "module": "example.ts",
   "type": "module",
   "private": true,
-  "scripts": {
-    "proto:gen": "npx @bufbuild/buf generate"
-  },
   "devDependencies": {
-    "@bufbuild/protoc-gen-es": "^2.2.5",
     "typescript": "^5"
   },
   "dependencies": {
