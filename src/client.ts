@@ -1,6 +1,3 @@
-import { EventEmitter } from "node:events";
-import { URL } from "node:url";
-
 import {
   type AuthenticationCreds,
   type IAuthStateProvider,
@@ -10,7 +7,6 @@ import type { ILogger, WebSocketConfig } from "./transport/types";
 import { ConnectionManager } from "./core/connection";
 import { Authenticator, type AuthenticatorEvents } from "./core/authenticator";
 import { DEFAULT_BROWSER, DEFAULT_SOCKET_CONFIG, WA_VERSION } from "./defaults";
-import type { BinaryNode } from "./binary";
 
 export interface ClientConfig {
   auth: IAuthStateProvider;
@@ -25,25 +21,27 @@ export interface ClientEvents extends AuthenticatorEvents {
   "creds.update": AuthenticatorEvents["creds.update"];
 }
 
+// Use a regular interface without extending EventTarget (avoids the conflict)
 declare interface WhaTSClient {
-  on<U extends keyof ClientEvents>(event: U, listener: ClientEvents[U]): this;
-  emit<U extends keyof ClientEvents>(
-    event: U,
-    ...args: Parameters<ClientEvents[U]>
-  ): boolean;
   ws: ConnectionManager["ws"];
   auth: IAuthStateProvider;
   logger: ILogger;
+  
+  // Add methods for actual usage
+  connect(): Promise<void>;
+  logout(reason?: string): Promise<void>;
+  
+  // Type-safe method to add event listeners
+  addListener<K extends keyof ClientEvents>(event: K, listener: (data: Parameters<ClientEvents[K]>[0]) => void): void;
 }
 
-class WhaTSClient extends EventEmitter {
+class WhaTSClient extends EventTarget {
   private config: Required<Omit<ClientConfig, "logger">> & { logger: ILogger };
   private conn: ConnectionManager;
   private authenticator: Authenticator;
 
   constructor(config: ClientConfig) {
     super();
-    this.setMaxListeners(0);
 
     const logger = config.logger || console as ILogger;
 
@@ -78,34 +76,32 @@ class WhaTSClient extends EventEmitter {
       this.logger,
     );
 
-    this.authenticator.on("connection.update", (update) => {
-      this.emit("connection.update", update);
-      if (update.connection === "close" && update.error) {
-        throw update.error;
-      }
+    this.authenticator.addEventListener("connection.update", (event: any) => {
+      this.dispatchEvent(new CustomEvent("connection.update", { detail: event.detail }));
     });
 
-    this.authenticator.on("creds.update", (update) => {
+    this.authenticator.addEventListener("creds.update", (event: any) => {
       this.logger.info("Saving updated credentials...");
       this.auth
         .saveCreds()
         .then(() => {
           this.logger.info("Credentials saved successfully");
-          this.emit("creds.update", update);
+          this.dispatchEvent(new CustomEvent("creds.update", { detail: event.detail }));
         })
         .catch((err) => {
           this.logger.error({ err }, "Failed to save credentials");
         });
     });
 
-    this.authenticator.on("_internal.sendNode", (node: BinaryNode) => {
-      this.logger.debug({ tag: node.tag }, "Authenticator requested sendNode");
-      this.conn.sendNode(node).catch((err) => {
+    this.authenticator.addEventListener("_internal.sendNode", (event: any) => {
+      this.logger.debug({ tag: event.detail.tag }, "Authenticator requested sendNode");
+      this.conn.sendNode(event.detail).catch((err) => {
         this.logger.error({ err }, "Failed to send node requested by Authenticator");
       });
     });
 
-    this.authenticator.on("_internal.closeConnection", (error?: Error) => {
+    this.authenticator.addEventListener("_internal.closeConnection", (event: any) => {
+      const error = event.detail;
       this.logger.debug({ err: error }, "Authenticator requested connection close");
       this.conn.close(error).catch((err) => {
         this.logger.error({ err }, "Error closing connection on Authenticator request");
@@ -113,6 +109,13 @@ class WhaTSClient extends EventEmitter {
     });
 
     this.logger.info("Wha.ts Client Initialized");
+  }
+  
+  // Implement the type-safe helper method
+  addListener<K extends keyof ClientEvents>(event: K, listener: (data: Parameters<ClientEvents[K]>[0]) => void): void {
+    this.addEventListener(event, ((e: CustomEvent) => {
+      listener(e.detail);
+    }) as EventListener);
   }
 
   async connect(): Promise<void> {

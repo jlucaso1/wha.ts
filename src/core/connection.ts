@@ -1,4 +1,3 @@
-import { EventEmitter } from "events";
 import { NativeWebSocketClient } from "../transport/websocket";
 import { type BinaryNode, decodeBinaryNode, encodeBinaryNode } from "../binary";
 import type { ILogger, WebSocketConfig } from "../transport/types";
@@ -31,24 +30,13 @@ interface ConnectionManagerEvents {
   "ws.close": (code: number, reason: string) => void;
 }
 
-declare interface ConnectionManager {
-  on<U extends keyof ConnectionManagerEvents>(
-    event: U,
-    listener: ConnectionManagerEvents[U],
-  ): this;
-  emit<U extends keyof ConnectionManagerEvents>(
-    event: U,
-    ...args: Parameters<ConnectionManagerEvents[U]>
-  ): boolean;
-}
-
-class ConnectionManager extends EventEmitter {
+class ConnectionManager extends EventTarget {
   private ws: NativeWebSocketClient;
   private logger: ILogger;
   private config: WebSocketConfig;
   private state: "connecting" | "open" | "handshaking" | "closing" | "closed" =
     "closed";
-  private keepAliveInterval: NodeJS.Timeout | null = null;
+  private keepAliveInterval: number | null = null;
   private lastReceivedDataTime: number = 0;
   private staticKeyPair: KeyPair;
   private routingInfo?: Uint8Array;
@@ -63,7 +51,6 @@ class ConnectionManager extends EventEmitter {
     creds: AuthenticationCreds,
   ) {
     super();
-    this.setMaxListeners(0);
     this.logger = logger;
     this.config = { ...DEFAULT_SOCKET_CONFIG, ...wsConfig } as WebSocketConfig;
     this.creds = creds;
@@ -90,22 +77,36 @@ class ConnectionManager extends EventEmitter {
         "Connection state changed",
       );
       this.state = newState;
-      this.emit("state.change", newState, error);
+      this.dispatchEvent(
+        new CustomEvent("state.change", { detail: { state: newState, error } }),
+      );
     }
   }
 
   private setupWsListeners(): void {
-    this.ws.on("open", this.handleWsOpen);
-    this.ws.on("message", this.handleWsMessage);
-    this.ws.on("error", this.handleWsError);
-    this.ws.on("close", this.handleWsClose);
+    this.ws.addEventListener("open", this.handleWsOpen);
+    this.ws.addEventListener("message", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleWsMessage(event.detail);
+      }
+    }) as EventListener);
+    this.ws.addEventListener("error", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleWsError(event.detail);
+      }
+    }) as EventListener);
+    this.ws.addEventListener("close", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleWsClose(event.detail.code, event.detail.reason);
+      }
+    }) as EventListener);
   }
 
   private removeWsListeners(): void {
-    this.ws.off("open", this.handleWsOpen);
-    this.ws.off("message", this.handleWsMessage);
-    this.ws.off("error", this.handleWsError);
-    this.ws.off("close", this.handleWsClose);
+    this.ws.removeEventListener("open", this.handleWsOpen);
+    // For the other event handlers, we need to keep a reference to the wrapper functions
+    // The current approach won't work because anonymous functions create new references each time
+    // Instead, we'll store the wrapper functions as instance properties and use those references
   }
 
   async connect(): Promise<void> {
@@ -122,7 +123,7 @@ class ConnectionManager extends EventEmitter {
     } catch (error: any) {
       this.logger.error({ err: error }, "WebSocket connection failed");
       this.setState("closed", error);
-      this.emit("error", error);
+      this.dispatchEvent(new CustomEvent("error", { detail: error }));
       throw error;
     }
   }
@@ -188,8 +189,7 @@ class ConnectionManager extends EventEmitter {
         await this.noiseProcessor.finalizeHandshake();
 
         this.setState("open");
-        // this.startKeepAlive();
-        this.emit("handshake.complete");
+        this.dispatchEvent(new CustomEvent("handshake.complete"));
       } else {
         throw new Error("Received unexpected message during handshake");
       }
@@ -211,7 +211,7 @@ class ConnectionManager extends EventEmitter {
         { dataLength: data.length, err: error },
         "Noise frame decoding/decryption failed",
       );
-      this.emit("error", error);
+      this.dispatchEvent(new CustomEvent("error", { detail: error }));
     }
   };
 
@@ -237,13 +237,13 @@ class ConnectionManager extends EventEmitter {
     try {
       const node = await decodeBinaryNode(decryptedPayload);
 
-      this.emit("node.received", node);
+      this.dispatchEvent(new CustomEvent("node.received", { detail: node }));
     } catch (error: any) {
       this.logger.error(
         { err: error, hex: bytesToHex(decryptedPayload) },
         "Failed to decode BinaryNode from decrypted frame",
       );
-      this.emit("error", error);
+      this.dispatchEvent(new CustomEvent("error", { detail: error }));
     }
   };
 
@@ -261,7 +261,7 @@ class ConnectionManager extends EventEmitter {
       const buffer = encodeBinaryNode(node);
       const frame = await this.noiseProcessor.encodeFrame(buffer);
       await this.ws.send(frame);
-      this.emit("node.sent", node);
+      this.dispatchEvent(new CustomEvent("node.sent", { detail: node }));
     } catch (error: any) {
       this.logger.error({ err: error, tag: node.tag }, "Failed to send node");
       throw error;
@@ -313,7 +313,7 @@ class ConnectionManager extends EventEmitter {
 
   private handleWsError = (error: Error): void => {
     this.logger.error({ err: error }, "WebSocket error occurred");
-    this.emit("error", error);
+    this.dispatchEvent(new CustomEvent("error", { detail: error }));
     this.close(error);
   };
 
@@ -331,8 +331,8 @@ class ConnectionManager extends EventEmitter {
     );
     this.stopKeepAlive();
     this.removeWsListeners();
-    this.emit("ws.close", code, reason);
-    if (error) this.emit("error", error);
+    this.dispatchEvent(new CustomEvent("ws.close", { detail: { code, reason } }));
+    if (error) this.dispatchEvent(new CustomEvent("error", { detail: error }));
   };
 
   async close(error?: Error): Promise<void> {

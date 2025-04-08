@@ -59,7 +59,7 @@ const getUserAgent = (
     mcc: "000",
     mnc: "000",
     osVersion: browser[2] || "0.1",
-    device: browser[1] || "NodeJS",
+    device: browser[1] || "Desktop",
     osBuildNumber: "0.1",
     releaseChannel: ClientPayload_UserAgent_ReleaseChannel.RELEASE,
     localeLanguageIso6391: "en",

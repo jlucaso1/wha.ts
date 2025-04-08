@@ -1,4 +1,3 @@
-import { EventEmitter } from "node:events";
 import type { ConnectionManager } from "./connection";
 import type {
   AuthenticationCreds,
@@ -38,22 +37,11 @@ interface AuthenticatorEvents {
   "_internal.closeConnection": (error?: Error) => void;
 }
 
-declare interface Authenticator {
-  on<U extends keyof AuthenticatorEvents>(
-    event: U,
-    listener: AuthenticatorEvents[U],
-  ): this;
-  emit<U extends keyof AuthenticatorEvents>(
-    event: U,
-    ...args: Parameters<AuthenticatorEvents[U]>
-  ): boolean;
-}
-
-class Authenticator extends EventEmitter {
+class Authenticator extends EventTarget {
   private conn: ConnectionManager;
   private authState: IAuthStateProvider;
   private logger: ILogger;
-  private qrTimeout?: NodeJS.Timeout;
+  private qrTimeout?: number;
   private qrRetryCount = 0;
   private processingPairSuccess = false;
 
@@ -70,14 +58,24 @@ class Authenticator extends EventEmitter {
     this.authState = authStateProvider;
     this.logger = logger;
 
-    this.conn.on("handshake.complete", this.handleHandshakeComplete);
-    this.conn.on("node.received", this.handleNodeReceived);
-    this.conn.on("error", (error) => {
-      this.logger.error({ err: error }, "Connection error");
-      this.clearQrTimeout();
-      this.emit("connection.update", { connection: "close", error });
-    });
-    this.conn.on("ws.close", (_code, _reason) => {
+    this.conn.addEventListener("handshake.complete", this.handleHandshakeComplete);
+    
+    this.conn.addEventListener("node.received", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleNodeReceived(event.detail);
+      }
+    }) as EventListener);
+    
+    this.conn.addEventListener("error", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        const error = event.detail;
+        this.logger.error({ err: error }, "Connection error");
+        this.clearQrTimeout();
+        this.dispatchEvent(new CustomEvent("connection.update", { detail: { connection: "close", error } }));
+      }
+    }) as EventListener);
+    
+    this.conn.addEventListener("ws.close", (_event) => {
       this.clearQrTimeout();
     });
   }
@@ -110,7 +108,7 @@ class Authenticator extends EventEmitter {
         { err: error },
         "Failed to prepare initial client payload",
       );
-      this.emit("connection.update", { connection: "close", error });
+      this.dispatchEvent(new CustomEvent("connection.update", { detail: { connection: "close", error } }));
       throw error;
     }
   }
@@ -145,15 +143,6 @@ class Authenticator extends EventEmitter {
     const pairDeviceNode = getBinaryNodeChild(node, "pair-device")!;
     const refNodes = getBinaryNodeChildren(pairDeviceNode, "ref");
 
-    const ack: BinaryNode = {
-      tag: "iq",
-      attrs: {
-        to: S_WHATSAPP_NET,
-        type: "result",
-      },
-    };
-    this.emit("_internal.sendNode", ack);
-
     this.qrRetryCount = 0;
     this.generateAndEmitQR(refNodes);
   }
@@ -168,8 +157,8 @@ class Authenticator extends EventEmitter {
         "No more QR refs available, pairing timed out/failed",
       );
       const error = new Error("QR code generation failed (no refs left)");
-      this.emit("connection.update", { connection: "close", error: error });
-      this.emit("_internal.closeConnection", error);
+      this.dispatchEvent(new CustomEvent("connection.update", { detail: { connection: "close", error } }));
+      this.dispatchEvent(new CustomEvent("_internal.closeConnection", { detail: error }));
       return;
     }
 
@@ -187,7 +176,7 @@ class Authenticator extends EventEmitter {
       { qrCodeLength: qr.length, retry: this.qrRetryCount },
       "Generated QR Code",
     );
-    this.emit("connection.update", { qr });
+    this.dispatchEvent(new CustomEvent("connection.update", { detail: { qr } }));
 
     const timeoutMs = this.qrRetryCount === 0
       ? this.initialQrTimeoutMs
@@ -353,19 +342,19 @@ class Authenticator extends EventEmitter {
       Object.assign(this.authState.creds, updatedCreds);
       await this.authState.saveCreds();
 
-      this.emit("_internal.sendNode", reply);
+      this.dispatchEvent(new CustomEvent("_internal.sendNode", { detail: reply }));
       this.logger.info("Sent pair-success confirmation reply");
 
-      this.emit("creds.update", updatedCreds);
-      this.emit("connection.update", { isNewLogin: true, qr: undefined });
+      this.dispatchEvent(new CustomEvent("creds.update", { detail: updatedCreds }));
+      this.dispatchEvent(new CustomEvent("connection.update", { detail: { isNewLogin: true, qr: undefined } }));
 
       this.logger.info(
         "Pairing complete, expecting connection close and restart",
       );
     } catch (error: any) {
       this.logger.error({ err: error }, "Error processing pair-success IQ");
-      this.emit("connection.update", { connection: "close", error });
-      this.emit("_internal.closeConnection", error);
+      this.dispatchEvent(new CustomEvent("connection.update", { detail: { connection: "close", error } }));
+      this.dispatchEvent(new CustomEvent("_internal.closeConnection", { detail: error }));
     } finally {
       this.processingPairSuccess = false;
     }
@@ -393,13 +382,13 @@ class Authenticator extends EventEmitter {
       Object.assign(this.authState.creds, updates);
       this.authState
         .saveCreds()
-        .then(() => this.emit("creds.update", updates))
+        .then(() => this.dispatchEvent(new CustomEvent("creds.update", { detail: updates })))
         .catch((err) =>
           this.logger.error({ err }, "Failed to save creds after login")
         );
     }
 
-    this.emit("connection.update", { connection: "open" });
+    this.dispatchEvent(new CustomEvent("connection.update", { detail: { connection: "open" } }));
   }
 
   private handleLoginFailure(node: BinaryNode): void {
@@ -410,8 +399,8 @@ class Authenticator extends EventEmitter {
     (error as any).code = code;
 
     this.clearQrTimeout();
-    this.emit("connection.update", { connection: "close", error });
-    this.emit("_internal.closeConnection", error);
+    this.dispatchEvent(new CustomEvent("connection.update", { detail: { connection: "close", error } }));
+    this.dispatchEvent(new CustomEvent("_internal.closeConnection", { detail: error }));
   }
 }
 

@@ -1,7 +1,3 @@
-import type { Agent } from "node:https";
-import EventEmitter from "node:events";
-import type { URL } from "node:url";
-
 export interface ILogger {
   info(obj: unknown, msg?: string): void;
   error(obj: unknown, msg?: string): void;
@@ -14,13 +10,12 @@ export interface WebSocketConfig {
   url: URL;
   connectTimeoutMs: number;
   logger: ILogger;
-  agent?: Agent;
   origin?: string;
   headers?: { [key: string]: string };
   keepAliveIntervalMs?: number;
 }
 
-export abstract class IWebSocketClient extends EventEmitter {
+export abstract class IWebSocketClient extends EventTarget {
   abstract get isOpen(): boolean;
   abstract get isClosed(): boolean;
   abstract get isConnecting(): boolean;
@@ -28,7 +23,6 @@ export abstract class IWebSocketClient extends EventEmitter {
 
   constructor(public url: URL, public config: WebSocketConfig) {
     super();
-    this.setMaxListeners(0);
   }
 
   abstract connect(): Promise<void>;

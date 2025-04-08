@@ -1,4 +1,3 @@
-import type { URL } from "node:url";
 import { IWebSocketClient, type WebSocketConfig } from "./types";
 
 const CONNECTING = 0;
@@ -28,6 +27,17 @@ export class NativeWebSocketClient extends IWebSocketClient {
   }
   get isClosing(): boolean {
     return this.socket?.readyState === CLOSING;
+  }
+
+  once(eventName: string, listener: (...args: any[]) => void) {
+    const handler = (event: Event | CustomEvent) => {
+      if (event instanceof CustomEvent) {
+        listener(event.detail);
+      } else {
+        listener(event);
+      }
+    };
+    this.addEventListener(eventName, handler, { once: true });
   }
 
   connect(): Promise<void> {
@@ -121,7 +131,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
     this.config.logger.info({}, "WebSocket opened");
     this.connectionPromise?.resolve();
     this.connectionPromise = null;
-    this.emit("open");
+    this.dispatchEvent(new CustomEvent("open"));
   };
 
   private handleMessage = (event: MessageEvent): void => {
@@ -138,7 +148,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
       );
       return;
     }
-    this.emit("message", bufferData);
+    this.dispatchEvent(new CustomEvent("message", { detail: bufferData }));
   };
 
   private handleError = (_event: Event): void => {
@@ -146,7 +156,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
     this.config.logger.error({ err: error }, "WebSocket error");
     this.connectionPromise?.reject(error);
     this.connectionPromise = null;
-    this.emit("error", error);
+    this.dispatchEvent(new CustomEvent("error", { detail: error }));
   };
 
   private handleClose = (event: any): void => {
@@ -161,7 +171,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
     this.connectionPromise = null;
     this.removeListeners();
     this.socket = null;
-    this.emit("close", code, reason);
+    this.dispatchEvent(new CustomEvent("close", { detail: { code, reason } }));
   };
 
   private removeListeners(): void {
@@ -178,7 +188,9 @@ export class NativeWebSocketClient extends IWebSocketClient {
     }
     this.removeListeners();
     this.socket = null;
-    this.emit("error", error);
-    this.emit("close", 1011, "Internal Error");
+    this.dispatchEvent(new CustomEvent("error", { detail: error }));
+    this.dispatchEvent(new CustomEvent("close", { detail: { code: 1011, reason: "Internal Error" } }));
   }
 }
+
+Object.setPrototypeOf(NativeWebSocketClient.prototype, EventTarget.prototype);

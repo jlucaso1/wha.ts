@@ -1,6 +1,5 @@
 import { renderUnicodeCompact } from "uqr";
 import { createWAClient, MemoryAuthState } from "./src/client";
-import process from "node:process";
 
 async function runExample() {
   console.log("Initializing Wha.ts client...");
@@ -21,7 +20,7 @@ async function runExample() {
 
   console.log("Setting up event listeners...");
 
-  client.on("connection.update", (update) => {
+  client.addListener("connection.update", (update) => {
     console.log("[CONNECTION UPDATE]", JSON.stringify(update));
 
     const { connection, qr, isNewLogin, error } = update;
@@ -30,7 +29,7 @@ async function runExample() {
       console.log(
         "\n------------------------- QR CODE -------------------------",
       );
-      console.log(renderUnicodeCompact(qr,));
+      console.log(renderUnicodeCompact(qr));
       console.log(
         "-----------------------------------------------------------",
       );
@@ -59,24 +58,12 @@ async function runExample() {
 
     if (connection === "close") {
       const reason = error?.message || "Unknown reason";
-      const shouldReconnect = (error as any)?.reason !== 401;
 
       console.log(`❌ Connection closed. Reason: ${reason}`);
-      if (shouldReconnect) {
-        console.log(
-          "   Connection closed unexpectedly. You might need to restart.",
-        );
-        process.exit(1);
-      } else {
-        console.log(
-          "   Connection closed (likely intended, e.g., logout or credential issue).",
-        );
-        process.exit(0);
-      }
     }
   });
 
-  client.on("creds.update", (_creds) => {
+  client.addListener("creds.update", (_creds) => {
     console.log("[CREDS UPDATE]", "Credentials were updated.");
   });
 
@@ -87,23 +74,9 @@ async function runExample() {
     );
   } catch (error) {
     console.error("💥 Failed to initiate connection:", error);
-    process.exit(1);
   }
-
-  process.on("SIGINT", async () => {
-    console.log("\nReceived SIGINT (Ctrl+C). Logging out...");
-    try {
-      await client.logout("User interrupted");
-    } catch (err) {
-      console.error("Error during logout:", err);
-    } finally {
-      console.log("Exiting.");
-      process.exit(0);
-    }
-  });
 }
 
 runExample().catch((err) => {
   console.error("Unhandled error during script execution:", err);
-  process.exit(1);
 });
