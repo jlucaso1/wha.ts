@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@types/bun": "^1.2.8",
     "typescript": "^5"
   },
   "dependencies": {

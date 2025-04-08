@@ -9,7 +9,7 @@ export const encodeBinaryNode = (node: BinaryNode): Uint8Array => {
   bufferList.length = 0;
   try {
     encodeBinaryNodeInternal(node, bufferList);
-    return new Uint8Array(bufferList);
+    return new Uint8Array([0x00, ...bufferList]);
   } catch (error) {
     console.error("Binary encoding error:", error);
     throw error;
@@ -138,6 +138,8 @@ const encodeBinaryNodeInternal = (
     for (const item of content) {
       encodeBinaryNodeInternal(item, buffer);
     }
+  } else if (typeof content === "undefined") {
+    // do nothing
   } else {
     throw new Error(
       `Cannot encode content of type ${typeof content}: ${content}`,
