@@ -1,14 +1,15 @@
 import { bytesToUtf8 } from "../utils/bytes-utils";
 import * as constants from "./constants";
 import { jidEncode } from "./jid-utils";
+import { decompressData } from "./node-utils";
 import type { BinaryNode } from "./types";
 
-export const decompressingIfRequired = (buffer: Uint8Array) => {
-	const prefix = buffer[0]!;
+export const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
+	const prefix = originalBuffer[0]!;
+	const buffer = originalBuffer.slice(1);
 	if ((prefix & 2) !== 0) {
-		throw new Error("zlib decompression not supported");
-	} else {
-		buffer = buffer.slice(1);
+		const decompressedData = await decompressData(buffer);
+		return decompressedData;
 	}
 
 	return buffer;

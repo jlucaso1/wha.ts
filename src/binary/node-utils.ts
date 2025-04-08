@@ -53,3 +53,23 @@ export const getBinaryNodeChildBuffer = (
 
   return undefined;
 };
+
+export async function decompressData(
+  compressedData: Uint8Array,
+): Promise<Uint8Array> {
+  const readableStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(compressedData);
+      controller.close();
+    },
+  });
+
+  const decompressionStream = new DecompressionStream("deflate");
+
+  const decompressedStream = readableStream.pipeThrough(decompressionStream);
+
+  const response = new Response(decompressedStream);
+  const decompressedArrayBuffer = await response.arrayBuffer();
+
+  return new Uint8Array(decompressedArrayBuffer);
+}
