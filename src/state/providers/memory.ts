@@ -2,21 +2,18 @@ import type {
   AuthenticationCreds,
   IAuthStateProvider,
   ISignalProtocolStore,
-  SignalDataTypeMap,
   SignalDataSet,
+  SignalDataTypeMap,
 } from "../interface";
 import { initAuthCreds } from "../utils";
-import { Buffer } from "node:buffer";
 
-// Simple deep clone function for objects with Buffers/Uint8Arrays
-// JSON stringify/parse won't handle them correctly without reviver/replacer
 const deepClone = <T>(obj: T): T => {
   if (obj === null || typeof obj !== "object") {
     return obj;
   }
 
-  if (obj instanceof Uint8Array || Buffer.isBuffer(obj)) {
-    return Buffer.from(obj) as T; // Clone Buffers/Uint8Arrays
+  if (obj instanceof Uint8Array) {
+    return new Uint8Array(obj) as T;
   }
 
   if (Array.isArray(obj)) {
@@ -33,12 +30,11 @@ const deepClone = <T>(obj: T): T => {
 };
 
 class MemorySignalKeyStore implements ISignalProtocolStore {
-  // Store structure: Map<DataType, Map<ID, Data>>
   private store = new Map<keyof SignalDataTypeMap, Map<string, any>>();
 
   async get<T extends keyof SignalDataTypeMap>(
     type: T,
-    ids: string[]
+    ids: string[],
   ): Promise<{ [id: string]: SignalDataTypeMap[T] | undefined }> {
     const typeStore = this.store.get(type);
     const results: { [id: string]: SignalDataTypeMap[T] | undefined } = {};
@@ -46,7 +42,6 @@ class MemorySignalKeyStore implements ISignalProtocolStore {
       for (const id of ids) {
         const value = typeStore.get(id);
         if (value !== undefined) {
-          // Deep clone to prevent external modification of the stored object
           results[id] = deepClone(value) as SignalDataTypeMap[T];
         }
       }
@@ -67,17 +62,11 @@ class MemorySignalKeyStore implements ISignalProtocolStore {
         if (value === null || value === undefined) {
           typeStore.delete(id);
         } else {
-          // Deep clone before storing
           typeStore.set(id, deepClone(value));
         }
       }
     }
   }
-
-  // Optional: Implement clear if needed
-  // async clear(): Promise<void> {
-  //     this.store.clear();
-  // }
 }
 
 export class MemoryAuthState implements IAuthStateProvider {
@@ -87,12 +76,8 @@ export class MemoryAuthState implements IAuthStateProvider {
   constructor(creds?: AuthenticationCreds) {
     this.creds = creds || initAuthCreds();
     this.keys = new MemorySignalKeyStore();
-    // TODO: Potentially load initial keys into the memory store if creds are passed
   }
 
-  /** In-memory store doesn't need explicit saving, but fulfills the interface */
   async saveCreds(): Promise<void> {
-    // console.log('MemoryAuthState: saveCreds called (no-op)');
-    // No actual file writing needed for the memory store
   }
 }

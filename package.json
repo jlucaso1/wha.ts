@@ -1,6 +1,6 @@
 {
   "name": "wha.ts",
-  "module": "index.ts",
+  "module": "example.ts",
   "type": "module",
   "private": true,
   "scripts": {
@@ -8,16 +8,13 @@
   },
   "devDependencies": {
     "@bufbuild/protoc-gen-es": "^2.2.5",
-    "@types/bun": "latest",
-    "@types/node": "^22.13.14",
-    "@types/qrcode-terminal": "^0.12.2",
     "typescript": "^5"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",
+    "@noble/ciphers": "^1.2.1",
     "@noble/curves": "^1.8.1",
-    "async-mutex": "^0.5.0",
-    "qrcode-terminal": "^0.12.0",
-    "ws": "^8.18.1"
+    "@noble/hashes": "^1.7.1",
+    "uqr": "^0.1.2"
   }
 }

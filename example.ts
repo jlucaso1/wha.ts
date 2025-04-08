@@ -1,5 +1,6 @@
+import { renderUnicodeCompact } from "uqr";
 import { createWAClient, MemoryAuthState } from "./src/client";
-import * as qrcode from "qrcode-terminal";
+import process from "node:process";
 
 async function runExample() {
   console.log("Initializing Wha.ts client...");
@@ -12,9 +13,10 @@ async function runExample() {
     logger: console,
     wsOptions: {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    }
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+    },
   });
 
   console.log("Setting up event listeners...");
@@ -26,18 +28,16 @@ async function runExample() {
 
     if (qr) {
       console.log(
-        "\n------------------------- QR CODE -------------------------"
+        "\n------------------------- QR CODE -------------------------",
       );
-      qrcode.generate(qr, { small: true }, (qrText) => {
-        console.log(qrText);
-      });
+      console.log(renderUnicodeCompact(qr,));
       console.log(
-        "-----------------------------------------------------------"
+        "-----------------------------------------------------------",
       );
       console.log("Scan the QR code using WhatsApp on your phone:");
       console.log("Settings > Linked Devices > Link a device");
       console.log(
-        "-----------------------------------------------------------\n"
+        "-----------------------------------------------------------\n",
       );
     }
 
@@ -53,7 +53,7 @@ async function runExample() {
     if (isNewLogin) {
       console.log("✨ Pairing successful (new login)!");
       console.log(
-        "   Credentials saved. Waiting for server to close connection for restart..."
+        "   Credentials saved. Waiting for server to close connection for restart...",
       );
     }
 
@@ -64,34 +64,31 @@ async function runExample() {
       console.log(`❌ Connection closed. Reason: ${reason}`);
       if (shouldReconnect) {
         console.log(
-          "   Connection closed unexpectedly. You might need to restart."
+          "   Connection closed unexpectedly. You might need to restart.",
         );
         process.exit(1);
       } else {
         console.log(
-          "   Connection closed (likely intended, e.g., logout or credential issue)."
+          "   Connection closed (likely intended, e.g., logout or credential issue).",
         );
         process.exit(0);
       }
     }
   });
 
-  client.on("creds.update", (creds) => {
+  client.on("creds.update", (_creds) => {
     console.log("[CREDS UPDATE]", "Credentials were updated.");
   });
 
-  console.log("Attempting to connect to WhatsApp...");
   try {
     await client.connect();
     console.log(
-      "Connection process initiated. Waiting for events (QR code or login success)..."
+      "Connection process initiated. Waiting for events (QR code or login success)...",
     );
   } catch (error) {
     console.error("💥 Failed to initiate connection:", error);
     process.exit(1);
   }
-
-  console.log("Script running, monitoring connection...");
 
   process.on("SIGINT", async () => {
     console.log("\nReceived SIGINT (Ctrl+C). Logging out...");

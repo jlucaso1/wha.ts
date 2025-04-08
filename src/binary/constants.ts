@@ -1,6 +1,3 @@
-// src/binary/constants.ts
-
-// Enum-like object for tag codes used in the binary format
 export const TAGS = {
   LIST_EMPTY: 0,
   DICTIONARY_0: 236,
@@ -16,19 +13,15 @@ export const TAGS = {
   BINARY_20: 253,
   BINARY_32: 254,
   NIBBLE_8: 255,
-  PACKED_MAX: 127, // Adjusted based on Baileys logic for packed limits
+  PACKED_MAX: 127,
   SINGLE_BYTE_MAX: 256,
-  STREAM_END: 2, // Example, confirm if needed for client logic
+  STREAM_END: 2,
 };
 
-// Single-byte tokens - strings mapped to a single byte code (index)
-// Copied directly from Baileys - essential for compact representation
 export const SINGLE_BYTE_TOKENS: (string | null)[] = [
-  // 0-2 are special tags, see TAGS enum
   null,
   null,
   null,
-  // 3-235 are single-byte tokens
   "account",
   "ack",
   "action",
@@ -41,7 +34,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "audio",
   "auth",
   "author",
-  "available", // 3-15
+  "available",
   "bad-protocol",
   "bad-request",
   "before",
@@ -59,7 +52,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "config",
   "contacts",
   "count",
-  "create", // 16-33
+  "create",
   "creation",
   "debug",
   "default",
@@ -76,7 +69,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "eph_setting",
   "ephemeral",
   "error",
-  "event", // 34-51
+  "event",
   "expiration",
   "expired",
   "fail",
@@ -94,7 +87,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "get",
   "google",
   "group",
-  "groups", // 52-69
+  "groups",
   "groups_v2",
   "groupinfo",
   "hard",
@@ -112,7 +105,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "ip4",
   "ip6",
   "is_new",
-  "item", // 70-87
+  "item",
   "item-not-found",
   "jid",
   "key",
@@ -130,7 +123,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "message_acks",
   "media",
   "media_conn",
-  "meta", // 88-105
+  "meta",
   "metadata",
   "method",
   "microsoft",
@@ -148,7 +141,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "node",
   "nodes",
   "none",
-  "not-acceptable", // 106-123
+  "not-acceptable",
   "not-allowed",
   "not-authorized",
   "notification",
@@ -164,7 +157,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "participants",
   "participating",
   "passive",
-  "paused", // 124-141
+  "paused",
   "picture",
   "pin",
   "ping",
@@ -181,7 +174,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "proceed",
   "product",
   "products",
-  "promote", // 142-159
+  "promote",
   "props",
   "protocol",
   "psa",
@@ -199,7 +192,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "remove",
   "request",
   "required",
-  "resource-constraint", // 160-177
+  "resource-constraint",
   "resource",
   "response",
   "result",
@@ -216,7 +209,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "set",
   "show",
   "silent",
-  "skmsg", // 178-195
+  "skmsg",
   "solid",
   "spam",
   "start",
@@ -232,7 +225,7 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "terminate",
   "text",
   "thumbnail-direct",
-  "thumbnail-hq", // 196-213
+  "thumbnail-hq",
   "thumbnail-sha256",
   "thumbnail",
   "timeout",
@@ -247,22 +240,16 @@ export const SINGLE_BYTE_TOKENS: (string | null)[] = [
   "url",
   "urn:xmpp:ping",
   "urn:xmpp:whatsapp:account",
-  "urn:xmpp:whatsapp:dirty", // 214-231
+  "urn:xmpp:whatsapp:dirty",
   "urn:xmpp:whatsapp:mms",
   "urn:xmpp:whatsapp:push",
   "user",
   "user-not-found",
-  "vcard", // 232-237 (ends before DICTIONARY tags)
-  // Note: Baileys list might have slightly more here, adjust if needed based on specific errors/needs
+  "vcard",
 ];
 
-// Double-byte tokens - More complex structure, often specific to WA internals
-// Keep minimal initially, add more as specific features are implemented
-// Copied a smaller subset from Baileys for initial connection/auth
 export const DOUBLE_BYTE_TOKENS: string[][] = [
-  // Dictionary 0 (236)
   [
-    // Copied first ~60 from Baileys dict 0 for basic functionality
     "account_sync",
     "admin",
     "announcement",
@@ -327,35 +314,21 @@ export const DOUBLE_BYTE_TOKENS: string[][] = [
     "free_space",
     "from_ip",
     "gcm",
-    // ... add more as needed based on required features (like group info, presence, etc.)
   ],
-  // Dictionary 1 (237)
-  [
-    // Add tokens from Baileys dict 1 if needed
-  ],
-  // Dictionary 2 (238)
-  [
-    // Add tokens from Baileys dict 2 if needed
-  ],
-  // Dictionary 3 (239)
-  [
-    // Add tokens from Baileys dict 3 if needed
-  ],
+  [],
+  [],
+  [],
 ];
 
-// Create a reverse map for encoding efficiency
-// Maps string -> { dict?: number, index: number }
 export const TOKEN_MAP: { [token: string]: { dict?: number; index: number } } =
   {};
 
-// Populate TOKEN_MAP from single-byte tokens
 SINGLE_BYTE_TOKENS.forEach((token, i) => {
   if (token) {
     TOKEN_MAP[token] = { index: i };
   }
 });
 
-// Populate TOKEN_MAP from double-byte tokens
 DOUBLE_BYTE_TOKENS.forEach((dict, i) => {
   dict.forEach((token, j) => {
     TOKEN_MAP[token] = { dict: i, index: j };

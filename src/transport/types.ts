@@ -8,7 +8,6 @@ export interface ILogger {
   warn(obj: unknown, msg?: string): void;
   debug(obj: unknown, msg?: string): void;
   trace(obj: unknown, msg?: string): void;
-  // level: string;
 }
 
 export interface WebSocketConfig {
