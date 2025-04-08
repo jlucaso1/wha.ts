@@ -16,7 +16,7 @@ import {
   HandshakeMessageSchema,
 } from "../gen/whatsapp_pb";
 
-export interface NoiseState {
+interface NoiseState {
   handshakeHash: Uint8Array;
   salt: Uint8Array;
   encryptionKey: Uint8Array;

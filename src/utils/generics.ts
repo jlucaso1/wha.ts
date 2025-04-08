@@ -35,9 +35,3 @@ export const encodeBigEndian = (num: number, bytes: number = 4): Uint8Array => {
 
   return arr;
 };
-
-export const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-export const unixTimestampSeconds = (date: Date = new Date()): number =>
-  Math.floor(date.getTime() / 1000);

@@ -3,7 +3,7 @@ import type { AuthenticationCreds } from "./interface";
 
 let currentRegistrationId = Math.floor(Math.random() * 16380);
 
-export const generateRegistrationId = (): number => {
+const generateRegistrationId = (): number => {
   currentRegistrationId = (currentRegistrationId + 1) % 16384;
   return currentRegistrationId;
 };

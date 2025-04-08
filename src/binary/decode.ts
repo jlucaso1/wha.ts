@@ -4,7 +4,7 @@ import { jidEncode } from "./jid-utils";
 import { decompressData } from "./node-utils";
 import type { BinaryNode } from "./types";
 
-export const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
+const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
 	const prefix = originalBuffer[0]!;
 	const buffer = originalBuffer.slice(1);
 	if ((prefix & 2) !== 0) {
@@ -15,7 +15,7 @@ export const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
 	return buffer;
 };
 
-export const decodeDecompressedBinaryNode = (
+const decodeDecompressedBinaryNode = (
 	buffer: Uint8Array,
 	opts: any,
 	indexRef: { index: number } = { index: 0 },

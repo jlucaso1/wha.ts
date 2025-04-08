@@ -1,12 +1,12 @@
 export type KeyPair = { public: Uint8Array; private: Uint8Array };
 
-export type SignedKeyPair = {
+type SignedKeyPair = {
   keyPair: KeyPair;
   signature: Uint8Array;
   keyId: number;
 };
 
-export type ProtocolAddress = {
+type ProtocolAddress = {
   name: string;
   deviceId: number;
 };
