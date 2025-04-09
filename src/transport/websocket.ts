@@ -45,30 +45,31 @@ export class NativeWebSocketClient extends IWebSocketClient {
       this.config.logger.warn({}, "WebSocket already connecting or open");
       return this.isConnecting
         ? new Promise((res, rej) => {
-          if (this.connectionPromise) {
-            const originalResolve = this.connectionPromise.resolve;
-            const originalReject = this.connectionPromise.reject;
-            this.connectionPromise.resolve = () => {
-              originalResolve();
-              res();
-            };
-            this.connectionPromise.reject = (err) => {
-              originalReject(err);
-              rej(err);
-            };
-          } else {
-            this.once("open", res);
-            this.once("error", rej);
-            this.once("close", () =>
-              rej(new Error("WebSocket closed during connection attempt")));
-          }
-        })
+            if (this.connectionPromise) {
+              const originalResolve = this.connectionPromise.resolve;
+              const originalReject = this.connectionPromise.reject;
+              this.connectionPromise.resolve = () => {
+                originalResolve();
+                res();
+              };
+              this.connectionPromise.reject = (err) => {
+                originalReject(err);
+                rej(err);
+              };
+            } else {
+              this.once("open", res);
+              this.once("error", rej);
+              this.once("close", () =>
+                rej(new Error("WebSocket closed during connection attempt"))
+              );
+            }
+          })
         : Promise.resolve();
     }
 
     this.config.logger.info(
       { url: this.url.toString() },
-      "Connecting WebSocket",
+      "Connecting WebSocket"
     );
 
     return new Promise<void>((resolve, reject) => {
@@ -86,7 +87,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
       } catch (error: any) {
         this.config.logger.error(
           { err: error },
-          "WebSocket instantiation failed",
+          "WebSocket instantiation failed"
         );
         this.connectionPromise?.reject(error);
         this.connectionPromise = null;
@@ -100,6 +101,11 @@ export class NativeWebSocketClient extends IWebSocketClient {
       throw new Error("WebSocket is not open");
     }
 
+    this.config.logger.debug(
+      { data: data.length },
+      "WebSocket ⬆️"
+    );
+
     try {
       this.socket!.send(data);
     } catch (error: any) {
@@ -110,12 +116,12 @@ export class NativeWebSocketClient extends IWebSocketClient {
 
   async close(
     code: number = 1000,
-    reason: string = "Normal Closure",
+    reason: string = "Normal Closure"
   ): Promise<void> {
     if (this.isClosing || this.isClosed) {
       this.config.logger.warn(
         { state: this.socket?.readyState },
-        "WebSocket already closing or closed",
+        "WebSocket already closing or closed"
       );
       return Promise.resolve();
     }
@@ -132,21 +138,15 @@ export class NativeWebSocketClient extends IWebSocketClient {
     this.dispatchEvent(new CustomEvent("open"));
   };
 
-  private handleMessage = (event: MessageEvent): void => {
-    const data = event.data;
-    let bufferData: Uint8Array;
-    if (data instanceof ArrayBuffer) {
-      bufferData = new Uint8Array(data);
-    } else if (typeof data === "string") {
-      bufferData = new TextEncoder().encode(data);
-    } else {
-      this.config.logger.warn(
-        { type: typeof data },
-        "Received unexpected message type",
-      );
-      return;
-    }
-    this.dispatchEvent(new CustomEvent("message", { detail: bufferData }));
+  private handleMessage = (event: MessageEvent<ArrayBuffer>): void => {
+    const data = new Uint8Array(event.data);
+
+    this.config.logger.debug(
+      { data: data.length },
+      "WebSocket ⬇️"
+    );
+
+    this.dispatchEvent(new CustomEvent("message", { detail: data }));
   };
 
   private handleError = (_event: Event): void => {
@@ -163,7 +163,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
       ? new Error(`WebSocket closed before opening: ${code} ${reason}`)
       : undefined;
     this.connectionPromise?.reject(
-      error || new Error(`WebSocket closed: ${code} ${reason}`),
+      error || new Error(`WebSocket closed: ${code} ${reason}`)
     );
     this.connectionPromise = null;
     this.removeListeners();
@@ -177,16 +177,6 @@ export class NativeWebSocketClient extends IWebSocketClient {
     this.socket.removeEventListener("message", this.handleMessage);
     this.socket.removeEventListener("error", this.handleError);
     this.socket.removeEventListener("close", this.handleClose);
-  }
-
-  private closeWithError(error: Error): void {
-    if (!this.isClosed && !this.isClosing) {
-      this.socket?.close(1011, "Internal Error");
-    }
-    this.removeListeners();
-    this.socket = null;
-    this.dispatchEvent(new CustomEvent("error", { detail: error }));
-    this.dispatchEvent(new CustomEvent("close", { detail: { code: 1011, reason: "Internal Error" } }));
   }
 }
 

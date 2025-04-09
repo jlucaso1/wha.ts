@@ -96,10 +96,6 @@ class WhaTSClient extends EventTarget {
     });
 
     this.authenticator.addEventListener("_internal.sendNode", (event: any) => {
-      this.logger.debug(
-        { tag: event.detail.tag },
-        "Authenticator requested sendNode",
-      );
       this.conn.sendNode(event.detail).catch((err) => {
         this.logger.error(
           { err },
@@ -112,10 +108,7 @@ class WhaTSClient extends EventTarget {
       "_internal.closeConnection",
       (event: any) => {
         const error = event.detail;
-        this.logger.debug(
-          { err: error },
-          "Authenticator requested connection close",
-        );
+
         this.conn.close(error).catch((err) => {
           this.logger.error(
             { err },

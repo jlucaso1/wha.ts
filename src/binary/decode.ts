@@ -213,6 +213,10 @@ const decodeDecompressedBinaryNode = (
 
 	const listSize = readListSize(readByte());
 	const header = readString(readByte());
+	console.trace({
+		listSize,
+		header,
+	})
 	if (!listSize || !header.length) {
 		throw new Error("invalid node");
 	}
@@ -257,7 +261,7 @@ const decodeDecompressedBinaryNode = (
 	}
 
 	return {
-		tag: header,
+		tag: header as constants.SINGLE_BYTE_TOKENS_TYPE,
 		attrs,
 		content: data,
 	};

@@ -1,25 +1,24 @@
 import { utf8ToBytes } from "../utils/bytes-utils";
-import { TAGS, TOKEN_MAP } from "./constants";
+import * as constants from "./constants";
 import { type FullJid, jidDecode } from "./jid-utils";
-import type { BinaryNode } from "./types";
+import type { BinaryNode, BinaryNodeCodingOptions } from "./types";
 
-const bufferList: number[] = [];
-
-export const encodeBinaryNode = (node: BinaryNode): Uint8Array => {
-  bufferList.length = 0;
-  try {
-    encodeBinaryNodeInternal(node, bufferList);
-    return new Uint8Array([0x00, ...bufferList]);
-  } catch (error) {
-    console.error("Binary encoding error:", error);
-    throw error;
-  }
+export const encodeBinaryNode = (
+  node: BinaryNode,
+  opts: Pick<BinaryNodeCodingOptions, "TAGS" | "TOKEN_MAP"> = constants,
+  buffer: number[] = [0]
+): Uint8Array => {
+  const encoded = encodeBinaryNodeInner(node, opts, buffer);
+  return Uint8Array.from(encoded);
 };
 
-const encodeBinaryNodeInternal = (
+const encodeBinaryNodeInner = (
   { tag, attrs, content }: BinaryNode,
-  buffer: number[],
-): void => {
+  opts: Pick<BinaryNodeCodingOptions, "TAGS" | "TOKEN_MAP">,
+  buffer: number[]
+): number[] => {
+  const { TAGS, TOKEN_MAP } = opts;
+
   const pushByte = (value: number) => buffer.push(value & 0xff);
 
   const pushInt = (value: number, n: number, littleEndian = false) => {
@@ -29,25 +28,26 @@ const encodeBinaryNodeInternal = (
     }
   };
 
-  const pushBytes = (bytes: Uint8Array) => {
-    Array.prototype.push.apply(buffer, Array.from(bytes));
+  const pushBytes = (bytes: Uint8Array | number[]) => {
+    for (const b of bytes) {
+      buffer.push(b);
+    }
   };
 
   const pushInt16 = (value: number) => {
-    pushBytes(new Uint8Array([(value >> 8) & 0xff, value & 0xff]));
+    pushBytes([(value >> 8) & 0xff, value & 0xff]);
   };
 
   const pushInt20 = (value: number) =>
-    pushBytes(
-      new Uint8Array([(value >> 16) & 0x0f, (value >> 8) & 0xff, value & 0xff]),
-    );
-
-  const pushInt32 = (value: number) => pushInt(value, 4, false);
-
+    pushBytes([(value >> 16) & 0x0f, (value >> 8) & 0xff, value & 0xff]);
   const writeByteLength = (length: number) => {
+    if (length >= 4294967296) {
+      throw new Error("string too large to encode: " + length);
+    }
+
     if (length >= 1 << 20) {
       pushByte(TAGS.BINARY_32);
-      pushInt32(length);
+      pushInt(length, 4); // 32 bit integer
     } else if (length >= 256) {
       pushByte(TAGS.BINARY_20);
       pushInt20(length);
@@ -63,12 +63,14 @@ const encodeBinaryNodeInternal = (
     pushBytes(bytes);
   };
 
-  const writeJid = ({ user, server, device }: FullJid) => {
-    if (typeof device === "number" || server === "lid") {
+  const writeJid = ({ domainType, device, user, server }: FullJid) => {
+    if (typeof device !== "undefined") {
       pushByte(TAGS.AD_JID);
-      pushByte(server === "lid" ? 1 : 0);
+      pushByte(domainType || 0);
       pushByte(device || 0);
-      writeString(user || "");
+      if (user) {
+        writeString(user);
+      }
     } else {
       pushByte(TAGS.JID_PAIR);
       if (user?.length) {
@@ -76,26 +78,124 @@ const encodeBinaryNodeInternal = (
       } else {
         pushByte(TAGS.LIST_EMPTY);
       }
-      writeString(server);
+
+      writeString(server ?? "");
     }
   };
 
-  const writeString = (str: string | undefined | null) => {
-    if (str === null || str === undefined) {
-      pushByte(TAGS.LIST_EMPTY);
-      return;
+  const packNibble = (char: string) => {
+    switch (char) {
+      case "-":
+        return 10;
+      case ".":
+        return 11;
+      case "\0":
+        return 15;
+      default:
+        if (char >= "0" && char <= "9") {
+          return char.charCodeAt(0) - "0".charCodeAt(0);
+        }
+
+        throw new Error(`invalid byte for nibble "${char}"`);
+    }
+  };
+
+  const packHex = (char: string) => {
+    if (char >= "0" && char <= "9") {
+      return char.charCodeAt(0) - "0".charCodeAt(0);
     }
 
-    const tokenData = TOKEN_MAP[str];
-    if (tokenData) {
-      if (typeof tokenData.dict === "number") {
-        pushByte(TAGS.DICTIONARY_0 + tokenData.dict);
+    if (char >= "A" && char <= "F") {
+      return 10 + char.charCodeAt(0) - "A".charCodeAt(0);
+    }
+
+    if (char >= "a" && char <= "f") {
+      return 10 + char.charCodeAt(0) - "a".charCodeAt(0);
+    }
+
+    if (char === "\0") {
+      return 15;
+    }
+
+    throw new Error(`Invalid hex char "${char}"`);
+  };
+
+  const writePackedBytes = (str: string, type: "nibble" | "hex") => {
+    if (str.length > TAGS.PACKED_MAX) {
+      throw new Error("Too many bytes to pack");
+    }
+
+    pushByte(type === "nibble" ? TAGS.NIBBLE_8 : TAGS.HEX_8);
+
+    let roundedLength = Math.ceil(str.length / 2.0);
+    if (str.length % 2 !== 0) {
+      roundedLength |= 128;
+    }
+
+    pushByte(roundedLength);
+    const packFunction = type === "nibble" ? packNibble : packHex;
+
+    const packBytePair = (v1: string, v2: string) => {
+      const result = (packFunction(v1) << 4) | packFunction(v2);
+      return result;
+    };
+
+    const strLengthHalf = Math.floor(str.length / 2);
+    for (let i = 0; i < strLengthHalf; i++) {
+      pushByte(packBytePair(str[2 * i] ?? "\x00", str[2 * i + 1] ?? "\x00"));
+    }
+
+    if (str.length % 2 !== 0) {
+      pushByte(packBytePair(str[str.length - 1] ?? "\x00", "\x00"));
+    }
+  };
+
+  const isNibble = (str: string) => {
+    if (str.length > TAGS.PACKED_MAX) {
+      return false;
+    }
+
+    for (const char of str) {
+      const isInNibbleRange = char >= "0" && char <= "9";
+      if (!isInNibbleRange && char !== "-" && char !== ".") {
+        return false;
       }
-      pushByte(tokenData.index);
-    } else {
-      const jid = jidDecode(str);
-      if (jid) {
-        writeJid(jid);
+    }
+
+    return true;
+  };
+
+  const isHex = (str: string) => {
+    if (str.length > TAGS.PACKED_MAX) {
+      return false;
+    }
+
+    for (const char of str) {
+      const isInNibbleRange = char >= "0" && char <= "9";
+      if (!isInNibbleRange && !(char >= "A" && char <= "F")) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const writeString = (str: string) => {
+    const tokenIndex = TOKEN_MAP[str];
+    if (tokenIndex) {
+      if (typeof tokenIndex.dict === "number") {
+        pushByte(TAGS.DICTIONARY_0 + tokenIndex.dict);
+      }
+
+      pushByte(tokenIndex.index);
+    } else if (isNibble(str)) {
+      writePackedBytes(str, "nibble");
+    } else if (isHex(str)) {
+      writePackedBytes(str, "hex");
+    } else if (str) {
+      const decodedJid = jidDecode(str);
+      if (decodedJid) {
+        writeJid(decodedJid);
       } else {
         writeStringRaw(str);
       }
@@ -106,8 +206,7 @@ const encodeBinaryNodeInternal = (
     if (listSize === 0) {
       pushByte(TAGS.LIST_EMPTY);
     } else if (listSize < 256) {
-      pushByte(TAGS.LIST_8);
-      pushByte(listSize);
+      pushBytes([TAGS.LIST_8, listSize]);
     } else {
       pushByte(TAGS.LIST_16);
       pushInt16(listSize);
@@ -115,17 +214,19 @@ const encodeBinaryNodeInternal = (
   };
 
   const validAttributes = Object.keys(attrs).filter(
-    (k) => attrs[k] !== undefined && attrs[k] !== null,
+    (k) => typeof attrs[k] !== "undefined" && attrs[k] !== null
   );
 
-  const listSize = 1 + 2 * validAttributes.length +
-    (content !== undefined ? 1 : 0);
-  writeListStart(listSize);
+  writeListStart(
+    2 * validAttributes.length + 1 + (typeof content !== "undefined" ? 1 : 0)
+  );
   writeString(tag);
 
   for (const key of validAttributes) {
-    writeString(key);
-    writeString(attrs[key]);
+    if (typeof attrs[key] === "string") {
+      writeString(key);
+      writeString(attrs[key]);
+    }
   }
 
   if (typeof content === "string") {
@@ -136,13 +237,15 @@ const encodeBinaryNodeInternal = (
   } else if (Array.isArray(content)) {
     writeListStart(content.length);
     for (const item of content) {
-      encodeBinaryNodeInternal(item, buffer);
+      encodeBinaryNodeInner(item, opts, buffer);
     }
   } else if (typeof content === "undefined") {
     // do nothing
   } else {
     throw new Error(
-      `Cannot encode content of type ${typeof content}: ${content}`,
+      `invalid children for header "${tag}": ${content} (${typeof content})`
     );
   }
+
+  return buffer;
 };

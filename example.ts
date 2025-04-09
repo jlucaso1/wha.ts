@@ -20,18 +20,7 @@ async function runExample() {
     const { connection, qr, isNewLogin, error } = update;
 
     if (qr) {
-      console.log(
-        "\n------------------------- QR CODE -------------------------",
-      );
       console.log(renderUnicodeCompact(qr));
-      console.log(
-        "-----------------------------------------------------------",
-      );
-      console.log("Scan the QR code using WhatsApp on your phone:");
-      console.log("Settings > Linked Devices > Link a device");
-      console.log(
-        "-----------------------------------------------------------\n",
-      );
     }
 
     if (connection === "connecting") {
@@ -46,7 +35,7 @@ async function runExample() {
     if (isNewLogin) {
       console.log("✨ Pairing successful (new login)!");
       console.log(
-        "   Credentials saved. Waiting for server to close connection for restart...",
+        "   Credentials saved. Waiting for server to close connection for restart..."
       );
     }
 
@@ -64,7 +53,7 @@ async function runExample() {
   try {
     await client.connect();
     console.log(
-      "Connection process initiated. Waiting for events (QR code or login success)...",
+      "Connection process initiated. Waiting for events (QR code or login success)..."
     );
   } catch (error) {
     console.error("💥 Failed to initiate connection:", error);

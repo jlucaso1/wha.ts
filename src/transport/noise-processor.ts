@@ -46,17 +46,16 @@ export class NoiseProcessor {
     routingInfo?: Uint8Array;
   }) {
     const initialHashData = utf8ToBytes(NOISE_MODE);
-    let handshakeHash = initialHashData.byteLength === 32
-      ? initialHashData
-      : sha256(initialHashData);
+    let handshakeHash =
+      initialHashData.byteLength === 32
+        ? initialHashData
+        : sha256(initialHashData);
     const salt = handshakeHash;
     const encryptionKey = handshakeHash;
     const decryptionKey = handshakeHash;
 
     handshakeHash = sha256(concatBytes(handshakeHash, noisePrologue));
-    handshakeHash = sha256(
-      concatBytes(handshakeHash, staticKeyPair.public),
-    );
+    handshakeHash = sha256(concatBytes(handshakeHash, staticKeyPair.public));
 
     this.state = {
       handshakeHash,
@@ -91,9 +90,7 @@ export class NoiseProcessor {
     if (!this.state.isHandshakeFinished) {
       this.state = {
         ...this.state,
-        handshakeHash: sha256(
-          concatBytes(this.state.handshakeHash, data),
-        ),
+        handshakeHash: sha256(concatBytes(this.state.handshakeHash, data)),
       };
     }
   }
@@ -121,7 +118,7 @@ export class NoiseProcessor {
       plaintext,
       this.state.encryptionKey,
       nonce,
-      this.state.handshakeHash,
+      this.state.handshakeHash
     );
     this.state = {
       ...this.state,
@@ -140,7 +137,7 @@ export class NoiseProcessor {
       ciphertext,
       this.state.decryptionKey,
       nonce,
-      this.state.handshakeHash,
+      this.state.handshakeHash
     );
     this.state = {
       ...this.state,
@@ -176,49 +173,54 @@ export class NoiseProcessor {
   async processHandshake(
     serverHelloData: Uint8Array,
     localStaticKeyPair: KeyPair,
-    localEphemeralKeyPair: KeyPair,
+    localEphemeralKeyPair: KeyPair
   ) {
     const { serverHello } = fromBinary(HandshakeMessageSchema, serverHelloData);
     if (
-      !serverHello?.ephemeral || !serverHello?.static || !serverHello?.payload
+      !serverHello?.ephemeral ||
+      !serverHello?.static ||
+      !serverHello?.payload
     ) {
       throw new Error("Invalid serverHello message received");
     }
     this.mixIntoHandshakeHash(serverHello.ephemeral);
-    await this.mixKeys(
-      Curve.sharedKey(localEphemeralKeyPair.private, serverHello.ephemeral),
+    this.mixKeys(
+      Curve.sharedKey(localEphemeralKeyPair.private, serverHello.ephemeral)
     );
     const decryptedServerStatic = await this.decryptMessage(serverHello.static);
-    await this.mixKeys(
-      Curve.sharedKey(localEphemeralKeyPair.private, decryptedServerStatic),
+    this.mixKeys(
+      Curve.sharedKey(localEphemeralKeyPair.private, decryptedServerStatic)
     );
     const decryptedPayload = await this.decryptMessage(serverHello.payload);
     const certChain = fromBinary(CertChainSchema, decryptedPayload);
     const intermediateCertDetailsBytes = certChain.intermediate?.details;
     if (!intermediateCertDetailsBytes) {
       throw new Error(
-        "Invalid certificate: Missing intermediate certificate details",
+        "Invalid certificate: Missing intermediate certificate details"
       );
     }
     const decodedCertDetails = fromBinary(
       CertChain_NoiseCertificate_DetailsSchema,
-      intermediateCertDetailsBytes,
+      intermediateCertDetailsBytes
     );
     const issuerSerial = decodedCertDetails.issuerSerial;
     if (issuerSerial === null || issuerSerial !== WA_CERT_DETAILS.SERIAL) {
-      this.state.logger.error({
-        expected: WA_CERT_DETAILS.SERIAL,
-        received: issuerSerial,
-      }, "Certificate serial mismatch");
+      this.state.logger.error(
+        {
+          expected: WA_CERT_DETAILS.SERIAL,
+          received: issuerSerial,
+        },
+        "Certificate serial mismatch"
+      );
       throw new Error(
-        `Server certificate validation failed. Expected serial ${WA_CERT_DETAILS.SERIAL}, received ${issuerSerial}`,
+        `Server certificate validation failed. Expected serial ${WA_CERT_DETAILS.SERIAL}, received ${issuerSerial}`
       );
     }
     const encryptedLocalStaticPublic = await this.encryptMessage(
-      localStaticKeyPair.public,
+      localStaticKeyPair.public
     );
-    await this.mixKeys(
-      Curve.sharedKey(localStaticKeyPair.private, serverHello.ephemeral),
+    this.mixKeys(
+      Curve.sharedKey(localStaticKeyPair.private, serverHello.ephemeral)
     );
     return encryptedLocalStaticPublic;
   }
@@ -235,7 +237,10 @@ export class NoiseProcessor {
       if (this.state.routingInfo) {
         const headerPrefix = new Uint8Array(7);
         const view = new DataView(headerPrefix.buffer);
-        headerPrefix.set([..."ED"].map((c) => c.charCodeAt(0)), 0);
+        headerPrefix.set(
+          [..."ED"].map((c) => c.charCodeAt(0)),
+          0
+        );
         view.setUint8(2, 0);
         view.setUint8(3, 1);
         view.setUint8(4, this.state.routingInfo.byteLength >> 16);
@@ -243,7 +248,7 @@ export class NoiseProcessor {
         frameHeader = concatBytes(
           headerPrefix,
           this.state.routingInfo,
-          this.state.noisePrologue,
+          this.state.noisePrologue
         );
       } else {
         frameHeader = this.state.noisePrologue;
@@ -256,7 +261,7 @@ export class NoiseProcessor {
     const view = new DataView(
       frame.buffer,
       frameHeader.byteOffset + frameHeader.length,
-      3,
+      3
     );
     view.setUint8(0, encryptedData.length >> 16);
     view.setUint16(1, encryptedData.length & 0xffff, false);
@@ -266,7 +271,7 @@ export class NoiseProcessor {
 
   async decodeFrame(
     newData: Uint8Array,
-    onFrame: (frameData: Uint8Array) => void,
+    onFrame: (frameData: Uint8Array) => void
   ) {
     this.state = {
       ...this.state,
@@ -276,23 +281,23 @@ export class NoiseProcessor {
       const dataView = new DataView(
         this.state.receivedBytes.buffer,
         this.state.receivedBytes.byteOffset,
-        this.state.receivedBytes.byteLength,
+        this.state.receivedBytes.byteLength
       );
-      const frameLength = (dataView.getUint8(0) << 16) |
-        dataView.getUint16(1, false);
+      const frameLength =
+        (dataView.getUint8(0) << 16) | dataView.getUint16(1, false);
       if (this.state.receivedBytes.length >= frameLength + 3) {
         const frameContentBytes = this.state.receivedBytes.subarray(
           3,
-          frameLength + 3,
+          frameLength + 3
         );
         const remainingBytes = this.state.receivedBytes.subarray(
-          frameLength + 3,
+          frameLength + 3
         );
         let processedFrameContent: Uint8Array;
         if (this.state.isHandshakeFinished) {
           try {
             processedFrameContent = await this.decryptMessage(
-              frameContentBytes,
+              frameContentBytes
             );
           } catch (error) {
             this.state.logger.error({ err: error }, "Error decrypting frame");

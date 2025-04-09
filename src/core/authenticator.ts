@@ -9,6 +9,7 @@ import {
   getBinaryNodeChild,
   getBinaryNodeChildren,
   S_WHATSAPP_NET,
+  type SINGLE_BYTE_TOKENS_TYPE,
 } from "../binary";
 import type { ClientPayload } from "../gen/whatsapp_pb";
 import {
@@ -38,7 +39,7 @@ interface AuthenticatorEvents {
       isNewLogin: boolean;
       qr?: string;
       error?: Error;
-    }>,
+    }>
   ) => void;
   "creds.update": (creds: Partial<AuthenticationCreds>) => void;
 
@@ -60,7 +61,7 @@ class Authenticator extends EventTarget {
   constructor(
     connectionManager: ConnectionManager,
     authStateProvider: IAuthStateProvider,
-    logger: ILogger,
+    logger: ILogger
   ) {
     super();
     this.conn = connectionManager;
@@ -69,33 +70,27 @@ class Authenticator extends EventTarget {
 
     this.conn.addEventListener(
       "handshake.complete",
-      this.handleHandshakeComplete,
+      this.handleHandshakeComplete
     );
 
-    this.conn.addEventListener(
-      "node.received",
-      ((event: Event) => {
-        if (event instanceof CustomEvent) {
-          this.handleNodeReceived(event.detail);
-        }
-      }) as EventListener,
-    );
+    this.conn.addEventListener("node.received", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleNodeReceived(event.detail);
+      }
+    }) as EventListener);
 
-    this.conn.addEventListener(
-      "error",
-      ((event: Event) => {
-        if (event instanceof CustomEvent) {
-          const error = event.detail;
-          this.logger.error({ err: error }, "Connection error");
-          this.clearQrTimeout();
-          this.dispatchEvent(
-            new CustomEvent("connection.update", {
-              detail: { connection: "close", error },
-            }),
-          );
-        }
-      }) as EventListener,
-    );
+    this.conn.addEventListener("error", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        const error = event.detail;
+        this.logger.error({ err: error }, "Connection error");
+        this.clearQrTimeout();
+        this.dispatchEvent(
+          new CustomEvent("connection.update", {
+            detail: { connection: "close", error },
+          })
+        );
+      }
+    }) as EventListener);
 
     this.conn.addEventListener("ws.close", (_event) => {
       this.clearQrTimeout();
@@ -123,34 +118,29 @@ class Authenticator extends EventTarget {
     } catch (error: any) {
       this.logger.error(
         { err: error },
-        "Failed to prepare initial client payload",
+        "Failed to prepare initial client payload"
       );
       this.dispatchEvent(
         new CustomEvent("connection.update", {
           detail: { connection: "close", error },
-        }),
+        })
       );
       throw error;
     }
   }
 
-  private handleHandshakeComplete = async (): Promise<void> => {
-  };
+  private handleHandshakeComplete = async (): Promise<void> => {};
 
   private handleNodeReceived = (node: BinaryNode): void => {
-    if (node.tag === "config") {
-      if (
-        getBinaryNodeChild(node, "pair-device")
-      ) {
+    if (node.tag === "iq") {
+      if (getBinaryNodeChild(node, "pair-device")) {
         this.handlePairDeviceIQ(node);
-      } else if (
-        getBinaryNodeChild(node, "pair-success")
-      ) {
+      } else if (getBinaryNodeChild(node, "pair-success")) {
         this.handlePairSuccessIQ(node);
       }
     } else if (node.tag === "success") {
       this.handleLoginSuccess(node);
-    } else if (node.tag === "failure") {
+    } else if (node.tag === "fail") {
       this.handleLoginFailure(node);
     }
   };
@@ -163,6 +153,21 @@ class Authenticator extends EventTarget {
 
     this.qrRetryCount = 0;
     this.generateAndEmitQR(refNodes);
+
+    if (!node.attrs.id) {
+      throw new Error("Missing message ID in stanza for pair-device");
+    }
+
+    const ack: BinaryNode = {
+      tag: "iq",
+      attrs: {
+        to: S_WHATSAPP_NET,
+        type: "result",
+        id: node.attrs.id,
+      },
+    };
+
+    this.dispatchEvent(new CustomEvent("_internal.sendNode", { detail: ack }));
   }
 
   private generateAndEmitQR(refNodes: BinaryNode[]): void {
@@ -172,42 +177,45 @@ class Authenticator extends EventTarget {
     if (!refNode?.content) {
       this.logger.error(
         { refsAvailable: refNodes.length, count: this.qrRetryCount },
-        "No more QR refs available, pairing timed out/failed",
+        "No more QR refs available, pairing timed out/failed"
       );
       const error = new Error("QR code generation failed (no refs left)");
       this.dispatchEvent(
         new CustomEvent("connection.update", {
           detail: { connection: "close", error },
-        }),
+        })
       );
       this.dispatchEvent(
-        new CustomEvent("_internal.closeConnection", { detail: error }),
+        new CustomEvent("_internal.closeConnection", { detail: error })
       );
       return;
     }
 
-    const ref = bytesToUtf8(refNode.content as Uint8Array);
-    const noiseKeyB64 = bytesToBase64(
-      this.authState.creds.noiseKey.public,
-    );
+    if (!(refNode.content instanceof Uint8Array)) {
+      throw new Error("Invalid reference node content");
+    }
+
+    const ref = bytesToUtf8(refNode.content);
+    const noiseKeyB64 = bytesToBase64(this.authState.creds.noiseKey.public);
     const identityKeyB64 = bytesToBase64(
-      this.authState.creds.signedIdentityKey.public,
+      this.authState.creds.signedIdentityKey.public
     );
     const advSecretB64 = this.authState.creds.advSecretKey;
 
     const qr = [ref, noiseKeyB64, identityKeyB64, advSecretB64].join(",");
 
     this.dispatchEvent(
-      new CustomEvent("connection.update", { detail: { qr } }),
+      new CustomEvent("connection.update", { detail: { qr } })
     );
 
-    const timeoutMs = this.qrRetryCount === 0
-      ? this.initialQrTimeoutMs
-      : this.subsequentQrTimeoutMs;
+    const timeoutMs =
+      this.qrRetryCount === 0
+        ? this.initialQrTimeoutMs
+        : this.subsequentQrTimeoutMs;
     this.qrTimeout = setTimeout(() => {
       this.qrRetryCount += 1;
       this.logger.info(
-        `QR timeout, generating new QR (retry ${this.qrRetryCount})`,
+        `QR timeout, generating new QR (retry ${this.qrRetryCount})`
       );
       this.generateAndEmitQR(refNodes);
     }, timeoutMs);
@@ -215,7 +223,7 @@ class Authenticator extends EventTarget {
 
   private _createSignalIdentity(
     jid: string,
-    publicKey: Uint8Array,
+    publicKey: Uint8Array
   ): {
     identifier: { name: string; deviceId: number };
     identifierKey: Uint8Array;
@@ -228,7 +236,7 @@ class Authenticator extends EventTarget {
 
   private _configureSuccessfulPairing(
     stanza: import("../binary").BinaryNode,
-    creds: AuthenticationCreds,
+    creds: AuthenticationCreds
   ): {
     creds: Partial<AuthenticationCreds>;
     reply: import("../binary").BinaryNode;
@@ -243,7 +251,7 @@ class Authenticator extends EventTarget {
 
     const deviceIdentityNode = getBinaryNodeChild(
       pairSuccessNode,
-      "device-identity",
+      "device-identity"
     );
     const platformNode = getBinaryNodeChild(pairSuccessNode, "platform");
     const deviceNode = getBinaryNodeChild(pairSuccessNode, "device");
@@ -251,13 +259,13 @@ class Authenticator extends EventTarget {
 
     if (!deviceIdentityNode?.content || !deviceNode?.attrs.jid) {
       throw new Error(
-        "Missing device-identity content or device jid in pair-success node",
+        "Missing device-identity content or device jid in pair-success node"
       );
     }
 
     const hmacIdentity = fromBinary(
       ADVSignedDeviceIdentityHMACSchema,
-      deviceIdentityNode.content as Uint8Array,
+      deviceIdentityNode.content as Uint8Array
     );
     if (!hmacIdentity.details || !hmacIdentity.hmac) {
       throw new Error("Invalid ADVSignedDeviceIdentityHMAC structure");
@@ -275,10 +283,11 @@ class Authenticator extends EventTarget {
 
     const account = fromBinary(
       ADVSignedDeviceIdentitySchema,
-      hmacIdentity.details,
+      hmacIdentity.details
     );
     if (
-      !account.details || !account.accountSignatureKey ||
+      !account.details ||
+      !account.accountSignatureKey ||
       !account.accountSignature
     ) {
       throw new Error("Invalid ADVSignedDeviceIdentity structure");
@@ -287,14 +296,14 @@ class Authenticator extends EventTarget {
     const accountMsg = concatBytes(
       new Uint8Array([6, 0]),
       account.details,
-      creds.signedIdentityKey.public,
+      creds.signedIdentityKey.public
     );
 
     if (
       !Curve.verify(
         account.accountSignatureKey,
         accountMsg,
-        account.accountSignature,
+        account.accountSignature
       )
     ) {
       throw new Error("Invalid account signature");
@@ -304,12 +313,12 @@ class Authenticator extends EventTarget {
       new Uint8Array([6, 1]),
       account.details,
       creds.signedIdentityKey.public,
-      account.accountSignatureKey,
+      account.accountSignatureKey
     );
 
     const deviceSignature = Curve.sign(
       creds.signedIdentityKey.private,
-      deviceMsg,
+      deviceMsg
     );
     const updatedAccount = {
       ...account,
@@ -320,7 +329,7 @@ class Authenticator extends EventTarget {
     const jid = deviceNode.attrs.jid;
     const identity = this._createSignalIdentity(
       jid,
-      account.accountSignatureKey,
+      account.accountSignatureKey
     );
 
     const authUpdate: Partial<AuthenticationCreds> = {
@@ -340,10 +349,10 @@ class Authenticator extends EventTarget {
 
     const deviceIdentity = fromBinary(
       ADVDeviceIdentitySchema,
-      updatedAccount.details!,
+      updatedAccount.details!
     );
 
-    const reply = {
+    const reply: BinaryNode = {
       tag: "iq",
       attrs: {
         to: S_WHATSAPP_NET,
@@ -352,11 +361,11 @@ class Authenticator extends EventTarget {
       },
       content: [
         {
-          tag: "pair-device-sign",
+          tag: "pair-device-sign" as SINGLE_BYTE_TOKENS_TYPE,
           attrs: {},
           content: [
             {
-              tag: "device-identity",
+              tag: "device-identity" as SINGLE_BYTE_TOKENS_TYPE,
               attrs: { "key-index": (deviceIdentity.keyIndex || 0).toString() },
               content: accountEnc,
             },
@@ -379,7 +388,7 @@ class Authenticator extends EventTarget {
     try {
       const { creds: updatedCreds, reply } = this._configureSuccessfulPairing(
         node,
-        this.authState.creds,
+        this.authState.creds
       );
 
       this.logger.info(
@@ -387,38 +396,38 @@ class Authenticator extends EventTarget {
           jid: updatedCreds.me?.id,
           platform: updatedCreds.platform,
         },
-        "Pairing successful, updating creds",
+        "Pairing successful, updating creds"
       );
 
       Object.assign(this.authState.creds, updatedCreds);
       await this.authState.saveCreds();
 
       this.dispatchEvent(
-        new CustomEvent("_internal.sendNode", { detail: reply }),
+        new CustomEvent("_internal.sendNode", { detail: reply })
       );
       this.logger.info("Sent pair-success confirmation reply");
 
       this.dispatchEvent(
-        new CustomEvent("creds.update", { detail: updatedCreds }),
+        new CustomEvent("creds.update", { detail: updatedCreds })
       );
       this.dispatchEvent(
         new CustomEvent("connection.update", {
           detail: { isNewLogin: true, qr: undefined },
-        }),
+        })
       );
 
       this.logger.info(
-        "Pairing complete, expecting connection close and restart",
+        "Pairing complete, expecting connection close and restart"
       );
     } catch (error: any) {
       this.logger.error({ err: error }, "Error processing pair-success IQ");
       this.dispatchEvent(
         new CustomEvent("connection.update", {
           detail: { connection: "close", error },
-        }),
+        })
       );
       this.dispatchEvent(
-        new CustomEvent("_internal.closeConnection", { detail: error }),
+        new CustomEvent("_internal.closeConnection", { detail: error })
       );
     } finally {
       this.processingPairSuccess = false;
@@ -449,7 +458,7 @@ class Authenticator extends EventTarget {
         .saveCreds()
         .then(() =>
           this.dispatchEvent(
-            new CustomEvent("creds.update", { detail: updates }),
+            new CustomEvent("creds.update", { detail: updates })
           )
         )
         .catch((err) =>
@@ -458,7 +467,7 @@ class Authenticator extends EventTarget {
     }
 
     this.dispatchEvent(
-      new CustomEvent("connection.update", { detail: { connection: "open" } }),
+      new CustomEvent("connection.update", { detail: { connection: "open" } })
     );
   }
 
@@ -473,10 +482,10 @@ class Authenticator extends EventTarget {
     this.dispatchEvent(
       new CustomEvent("connection.update", {
         detail: { connection: "close", error },
-      }),
+      })
     );
     this.dispatchEvent(
-      new CustomEvent("_internal.closeConnection", { detail: error }),
+      new CustomEvent("_internal.closeConnection", { detail: error })
     );
   }
 }

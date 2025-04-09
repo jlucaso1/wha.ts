@@ -99,7 +99,7 @@ export const generateLoginPayload = (
     ...(getBaseClientPayload(version, browser) as ClientPayload),
     connectReason: ClientPayload_ConnectReason.USER_ACTIVATED,
     connectType: ClientPayload_ConnectType.WIFI_UNKNOWN,
-    username: BigInt(user),
+    username: BigInt(user || "0"),
     device: device || 0,
     pull: true,
   });

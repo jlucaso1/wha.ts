@@ -15,19 +15,20 @@ export type JidServer =
   | string;
 
 export type JidWithDevice = {
-  user: string;
+  user?: string;
   device?: number;
 };
 
 export type FullJid = JidWithDevice & {
   server: JidServer;
+  domainType?: number;
 };
 
 /** Encodes JID components into a string */
 export const jidEncode = (
-  user: string | number | null,
-  server: JidServer,
-  device?: number,
+  user?: string | number | null,
+  server?: JidServer,
+  device?: number
 ): string => {
   const deviceSuffix = device !== undefined ? `:${device}` : "";
   return `${user || ""}${deviceSuffix}@${server}`;
@@ -35,46 +36,33 @@ export const jidEncode = (
 
 /** Decodes a JID string into its components */
 export const jidDecode = (jid: string | undefined): FullJid | undefined => {
-  if (typeof jid !== "string") {
-    return undefined;
-  }
-  const sepIdx = jid.indexOf("@");
+  const sepIdx = typeof jid === "string" ? jid.indexOf("@") : -1;
   if (sepIdx < 0) {
     return undefined;
   }
 
-  const server = jid.slice(sepIdx + 1) as JidServer;
-  const userCombined = jid.slice(0, sepIdx);
+  const server = jid!.slice(sepIdx + 1);
+  const userCombined = jid!.slice(0, sepIdx);
 
-  const [user, deviceStr] = userCombined.split(":");
-  const device = deviceStr ? parseInt(deviceStr, 10) : undefined;
-
-  if (deviceStr && isNaN(device!)) {
-    console.warn(`Invalid device ID format in JID: ${jid}`);
-    return undefined;
-  }
-
-  if (!user) {
-    console.warn(`Invalid user format in JID: ${jid}`);
-
-    return undefined;
-  }
+  const [userAgent, device] = userCombined.split(":");
+  const user = userAgent?.split("_")[0];
 
   return {
-    server,
+    server: server as JidServer,
     user,
-    device,
+    domainType: server === "lid" ? 1 : 0,
+    device: device ? +device : undefined,
   };
 };
 
 /** Checks if two JIDs belong to the same user (ignoring device and server type changes like c.us vs s.whatsapp.net) */
 export const areJidsSameUser = (
   jid1: string | undefined,
-  jid2: string | undefined,
+  jid2: string | undefined
 ): boolean => {
   return (
     jidDecode(jidNormalizedUser(jid1))?.user ===
-      jidDecode(jidNormalizedUser(jid2))?.user
+    jidDecode(jidNormalizedUser(jid2))?.user
   );
 };
 

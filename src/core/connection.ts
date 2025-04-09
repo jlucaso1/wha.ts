@@ -21,7 +21,7 @@ import { Curve } from "../signal/crypto";
 interface ConnectionManagerEvents {
   "state.change": (
     state: "connecting" | "open" | "handshaking" | "closing" | "closed",
-    error?: Error,
+    error?: Error
   ) => void;
   "handshake.complete": () => void;
   "node.received": (node: BinaryNode) => void;
@@ -48,7 +48,7 @@ class ConnectionManager extends EventTarget {
   constructor(
     wsConfig: Partial<WebSocketConfig>,
     logger: ILogger,
-    creds: AuthenticationCreds,
+    creds: AuthenticationCreds
   ) {
     super();
     this.logger = logger;
@@ -74,37 +74,28 @@ class ConnectionManager extends EventTarget {
     if (this.state !== newState) {
       this.state = newState;
       this.dispatchEvent(
-        new CustomEvent("state.change", { detail: { state: newState, error } }),
+        new CustomEvent("state.change", { detail: { state: newState, error } })
       );
     }
   }
 
   private setupWsListeners(): void {
     this.ws.addEventListener("open", this.handleWsOpen);
-    this.ws.addEventListener(
-      "message",
-      ((event: Event) => {
-        if (event instanceof CustomEvent) {
-          this.handleWsMessage(event.detail);
-        }
-      }) as EventListener,
-    );
-    this.ws.addEventListener(
-      "error",
-      ((event: Event) => {
-        if (event instanceof CustomEvent) {
-          this.handleWsError(event.detail);
-        }
-      }) as EventListener,
-    );
-    this.ws.addEventListener(
-      "close",
-      ((event: Event) => {
-        if (event instanceof CustomEvent) {
-          this.handleWsClose(event.detail.code, event.detail.reason);
-        }
-      }) as EventListener,
-    );
+    this.ws.addEventListener("message", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleWsMessage(event.detail);
+      }
+    }) as EventListener);
+    this.ws.addEventListener("error", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleWsError(event.detail);
+      }
+    }) as EventListener);
+    this.ws.addEventListener("close", ((event: Event) => {
+      if (event instanceof CustomEvent) {
+        this.handleWsClose(event.detail.code, event.detail.reason);
+      }
+    }) as EventListener);
   }
 
   private removeWsListeners(): void {
@@ -115,7 +106,7 @@ class ConnectionManager extends EventTarget {
     if (this.state !== "closed") {
       this.logger.warn(
         { state: this.state },
-        "Connect called on non-closed connection",
+        "Connect called on non-closed connection"
       );
       return;
     }
@@ -136,7 +127,7 @@ class ConnectionManager extends EventTarget {
 
     try {
       const handshakeMsg = this.noiseProcessor.generateInitialHandshakeMessage(
-        this.ephemeralKeys,
+        this.ephemeralKeys
       );
 
       const frame = await this.noiseProcessor.encodeFrame(handshakeMsg);
@@ -155,7 +146,7 @@ class ConnectionManager extends EventTarget {
         const clientFinishStatic = await this.noiseProcessor.processHandshake(
           data,
           this.staticKeyPair,
-          this.ephemeralKeys,
+          this.ephemeralKeys
         );
 
         let clientPayload: ClientPayload;
@@ -165,34 +156,28 @@ class ConnectionManager extends EventTarget {
           clientPayload = generateRegisterPayload(this.creds);
         }
 
-        const clientPayloadBytes = toBinary(
-          ClientPayloadSchema,
-          clientPayload,
-        );
+        const clientPayloadBytes = toBinary(ClientPayloadSchema, clientPayload);
 
         const payloadEnc = await this.noiseProcessor.encryptMessage(
-          clientPayloadBytes,
+          clientPayloadBytes
         );
 
-        const clientFinishMsg = create(
-          HandshakeMessageSchema,
-          {
-            clientFinish: {
-              static: clientFinishStatic,
-              payload: payloadEnc,
-            },
+        const clientFinishMsg = create(HandshakeMessageSchema, {
+          clientFinish: {
+            static: clientFinishStatic,
+            payload: payloadEnc,
           },
-        );
+        });
 
         const finishPayloadBytes = toBinary(
           HandshakeMessageSchema,
-          clientFinishMsg,
+          clientFinishMsg
         );
 
         const frame = await this.noiseProcessor.encodeFrame(finishPayloadBytes);
         await this.ws.send(frame);
 
-        await this.noiseProcessor.finalizeHandshake();
+        this.noiseProcessor.finalizeHandshake();
 
         this.setState("open");
         this.dispatchEvent(new CustomEvent("handshake.complete"));
@@ -208,26 +193,23 @@ class ConnectionManager extends EventTarget {
   private handleWsMessage = async (data: Uint8Array): Promise<void> => {
     this.lastReceivedDataTime = Date.now();
     try {
-      await this.noiseProcessor.decodeFrame(
-        data,
-        this.handleDecryptedFrame,
-      );
+      await this.noiseProcessor.decodeFrame(data, this.handleDecryptedFrame);
     } catch (error: any) {
       this.logger.error(
         { dataLength: data.length, err: error },
-        "Noise frame decoding/decryption failed",
+        "Noise frame decoding/decryption failed"
       );
       this.dispatchEvent(new CustomEvent("error", { detail: error }));
     }
   };
 
   private handleDecryptedFrame = async (
-    decryptedPayload: Uint8Array,
+    decryptedPayload: Uint8Array
   ): Promise<void> => {
     if (this.state !== "open" && this.state !== "handshaking") {
       this.logger.warn(
         { state: this.state },
-        "Received data in unexpected state, ignoring",
+        "Received data in unexpected state, ignoring"
       );
       return;
     }
@@ -243,11 +225,17 @@ class ConnectionManager extends EventTarget {
     try {
       const node = await decodeBinaryNode(decryptedPayload);
 
+      if (node.tag === "stream:error") {
+        // here we need to reconnect the socket connection
+
+        return;
+      }
+
       this.dispatchEvent(new CustomEvent("node.received", { detail: node }));
     } catch (error: any) {
       this.logger.error(
         { err: error, hex: bytesToHex(decryptedPayload) },
-        "Failed to decode BinaryNode from decrypted frame",
+        "Failed to decode BinaryNode from decrypted frame"
       );
       this.dispatchEvent(new CustomEvent("error", { detail: error }));
     }
@@ -256,13 +244,10 @@ class ConnectionManager extends EventTarget {
   async sendNode(node: BinaryNode): Promise<void> {
     if (this.state !== "open") {
       throw new Error(
-        `Cannot send node while connection state is "${this.state}"`,
+        `Cannot send node while connection state is "${this.state}"`
       );
     }
-    this.logger.trace(
-      { tag: node.tag, attrs: node.attrs },
-      "Encoding and sending node",
-    );
+
     try {
       const buffer = encodeBinaryNode(node);
       const frame = await this.noiseProcessor.encodeFrame(buffer);
@@ -286,10 +271,10 @@ class ConnectionManager extends EventTarget {
       const timeSinceLastReceive = Date.now() - this.lastReceivedDataTime;
       if (
         timeSinceLastReceive >
-          (this.config.keepAliveIntervalMs || 30000) + 5000
+        (this.config.keepAliveIntervalMs || 30000) + 5000
       ) {
         this.logger.warn(
-          `No data received in ${timeSinceLastReceive}ms, closing connection.`,
+          `No data received in ${timeSinceLastReceive}ms, closing connection.`
         );
         this.close(new Error("Connection timed out (keep-alive)"));
       } else {
@@ -325,20 +310,21 @@ class ConnectionManager extends EventTarget {
 
   private handleWsClose = (code: number, reasonBuffer: Uint8Array): void => {
     const reason = reasonBuffer.toString();
-    const error = this.state !== "closing"
-      ? new Error(`WebSocket closed unexpectedly: ${code} ${reason}`)
-      : undefined;
+    const error =
+      this.state !== "closing"
+        ? new Error(`WebSocket closed unexpectedly: ${code} ${reason}`)
+        : undefined;
     this.setState(
       "closed",
       error ||
         (this.state === "closing"
           ? undefined
-          : new Error("Unknown close reason")),
+          : new Error("Unknown close reason"))
     );
     this.stopKeepAlive();
     this.removeWsListeners();
     this.dispatchEvent(
-      new CustomEvent("ws.close", { detail: { code, reason } }),
+      new CustomEvent("ws.close", { detail: { code, reason } })
     );
     if (error) this.dispatchEvent(new CustomEvent("error", { detail: error }));
   };
@@ -357,11 +343,11 @@ class ConnectionManager extends EventTarget {
     } catch (wsError: any) {
       this.logger.error(
         { err: wsError },
-        "Error explicitly closing WebSocket in ConnectionManager",
+        "Error explicitly closing WebSocket in ConnectionManager"
       );
       this.handleWsClose(
         wsError.code || 1011,
-        wsError.message || "Forced close after error",
+        wsError.message || "Forced close after error"
       );
     }
   }
