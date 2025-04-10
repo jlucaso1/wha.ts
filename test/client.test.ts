@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {  WhaTSClient } from "../src/client";
-import { UnstorageAuthState } from "../src/state/providers/unstorage";
+import { GenericAuthState } from "../src/state/providers/generic-auth-state";
 
 vi.mock("../src/core/connection", () => ({
     ConnectionManager: vi.fn(() => ({
@@ -22,10 +22,10 @@ vi.mock("../src/core/authenticator", () => ({
 }));
 
 let client: WhaTSClient;
-let authState: UnstorageAuthState;
+let authState: GenericAuthState;
 
 beforeEach(async () => {
-    authState = await UnstorageAuthState.init();
+    authState = await GenericAuthState.init();
     client = new WhaTSClient({ auth: authState });
 });
 

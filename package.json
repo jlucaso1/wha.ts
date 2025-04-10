@@ -7,7 +7,9 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "coverage": "vitest run --coverage",
-    "build:extension": "bun build --outfile=extension/dist/main.js --target=browser extension/main.ts"
+    "build:extension": "bun build --outfile=extension/dist/main.js --target=browser extension/main.ts",
+    "run:web": "bun example/index.html",
+    "run:example": "bun example/example.ts"
   },
   "devDependencies": {
     "typescript": "^5",

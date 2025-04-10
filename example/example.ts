@@ -1,14 +1,18 @@
 import { renderUnicodeCompact } from "uqr";
-import { createWAClient } from "./src/client";
-import {
-  UnstorageAuthState,
-  createFsStorage,
-} from "./src/state/providers/unstorage";
+import { createWAClient } from "../src/client";
+import { GenericAuthState } from "../src/state/providers/generic-auth-state";
+import localStorageDriver from "unstorage/drivers/localstorage";
+import fsDriver from "unstorage/drivers/fs-lite";
+import { createStorage } from "unstorage";
+
+const IS_BROWSER = typeof window !== "undefined";
 
 async function runExample() {
-  const storage = createFsStorage({ base: "./storage" });
+  const storage = IS_BROWSER
+    ? createStorage({ driver: localStorageDriver({ base: "wha.ts" }) })
+    : createStorage({ driver: fsDriver({ base: "./storage" }) });
 
-  const authState = await UnstorageAuthState.init(storage);
+  const authState = await GenericAuthState.init(storage);
 
   const client = createWAClient({
     auth: authState,

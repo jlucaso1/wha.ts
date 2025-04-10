@@ -1,4 +1,4 @@
-import type { Storage } from "unstorage";
+import { createStorage, type Storage } from "unstorage";
 import type {
   AuthenticationCreds,
   IAuthStateProvider,
@@ -11,7 +11,7 @@ import { initAuthCreds, BufferJSON } from "../utils";
 const CREDS_KEY = "auth:creds";
 const SIGNAL_KEY_PREFIX = "signal:";
 
-class UnstorageSignalKeyStore implements ISignalProtocolStore {
+class GenericSignalKeyStore implements ISignalProtocolStore {
   constructor(private storage: Storage) {}
 
   private getSignalKey(type: keyof SignalDataTypeMap, id: string): string {
@@ -106,7 +106,7 @@ class UnstorageSignalKeyStore implements ISignalProtocolStore {
   }
 }
 
-export class UnstorageAuthState implements IAuthStateProvider {
+export class GenericAuthState implements IAuthStateProvider {
   public creds: AuthenticationCreds;
   public keys: ISignalProtocolStore;
 
@@ -119,9 +119,7 @@ export class UnstorageAuthState implements IAuthStateProvider {
     this.keys = keys;
   }
 
-  static async init(
-    storage = createMemoryStorage()
-  ): Promise<UnstorageAuthState> {
+  static async init(storage = createStorage()): Promise<GenericAuthState> {
     let creds: AuthenticationCreds;
     try {
       const credsValue = await storage.getItem(CREDS_KEY);
@@ -159,9 +157,9 @@ export class UnstorageAuthState implements IAuthStateProvider {
       }
     }
 
-    const keyStore = new UnstorageSignalKeyStore(storage);
+    const keyStore = new GenericSignalKeyStore(storage);
 
-    return new UnstorageAuthState(creds, keyStore, storage);
+    return new GenericAuthState(creds, keyStore, storage);
   }
 
   async saveCreds(): Promise<void> {
@@ -185,17 +183,7 @@ export class UnstorageAuthState implements IAuthStateProvider {
       await Promise.all(removePromises);
 
       this.creds = initAuthCreds();
-      this.keys = new UnstorageSignalKeyStore(this.storage);
+      this.keys = new GenericSignalKeyStore(this.storage);
     } catch (error) {}
   }
 }
-
-import { createStorage as createUnstorage } from "unstorage";
-import fsDriver from "unstorage/drivers/fs";
-
-export const createMemoryStorage = () => createUnstorage();
-
-export const createFsStorage = (options?: { base?: string }) => {
-  const baseDir = options?.base || "./storage";
-  return createUnstorage({ driver: fsDriver({ base: baseDir }) });
-};
