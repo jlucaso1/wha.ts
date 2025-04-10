@@ -1,8 +1,8 @@
-import * as constants from "./constants";
 import { jidEncode } from "./jid-utils";
 import { decompressData } from "./node-utils";
 import type { BinaryNode } from "./types";
 import { BinaryReader } from "./reader";
+import { DOUBLE_BYTE_TOKENS, SINGLE_BYTE_TOKENS, TAGS, type SINGLE_BYTE_TOKENS_TYPE } from "./constants";
 
 const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
   const prefix = originalBuffer[0]!;
@@ -14,12 +14,7 @@ const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
   return buffer;
 };
 
-const decodeDecompressedBinaryNode = (
-  reader: BinaryReader,
-  opts: any
-): BinaryNode => {
-  const { DOUBLE_BYTE_TOKENS, SINGLE_BYTE_TOKENS, TAGS } = opts;
-
+const decodeDecompressedBinaryNode = (reader: BinaryReader): BinaryNode => {
   const unpackHex = (value: number) => {
     if (value >= 0 && value < 16) {
       return value < 10
@@ -86,12 +81,12 @@ const decodeDecompressedBinaryNode = (
   };
 
   const readJidPair = () => {
-    const i = readString(reader.readByte());
-    const j = readString(reader.readByte());
-    if (j) {
-      return (i || "") + "@" + j;
+    const userPart = readString(reader.readByte());
+    const serverPart = readString(reader.readByte());
+    if (serverPart) {
+      return (userPart || "") + "@" + serverPart;
     }
-    throw new Error("invalid jid pair: " + i + ", " + j);
+    throw new Error("invalid jid pair: " + userPart + ", " + serverPart);
   };
 
   const readAdJid = () => {
@@ -135,7 +130,7 @@ const decodeDecompressedBinaryNode = (
     const items: BinaryNode[] = [];
     const size = readListSize(tag);
     for (let i = 0; i < size; i++) {
-      items.push(decodeDecompressedBinaryNode(reader, opts));
+      items.push(decodeDecompressedBinaryNode(reader));
     }
     return items;
   };
@@ -150,12 +145,12 @@ const decodeDecompressedBinaryNode = (
   };
 
   const listSize = readListSize(reader.readByte());
-  const header = readString(reader.readByte());
+  const tag = readString(reader.readByte());
 
-  if (!listSize || !header.length) throw new Error("invalid node");
+  if (!listSize || !tag.length) throw new Error("invalid node");
 
   const attrs: BinaryNode["attrs"] = {};
-  let data: BinaryNode["content"];
+  let content: BinaryNode["content"];
 
   const attributesLength = (listSize - 1) >> 1;
   for (let i = 0; i < attributesLength; i++) {
@@ -167,7 +162,7 @@ const decodeDecompressedBinaryNode = (
   if (listSize % 2 === 0) {
     const tag = reader.readByte();
     if (isListTag(tag)) {
-      data = readList(tag);
+      content = readList(tag);
     } else {
       let decoded: Uint8Array | string;
       switch (tag) {
@@ -184,23 +179,23 @@ const decodeDecompressedBinaryNode = (
           decoded = readString(tag);
           break;
       }
-      data = decoded;
+      content = decoded;
     }
   }
 
-  console.debug({ listSize, tag: header, attrs });
+  console.debug({ listSize, tag: tag, attrs });
 
   return {
-    tag: header as constants.SINGLE_BYTE_TOKENS_TYPE,
+    tag: tag as SINGLE_BYTE_TOKENS_TYPE,
     attrs,
-    content: data,
+    content,
   };
 };
 
 export const decodeBinaryNode = async (
-  buff: Uint8Array
+  encodedBuffer: Uint8Array
 ): Promise<BinaryNode> => {
-  const decompBuff = await decompressingIfRequired(buff);
-  const reader = new BinaryReader(decompBuff);
-  return decodeDecompressedBinaryNode(reader, constants);
+  const decompressedBuffer = await decompressingIfRequired(encodedBuffer);
+  const reader = new BinaryReader(decompressedBuffer);
+  return decodeDecompressedBinaryNode(reader);
 };

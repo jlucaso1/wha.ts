@@ -33,12 +33,12 @@ export class NoiseProcessor {
   private state: NoiseState;
 
   constructor({
-    staticKeyPair,
+    localStaticKeyPair,
     noisePrologue,
     logger,
     routingInfo,
   }: {
-    staticKeyPair: KeyPair;
+    localStaticKeyPair: KeyPair;
     noisePrologue: Uint8Array;
     logger: ILogger;
     routingInfo?: Uint8Array;
@@ -53,7 +53,7 @@ export class NoiseProcessor {
     const decryptionKey = handshakeHash;
 
     handshakeHash = sha256(concatBytes(handshakeHash, noisePrologue));
-    handshakeHash = sha256(concatBytes(handshakeHash, staticKeyPair.public));
+    handshakeHash = sha256(concatBytes(handshakeHash, localStaticKeyPair.public));
 
     this.state = {
       handshakeHash,
@@ -77,10 +77,10 @@ export class NoiseProcessor {
     return this.state;
   }
 
-  generateInitialHandshakeMessage(ephemeralKeyPair: KeyPair): Uint8Array {
+  generateInitialHandshakeMessage(localEphemeralKeyPair: KeyPair): Uint8Array {
     const helloMsg = create(HandshakeMessageSchema, {
       clientHello: {
-        ephemeral: ephemeralKeyPair.public,
+        ephemeral: localEphemeralKeyPair.public,
       },
     });
     return toBinary(HandshakeMessageSchema, helloMsg);
@@ -171,11 +171,11 @@ export class NoiseProcessor {
   }
 
   async processHandshake(
-    serverHelloData: Uint8Array,
+    serverHelloBytes: Uint8Array,
     localStaticKeyPair: KeyPair,
     localEphemeralKeyPair: KeyPair
   ) {
-    const { serverHello } = fromBinary(HandshakeMessageSchema, serverHelloData);
+    const { serverHello } = fromBinary(HandshakeMessageSchema, serverHelloBytes);
     if (
       !serverHello?.ephemeral ||
       !serverHello?.static ||

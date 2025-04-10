@@ -1,26 +1,20 @@
 import { utf8ToBytes } from "../utils/bytes-utils";
-import * as constants from "./constants";
+import { TAGS, TOKEN_MAP } from "./constants";
 import { type FullJid, jidDecode } from "./jid-utils";
-import type { BinaryNode, BinaryNodeCodingOptions } from "./types";
+import type { BinaryNode } from "./types";
 import { BinaryWriter } from "./writer";
 
-export const encodeBinaryNode = (
-  node: BinaryNode,
-  opts: Pick<BinaryNodeCodingOptions, "TAGS" | "TOKEN_MAP"> = constants
-): Uint8Array => {
+export const encodeBinaryNode = (node: BinaryNode): Uint8Array => {
   const writer = new BinaryWriter();
   writer.writeByte(0);
-  encodeBinaryNodeInner(node, opts, writer);
+  encodeBinaryNodeInner(node, writer);
   return writer.getData();
 };
 
 const encodeBinaryNodeInner = (
   { tag, attrs, content }: BinaryNode,
-  opts: Pick<BinaryNodeCodingOptions, "TAGS" | "TOKEN_MAP">,
   writer: BinaryWriter
 ): void => {
-  const { TAGS, TOKEN_MAP } = opts;
-
   const writeByteLength = (length: number) => {
     if (length >= 4294967296) {
       throw new Error("string too large to encode: " + length);
@@ -158,7 +152,8 @@ const encodeBinaryNodeInner = (
   };
 
   const validAttributes = Object.keys(attrs).filter(
-    (k) => typeof attrs[k] !== "undefined" && attrs[k] !== null
+    (attrName) =>
+      typeof attrs[attrName] !== "undefined" && attrs[attrName] !== null
   );
 
   const listSize =
@@ -199,7 +194,7 @@ const encodeBinaryNodeInner = (
       writer.writeInt16(content.length);
     }
     for (const item of content) {
-      encodeBinaryNodeInner(item, opts, writer);
+      encodeBinaryNodeInner(item, writer);
     }
   }
 };

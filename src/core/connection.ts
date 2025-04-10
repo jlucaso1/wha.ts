@@ -56,7 +56,7 @@ class ConnectionManager extends EventTarget {
     this.routingInfo = creds.routingInfo;
 
     this.noiseProcessor = new NoiseProcessor({
-      staticKeyPair: creds.pairingEphemeralKeyPair,
+      localStaticKeyPair: creds.pairingEphemeralKeyPair,
       noisePrologue: NOISE_WA_HEADER,
       logger: this.logger,
       routingInfo: this.routingInfo,

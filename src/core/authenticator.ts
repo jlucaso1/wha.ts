@@ -43,8 +43,8 @@ interface AuthenticatorEvents {
 }
 
 class Authenticator extends EventTarget {
-  private conn: ConnectionManager;
-  private authState: IAuthStateProvider;
+  private connectionManager: ConnectionManager;
+  private authStateProvider: IAuthStateProvider;
   private logger: ILogger;
   private qrTimeout?: ReturnType<typeof setTimeout>;
   private qrRetryCount = 0;
@@ -59,22 +59,24 @@ class Authenticator extends EventTarget {
     logger: ILogger
   ) {
     super();
-    this.conn = connectionManager;
-    this.authState = authStateProvider;
+    this.connectionManager = connectionManager;
+    this.authStateProvider = authStateProvider;
     this.logger = logger;
 
-    this.conn.addEventListener(
+    this.connectionManager.addEventListener(
       "handshake.complete",
       this.handleHandshakeComplete
     );
 
-    this.conn.addEventListener("node.received", ((event: Event) => {
+    this.connectionManager.addEventListener("node.received", ((
+      event: Event
+    ) => {
       if (event instanceof CustomEvent) {
         this.handleNodeReceived(event.detail);
       }
     }) as EventListener);
 
-    this.conn.addEventListener("error", ((event: Event) => {
+    this.connectionManager.addEventListener("error", ((event: Event) => {
       if (event instanceof CustomEvent) {
         const error = event.detail;
         this.logger.error({ err: error }, "Connection error");
@@ -87,7 +89,7 @@ class Authenticator extends EventTarget {
       }
     }) as EventListener);
 
-    this.conn.addEventListener("ws.close", (_event) => {
+    this.connectionManager.addEventListener("ws.close", (_event) => {
       this.clearQrTimeout();
     });
   }
@@ -129,7 +131,7 @@ class Authenticator extends EventTarget {
       throw new Error("Missing 'from' attribute in pair-device node");
     }
 
-    const ack: BinaryNode = {
+    const ackNode: BinaryNode = {
       tag: "iq",
       attrs: {
         to: node.attrs.from,
@@ -138,7 +140,7 @@ class Authenticator extends EventTarget {
       },
     };
 
-    this.dispatchEvent(new CustomEvent("_internal.sendNode", { detail: ack }));
+    this.dispatchEvent(new CustomEvent("_internal.sendNode", { detail: ackNode }));
 
     const pairDeviceNode = getBinaryNodeChild(node, "pair-device")!;
     const refNodes = getBinaryNodeChildren(pairDeviceNode, "ref");
@@ -173,11 +175,15 @@ class Authenticator extends EventTarget {
     }
 
     const ref = bytesToUtf8(refNode.content);
-    const noiseKeyB64 = bytesToBase64(this.authState.creds.noiseKey.public);
-    const identityKeyB64 = bytesToBase64(
-      this.authState.creds.signedIdentityKey.public
+    const noiseKeyB64 = bytesToBase64(
+      this.authStateProvider.creds.noiseKey.public
     );
-    const advSecretB64 = bytesToBase64(this.authState.creds.advSecretKey);
+    const identityKeyB64 = bytesToBase64(
+      this.authStateProvider.creds.signedIdentityKey.public
+    );
+    const advSecretB64 = bytesToBase64(
+      this.authStateProvider.creds.advSecretKey
+    );
 
     const qr = [ref, noiseKeyB64, identityKeyB64, advSecretB64].join(",");
 
@@ -211,12 +217,12 @@ class Authenticator extends EventTarget {
     };
   }
 
-  private _configureSuccessfulPairing(
-    stanza: import("../binary").BinaryNode,
+  private processPairingSuccessData(
+    stanza: BinaryNode,
     creds: AuthenticationCreds
   ): {
     creds: Partial<AuthenticationCreds>;
-    reply: import("../binary").BinaryNode;
+    reply: BinaryNode;
   } {
     const msgId = stanza.attrs.id;
     if (!msgId) {
@@ -363,9 +369,9 @@ class Authenticator extends EventTarget {
     this.clearQrTimeout();
 
     try {
-      const { creds: updatedCreds, reply } = this._configureSuccessfulPairing(
+      const { creds: updatedCreds, reply } = this.processPairingSuccessData(
         node,
-        this.authState.creds
+        this.authStateProvider.creds
       );
 
       this.logger.info(
@@ -376,8 +382,8 @@ class Authenticator extends EventTarget {
         "Pairing successful, updating creds"
       );
 
-      Object.assign(this.authState.creds, updatedCreds);
-      await this.authState.saveCreds();
+      Object.assign(this.authStateProvider.creds, updatedCreds);
+      await this.authStateProvider.saveCreds();
 
       this.dispatchEvent(
         new CustomEvent("_internal.sendNode", { detail: reply })
@@ -418,20 +424,20 @@ class Authenticator extends EventTarget {
     const platform = node.attrs.platform;
     const pushname = node.attrs.pushname;
     const updates: Partial<AuthenticationCreds> = {};
-    if (platform && this.authState.creds.platform !== platform) {
+    if (platform && this.authStateProvider.creds.platform !== platform) {
       updates.platform = platform;
     }
-    if (pushname && this.authState.creds.me?.name !== pushname) {
-      updates.me = { ...this.authState.creds.me!, name: pushname };
+    if (pushname && this.authStateProvider.creds.me?.name !== pushname) {
+      updates.me = { ...this.authStateProvider.creds.me!, name: pushname };
     }
-    if (!this.authState.creds.registered) {
+    if (!this.authStateProvider.creds.registered) {
       updates.registered = true;
     }
 
     if (Object.keys(updates).length > 0) {
       this.logger.info({ updates }, "Updating creds after login success");
-      Object.assign(this.authState.creds, updates);
-      this.authState
+      Object.assign(this.authStateProvider.creds, updates);
+      this.authStateProvider
         .saveCreds()
         .then(() =>
           this.dispatchEvent(
