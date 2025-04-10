@@ -9,14 +9,14 @@ import {
   ClientPayloadSchema,
   HandshakeMessageSchema,
 } from "../gen/whatsapp_pb";
-import type { AuthenticationCreds, KeyPair } from "../state/interface";
+import type { AuthenticationCreds } from "../state/interface";
 import { NoiseProcessor } from "../transport/noise-processor";
+import { FrameHandler } from '../transport/frame-handler';
 import {
   generateLoginPayload,
   generateRegisterPayload,
 } from "./auth-payload-generators";
 import { bytesToHex } from "../utils/bytes-utils";
-import { Curve } from "../signal/crypto";
 
 interface ConnectionManagerEvents {
   "state.change": (
@@ -42,6 +42,7 @@ class ConnectionManager extends EventTarget {
   private creds: AuthenticationCreds;
 
   private noiseProcessor: NoiseProcessor;
+  private frameHandler: FrameHandler;
 
   constructor(
     wsConfig: Partial<WebSocketConfig>,
@@ -60,6 +61,14 @@ class ConnectionManager extends EventTarget {
       logger: this.logger,
       routingInfo: this.routingInfo,
     });
+
+    this.frameHandler = new FrameHandler(
+      this.noiseProcessor,
+      this.logger,
+      this.handleDecryptedFrame,
+      this.routingInfo,
+      NOISE_WA_HEADER
+    );
 
     this.ws = new NativeWebSocketClient(this.config.url, this.config);
 
@@ -126,7 +135,7 @@ class ConnectionManager extends EventTarget {
         this.creds.pairingEphemeralKeyPair
       );
 
-      const frame = await this.noiseProcessor.encodeFrame(handshakeMsg);
+      const frame = await this.frameHandler.framePayload(handshakeMsg);
       await this.ws.send(frame);
     } catch (error: any) {
       this.logger.error({ err: error }, "Noise handshake initiation failed");
@@ -169,7 +178,7 @@ class ConnectionManager extends EventTarget {
           clientFinishMsg
         );
 
-        const frame = await this.noiseProcessor.encodeFrame(finishPayloadBytes);
+        const frame = await this.frameHandler.framePayload(finishPayloadBytes);
         await this.ws.send(frame);
 
         this.noiseProcessor.finalizeHandshake();
@@ -188,7 +197,7 @@ class ConnectionManager extends EventTarget {
   private handleWsMessage = async (data: Uint8Array): Promise<void> => {
     this.lastReceivedDataTime = Date.now();
     try {
-      await this.noiseProcessor.decodeFrame(data, this.handleDecryptedFrame);
+      await this.frameHandler.handleReceivedData(data);
     } catch (error: any) {
       this.logger.error(
         { dataLength: data.length, err: error },
@@ -239,7 +248,7 @@ class ConnectionManager extends EventTarget {
 
     try {
       const buffer = encodeBinaryNode(node);
-      const frame = await this.noiseProcessor.encodeFrame(buffer);
+      const frame = await this.frameHandler.framePayload(buffer);
       await this.ws.send(frame);
       this.dispatchEvent(new CustomEvent("node.sent", { detail: node }));
     } catch (error: any) {

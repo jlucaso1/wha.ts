@@ -24,8 +24,6 @@ interface NoiseState {
   readCounter: number;
   writeCounter: number;
   isHandshakeFinished: boolean;
-  hasSentPrologue: boolean;
-  receivedBytes: Uint8Array;
   routingInfo?: Uint8Array;
   noisePrologue: Uint8Array;
   logger: ILogger;
@@ -65,12 +63,14 @@ export class NoiseProcessor {
       readCounter: 0,
       writeCounter: 0,
       isHandshakeFinished: false,
-      hasSentPrologue: false,
-      receivedBytes: new Uint8Array(0),
       routingInfo,
       noisePrologue,
       logger,
     };
+  }
+
+  get isHandshakeFinished() {
+    return this.state.isHandshakeFinished;
   }
 
   getState(): NoiseState {
@@ -223,100 +223,6 @@ export class NoiseProcessor {
       Curve.sharedKey(localStaticKeyPair.private, serverHello.ephemeral)
     );
     return encryptedLocalStaticPublic;
-  }
-
-  async encodeFrame(data: Uint8Array) {
-    let encryptedData: Uint8Array;
-    if (this.state.isHandshakeFinished) {
-      encryptedData = await this.encryptMessage(data);
-    } else {
-      encryptedData = data;
-    }
-    let frameHeader: Uint8Array = new Uint8Array(0);
-    if (!this.state.hasSentPrologue) {
-      if (this.state.routingInfo) {
-        const headerPrefix = new Uint8Array(7);
-        const view = new DataView(headerPrefix.buffer);
-        headerPrefix.set(
-          [..."ED"].map((c) => c.charCodeAt(0)),
-          0
-        );
-        view.setUint8(2, 0);
-        view.setUint8(3, 1);
-        view.setUint8(4, this.state.routingInfo.byteLength >> 16);
-        view.setUint16(5, this.state.routingInfo.byteLength & 0xffff, false);
-        frameHeader = concatBytes(
-          headerPrefix,
-          this.state.routingInfo,
-          this.state.noisePrologue
-        );
-      } else {
-        frameHeader = this.state.noisePrologue;
-      }
-      this.state.hasSentPrologue = true;
-    }
-    const totalLength = frameHeader.length + 3 + encryptedData.length;
-    const frame = new Uint8Array(totalLength);
-    frame.set(frameHeader, 0);
-    const view = new DataView(
-      frame.buffer,
-      frameHeader.byteOffset + frameHeader.length,
-      3
-    );
-    view.setUint8(0, encryptedData.length >> 16);
-    view.setUint16(1, encryptedData.length & 0xffff, false);
-    frame.set(encryptedData, frameHeader.length + 3);
-    return frame;
-  }
-
-  async decodeFrame(
-    newData: Uint8Array,
-    onFrame: (frameData: Uint8Array) => void
-  ) {
-    this.state = {
-      ...this.state,
-      receivedBytes: concatBytes(this.state.receivedBytes, newData),
-    };
-    while (this.state.receivedBytes.length >= 3) {
-      const dataView = new DataView(
-        this.state.receivedBytes.buffer,
-        this.state.receivedBytes.byteOffset,
-        this.state.receivedBytes.byteLength
-      );
-      const frameLength =
-        (dataView.getUint8(0) << 16) | dataView.getUint16(1, false);
-      if (this.state.receivedBytes.length >= frameLength + 3) {
-        const frameContentBytes = this.state.receivedBytes.subarray(
-          3,
-          frameLength + 3
-        );
-        const remainingBytes = this.state.receivedBytes.subarray(
-          frameLength + 3
-        );
-        let processedFrameContent: Uint8Array;
-        if (this.state.isHandshakeFinished) {
-          try {
-            processedFrameContent = await this.decryptMessage(
-              frameContentBytes
-            );
-          } catch (error) {
-            this.state.logger.error({ err: error }, "Error decrypting frame");
-            this.state = { ...this.state, receivedBytes: remainingBytes };
-            continue;
-          }
-        } else {
-          processedFrameContent = frameContentBytes;
-        }
-        this.state = { ...this.state, receivedBytes: remainingBytes };
-        try {
-          onFrame(processedFrameContent);
-        } catch (error) {
-          this.state.logger.error({ err: error }, "Error processing frame");
-        }
-      } else {
-        break;
-      }
-    }
   }
 
   private generateIV(counter: number) {
