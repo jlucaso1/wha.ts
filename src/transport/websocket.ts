@@ -67,11 +67,6 @@ export class NativeWebSocketClient extends IWebSocketClient {
         : Promise.resolve();
     }
 
-    this.config.logger.info(
-      { url: this.url.toString() },
-      "Connecting WebSocket"
-    );
-
     return new Promise<void>((resolve, reject) => {
       this.connectionPromise = { resolve, reject };
 

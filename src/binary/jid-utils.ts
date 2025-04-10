@@ -5,7 +5,7 @@ export const STATUS_JID_SUFFIX = "status@broadcast";
 export const NEWSLETTER_JID_SUFFIX = "@newsletter";
 export const LID_JID_SUFFIX = "@lid";
 
-export type JidServer =
+type JidServer =
   | "s.whatsapp.net"
   | "g.us"
   | "broadcast"
@@ -14,7 +14,7 @@ export type JidServer =
   | "c.us"
   | string;
 
-export type JidWithDevice = {
+type JidWithDevice = {
   user?: string;
   device?: number;
 };

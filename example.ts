@@ -6,8 +6,6 @@ import {
 } from "./src/state/providers/unstorage";
 
 async function runExample() {
-  console.log("Initializing Wha.ts client...");
-
   const storage = createFsStorage({ base: "./storage" });
 
   const authState = await UnstorageAuthState.init(storage);
@@ -16,8 +14,6 @@ async function runExample() {
     auth: authState,
     logger: console,
   });
-
-  console.log("Setting up event listeners...");
 
   client.addListener("connection.update", (update) => {
     console.log("[CONNECTION UPDATE]", JSON.stringify(update));

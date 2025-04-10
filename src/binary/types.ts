@@ -6,5 +6,3 @@ export type BinaryNode = {
   attrs: { [key: string]: string };
   content?: BinaryNode[] | string | Uint8Array;
 };
-
-export type BinaryNodeCodingOptions = typeof constants

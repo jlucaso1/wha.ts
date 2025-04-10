@@ -82,10 +82,7 @@ class UnstorageSignalKeyStore implements ISignalProtocolStore {
           );
         } else {
           try {
-            const serializedValue = JSON.stringify(
-              value,
-              BufferJSON.replacer
-            );
+            const serializedValue = JSON.stringify(value, BufferJSON.replacer);
             setPromises.push(
               this.storage
                 .setItem(key, serializedValue)
@@ -122,29 +119,21 @@ export class UnstorageAuthState implements IAuthStateProvider {
     this.keys = keys;
   }
 
-  static async init(storage = createMemoryStorage()): Promise<UnstorageAuthState> {
+  static async init(
+    storage = createMemoryStorage()
+  ): Promise<UnstorageAuthState> {
     let creds: AuthenticationCreds;
     try {
       const credsValue = await storage.getItem(CREDS_KEY);
       if (credsValue !== null && typeof credsValue === "string") {
         creds = JSON.parse(credsValue, BufferJSON.reviver);
-        console.log("[UnstorageAuthState] Loaded existing credentials.");
       } else if (credsValue !== null) {
         try {
           creds = JSON.parse(JSON.stringify(credsValue), BufferJSON.reviver);
-          console.log(
-            "[UnstorageAuthState] Recovered creds from non-string value."
-          );
         } catch {
-          console.warn(
-            "[UnstorageAuthState] Recovery failed, initializing new credentials."
-          );
           creds = initAuthCreds();
         }
       } else {
-        console.log(
-          "[UnstorageAuthState] No existing credentials found, initializing new ones."
-        );
         creds = initAuthCreds();
         await storage.setItem(
           CREDS_KEY,
@@ -195,13 +184,9 @@ export class UnstorageAuthState implements IAuthStateProvider {
       );
       await Promise.all(removePromises);
 
-      console.log("[UnstorageAuthState] Authentication data cleared.");
-
       this.creds = initAuthCreds();
       this.keys = new UnstorageSignalKeyStore(this.storage);
-    } catch (error) {
-      console.error("[UnstorageAuthState] Error clearing data:", error);
-    }
+    } catch (error) {}
   }
 }
 
@@ -212,6 +197,5 @@ export const createMemoryStorage = () => createUnstorage();
 
 export const createFsStorage = (options?: { base?: string }) => {
   const baseDir = options?.base || "./storage";
-  console.log(`[createFsStorage] Using file system storage at: ${baseDir}`);
   return createUnstorage({ driver: fsDriver({ base: baseDir }) });
 };
