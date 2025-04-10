@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { createWAClient } from "../src/client";
-import type { ClientEvents } from "../src/client";
+import type { ClientEventMap } from "../src/client-events";
 import { UnstorageAuthState } from "../src/state/providers/unstorage";
 
 const E2E_TEST_TIMEOUT = 10_000;
@@ -17,7 +17,7 @@ test(
     let connectionOpened = false;
 
     const qrCodePromise = new Promise<string>((resolve, reject) => {
-      const handleUpdate: ClientEvents["connection.update"] = (update) => {
+      const handleUpdate = (update: ClientEventMap["connection.update"]) => {
         console.log("[E2E Test] Connection Update:", JSON.stringify(update));
         const { connection, qr, isNewLogin, error } = update;
 

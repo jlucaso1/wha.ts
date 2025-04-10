@@ -17,20 +17,17 @@ import {
   generateRegisterPayload,
 } from "./auth-payload-generators";
 import { bytesToHex } from "../utils/bytes-utils";
+import { TypedEventTarget } from "../utils/typed-event-target";
+import {
+  type ConnectionManagerEventMap,
+  type StateChangePayload,
+  type ErrorPayload,
+  type NodeReceivedPayload,
+  type NodeSentPayload,
+  type WsClosePayload
+} from "./connection-events";
 
-interface ConnectionManagerEvents {
-  "state.change": (
-    state: "connecting" | "open" | "handshaking" | "closing" | "closed",
-    error?: Error
-  ) => void;
-  "handshake.complete": () => void;
-  "node.received": (node: BinaryNode) => void;
-  "node.sent": (node: BinaryNode) => void;
-  error: (error: Error) => void;
-  "ws.close": (code: number, reason: string) => void;
-}
-
-class ConnectionManager extends EventTarget {
+class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
   private ws: NativeWebSocketClient;
   private logger: ILogger;
   private config: WebSocketConfig;
@@ -78,9 +75,8 @@ class ConnectionManager extends EventTarget {
   private setState(newState: typeof this.state, error?: Error): void {
     if (this.state !== newState) {
       this.state = newState;
-      this.dispatchEvent(
-        new CustomEvent("state.change", { detail: { state: newState, error } })
-      );
+      const payload: StateChangePayload = { state: newState, error };
+      this.dispatchTypedEvent("state.change", payload);
     }
   }
 
@@ -121,7 +117,7 @@ class ConnectionManager extends EventTarget {
     } catch (error: any) {
       this.logger.error({ err: error }, "WebSocket connection failed");
       this.setState("closed", error);
-      this.dispatchEvent(new CustomEvent("error", { detail: error }));
+      this.dispatchTypedEvent("error", { error });
       throw error;
     }
   }
@@ -184,7 +180,7 @@ class ConnectionManager extends EventTarget {
         this.noiseProcessor.finalizeHandshake();
 
         this.setState("open");
-        this.dispatchEvent(new CustomEvent("handshake.complete"));
+        this.dispatchTypedEvent("handshake.complete", {});
       } else {
         throw new Error("Received unexpected message during handshake");
       }
@@ -203,7 +199,7 @@ class ConnectionManager extends EventTarget {
         { dataLength: data.length, err: error },
         "Noise frame decoding/decryption failed"
       );
-      this.dispatchEvent(new CustomEvent("error", { detail: error }));
+      this.dispatchTypedEvent("error", { error });
     }
   };
 
@@ -229,13 +225,13 @@ class ConnectionManager extends EventTarget {
     try {
       const node = await decodeBinaryNode(decryptedPayload);
 
-      this.dispatchEvent(new CustomEvent("node.received", { detail: node }));
+      this.dispatchTypedEvent("node.received", { node });
     } catch (error: any) {
       this.logger.error(
         { err: error, hex: bytesToHex(decryptedPayload) },
         "Failed to decode BinaryNode from decrypted frame"
       );
-      this.dispatchEvent(new CustomEvent("error", { detail: error }));
+      this.dispatchTypedEvent("error", { error });
     }
   };
 
@@ -250,7 +246,7 @@ class ConnectionManager extends EventTarget {
       const buffer = encodeBinaryNode(node);
       const frame = await this.frameHandler.framePayload(buffer);
       await this.ws.send(frame);
-      this.dispatchEvent(new CustomEvent("node.sent", { detail: node }));
+      this.dispatchTypedEvent("node.sent", { node });
     } catch (error: any) {
       this.logger.error({ err: error, tag: node.tag }, "Failed to send node");
       throw error;
@@ -302,7 +298,7 @@ class ConnectionManager extends EventTarget {
 
   private handleWsError = (error: Error): void => {
     this.logger.error({ err: error }, "WebSocket error occurred");
-    this.dispatchEvent(new CustomEvent("error", { detail: error }));
+    this.dispatchTypedEvent("error", { error });
     this.close(error);
   };
 
@@ -321,10 +317,8 @@ class ConnectionManager extends EventTarget {
     );
     this.stopKeepAlive();
     this.removeWsListeners();
-    this.dispatchEvent(
-      new CustomEvent("ws.close", { detail: { code, reason } })
-    );
-    if (error) this.dispatchEvent(new CustomEvent("error", { detail: error }));
+    this.dispatchTypedEvent("ws.close", { code, reason });
+    if (error) this.dispatchTypedEvent("error", { error });
   };
 
   async close(error?: Error): Promise<void> {
@@ -352,4 +346,3 @@ class ConnectionManager extends EventTarget {
 }
 
 export { ConnectionManager };
-export type { ConnectionManagerEvents };

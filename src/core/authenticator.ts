@@ -26,23 +26,16 @@ import {
 } from "../gen/whatsapp_pb";
 import { hmacSign } from "../signal/crypto";
 import { Curve } from "../signal/crypto";
+import { TypedEventTarget, type TypedCustomEvent } from "../utils/typed-event-target";
+import {
+  type AuthenticatorEventMap,
+  type ConnectionUpdatePayload,
+  type CredsUpdatePayload,
+  type InternalSendNodePayload,
+  type InternalCloseConnectionPayload
+} from "./authenticator-events";
 
-interface AuthenticatorEvents {
-  "connection.update": (
-    update: Partial<{
-      connection: "connecting" | "open" | "close";
-      isNewLogin: boolean;
-      qr?: string;
-      error?: Error;
-    }>
-  ) => void;
-  "creds.update": (creds: Partial<AuthenticationCreds>) => void;
-
-  "_internal.sendNode": (node: BinaryNode) => void;
-  "_internal.closeConnection": (error?: Error) => void;
-}
-
-class Authenticator extends EventTarget {
+class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
   private connectionManager: ConnectionManager;
   private authStateProvider: IAuthStateProvider;
   private logger: ILogger;
@@ -68,28 +61,25 @@ class Authenticator extends EventTarget {
       this.handleHandshakeComplete
     );
 
-    this.connectionManager.addEventListener("node.received", ((
-      event: Event
+    this.connectionManager.addEventListener("node.received", (
+      event: TypedCustomEvent<{ node: BinaryNode }>
     ) => {
-      if (event instanceof CustomEvent) {
-        this.handleNodeReceived(event.detail);
-      }
-    }) as EventListener);
+      this.handleNodeReceived(event.detail.node);
+    });
 
-    this.connectionManager.addEventListener("error", ((event: Event) => {
-      if (event instanceof CustomEvent) {
-        const error = event.detail;
-        this.logger.error({ err: error }, "Connection error");
-        this.clearQrTimeout();
-        this.dispatchEvent(
-          new CustomEvent("connection.update", {
-            detail: { connection: "close", error },
-          })
-        );
-      }
-    }) as EventListener);
+    this.connectionManager.addEventListener("error", (
+      event: TypedCustomEvent<{ error: Error }>
+    ) => {
+      const error = event.detail.error;
+      this.logger.error({ err: error }, "Connection error");
+      this.clearQrTimeout();
+      this.dispatchTypedEvent("connection.update", {
+        connection: "close",
+        error
+      });
+    });
 
-    this.connectionManager.addEventListener("ws.close", (_event) => {
+    this.connectionManager.addEventListener("ws.close", () => {
       this.clearQrTimeout();
     });
   }
@@ -140,7 +130,7 @@ class Authenticator extends EventTarget {
       },
     };
 
-    this.dispatchEvent(new CustomEvent("_internal.sendNode", { detail: ackNode }));
+    this.dispatchTypedEvent("_internal.sendNode", { node: ackNode });
 
     const pairDeviceNode = getBinaryNodeChild(node, "pair-device")!;
     const refNodes = getBinaryNodeChildren(pairDeviceNode, "ref");
@@ -159,14 +149,11 @@ class Authenticator extends EventTarget {
         "No more QR refs available, pairing timed out/failed"
       );
       const error = new Error("QR code generation failed (no refs left)");
-      this.dispatchEvent(
-        new CustomEvent("connection.update", {
-          detail: { connection: "close", error },
-        })
-      );
-      this.dispatchEvent(
-        new CustomEvent("_internal.closeConnection", { detail: error })
-      );
+      this.dispatchTypedEvent("connection.update", { 
+        connection: "close", 
+        error 
+      });
+      this.dispatchTypedEvent("_internal.closeConnection", { error });
       return;
     }
 
@@ -187,9 +174,7 @@ class Authenticator extends EventTarget {
 
     const qr = [ref, noiseKeyB64, identityKeyB64, advSecretB64].join(",");
 
-    this.dispatchEvent(
-      new CustomEvent("connection.update", { detail: { qr } })
-    );
+    this.dispatchTypedEvent("connection.update", { qr });
 
     const timeoutMs =
       this.qrRetryCount === 0
@@ -385,33 +370,25 @@ class Authenticator extends EventTarget {
       Object.assign(this.authStateProvider.creds, updatedCreds);
       await this.authStateProvider.saveCreds();
 
-      this.dispatchEvent(
-        new CustomEvent("_internal.sendNode", { detail: reply })
-      );
+      this.dispatchTypedEvent("_internal.sendNode", { node: reply });
       this.logger.info("Sent pair-success confirmation reply");
 
-      this.dispatchEvent(
-        new CustomEvent("creds.update", { detail: updatedCreds })
-      );
-      this.dispatchEvent(
-        new CustomEvent("connection.update", {
-          detail: { isNewLogin: true, qr: undefined },
-        })
-      );
+      this.dispatchTypedEvent("creds.update", updatedCreds);
+      this.dispatchTypedEvent("connection.update", { 
+        isNewLogin: true, 
+        qr: undefined 
+      });
 
       this.logger.info(
         "Pairing complete, expecting connection close and restart"
       );
     } catch (error: any) {
       this.logger.error({ err: error }, "Error processing pair-success IQ");
-      this.dispatchEvent(
-        new CustomEvent("connection.update", {
-          detail: { connection: "close", error },
-        })
-      );
-      this.dispatchEvent(
-        new CustomEvent("_internal.closeConnection", { detail: error })
-      );
+      this.dispatchTypedEvent("connection.update", {
+        connection: "close",
+        error
+      });
+      this.dispatchTypedEvent("_internal.closeConnection", { error });
     } finally {
       this.processingPairSuccess = false;
     }
@@ -439,19 +416,13 @@ class Authenticator extends EventTarget {
       Object.assign(this.authStateProvider.creds, updates);
       this.authStateProvider
         .saveCreds()
-        .then(() =>
-          this.dispatchEvent(
-            new CustomEvent("creds.update", { detail: updates })
-          )
-        )
+        .then(() => this.dispatchTypedEvent("creds.update", updates))
         .catch((err) =>
           this.logger.error({ err }, "Failed to save creds after login")
         );
     }
 
-    this.dispatchEvent(
-      new CustomEvent("connection.update", { detail: { connection: "open" } })
-    );
+    this.dispatchTypedEvent("connection.update", { connection: "open" });
   }
 
   private handleLoginFailure(node: BinaryNode): void {
@@ -462,16 +433,12 @@ class Authenticator extends EventTarget {
     (error as any).code = code;
 
     this.clearQrTimeout();
-    this.dispatchEvent(
-      new CustomEvent("connection.update", {
-        detail: { connection: "close", error },
-      })
-    );
-    this.dispatchEvent(
-      new CustomEvent("_internal.closeConnection", { detail: error })
-    );
+    this.dispatchTypedEvent("connection.update", {
+      connection: "close",
+      error
+    });
+    this.dispatchTypedEvent("_internal.closeConnection", { error });
   }
 }
 
 export { Authenticator };
-export type { AuthenticatorEvents };
