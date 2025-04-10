@@ -1,11 +1,9 @@
 import { Curve, randomBytes, signedKeyPair } from "../signal/crypto";
 import type { AuthenticationCreds } from "./interface";
-
-let currentRegistrationId = Math.floor(Math.random() * 16380);
+import { bytesToBase64, base64ToBytes } from "../utils/bytes-utils";
 
 const generateRegistrationId = (): number => {
-  currentRegistrationId = (currentRegistrationId + 1) % 16384;
-  return currentRegistrationId;
+  return Uint16Array.from(randomBytes(2)!)[0]! & 16383;
 };
 
 export const initAuthCreds = (): AuthenticationCreds => {
@@ -25,12 +23,38 @@ export const initAuthCreds = (): AuthenticationCreds => {
       unarchiveChats: false,
     },
     registered: false,
-    platform: undefined,
-    me: undefined,
-    account: undefined,
-    signalIdentities: [],
-    myAppStateKeyId: undefined,
     pairingCode: undefined,
     routingInfo: undefined,
   };
+};
+
+export const BufferJSON = {
+  replacer: (_k: string, value: any) => {
+    if (
+      value instanceof Uint8Array ||
+      value?.type === "Buffer"
+    ) {
+      return {
+        type: "Buffer",
+        data: bytesToBase64(value?.data || value),
+      };
+    }
+
+    return value;
+  },
+
+  reviver: (_k: string, value: any) => {
+    if (
+      typeof value === "object" &&
+      !!value &&
+      (value.buffer === true || value.type === "Buffer")
+    ) {
+      const val = value.data || value.value;
+      return typeof val === "string"
+        ? base64ToBytes(val)
+        : new Uint8Array(val || []);
+    }
+
+    return value;
+  },
 };

@@ -2,7 +2,6 @@ import {
   type AuthenticationCreds,
   type IAuthStateProvider,
 } from "./state/interface";
-import { MemoryAuthState } from "./state/providers/memory";
 import type { ILogger, WebSocketConfig } from "./transport/types";
 import { ConnectionManager } from "./core/connection";
 import { Authenticator, type AuthenticatorEvents } from "./core/authenticator";
@@ -31,7 +30,7 @@ declare interface WhaTSClient {
 
   addListener<K extends keyof ClientEvents>(
     event: K,
-    listener: (data: Parameters<ClientEvents[K]>[0]) => void,
+    listener: (data: Parameters<ClientEvents[K]>[0]) => void
   ): void;
 }
 
@@ -43,7 +42,7 @@ class WhaTSClient extends EventTarget {
   constructor(config: ClientConfig) {
     super();
 
-    const logger = config.logger || console as ILogger;
+    const logger = config.logger || (console as ILogger);
 
     this.config = {
       auth: config.auth,
@@ -55,7 +54,7 @@ class WhaTSClient extends EventTarget {
         ...(config.wsOptions || {}),
         url: new URL(
           config.wsOptions?.url?.toString() ||
-            DEFAULT_SOCKET_CONFIG.waWebSocketUrl,
+            DEFAULT_SOCKET_CONFIG.waWebSocketUrl
         ),
         logger: logger,
       },
@@ -67,18 +66,14 @@ class WhaTSClient extends EventTarget {
     this.conn = new ConnectionManager(
       this.config.wsOptions as WebSocketConfig,
       this.logger,
-      this.auth.creds,
+      this.auth.creds
     );
 
-    this.authenticator = new Authenticator(
-      this.conn,
-      this.auth,
-      this.logger,
-    );
+    this.authenticator = new Authenticator(this.conn, this.auth, this.logger);
 
     this.authenticator.addEventListener("connection.update", (event: any) => {
       this.dispatchEvent(
-        new CustomEvent("connection.update", { detail: event.detail }),
+        new CustomEvent("connection.update", { detail: event.detail })
       );
     });
 
@@ -87,7 +82,7 @@ class WhaTSClient extends EventTarget {
         .saveCreds()
         .then(() => {
           this.dispatchEvent(
-            new CustomEvent("creds.update", { detail: event.detail }),
+            new CustomEvent("creds.update", { detail: event.detail })
           );
         })
         .catch((err) => {
@@ -99,7 +94,7 @@ class WhaTSClient extends EventTarget {
       this.conn.sendNode(event.detail).catch((err) => {
         this.logger.error(
           { err },
-          "Failed to send node requested by Authenticator",
+          "Failed to send node requested by Authenticator"
         );
       });
     });
@@ -112,23 +107,20 @@ class WhaTSClient extends EventTarget {
         this.conn.close(error).catch((err) => {
           this.logger.error(
             { err },
-            "Error closing connection on Authenticator request",
+            "Error closing connection on Authenticator request"
           );
         });
-      },
+      }
     );
   }
 
   addListener<K extends keyof ClientEvents>(
     event: K,
-    listener: (data: Parameters<ClientEvents[K]>[0]) => void,
+    listener: (data: Parameters<ClientEvents[K]>[0]) => void
   ): void {
-    this.addEventListener(
-      event,
-      ((e: CustomEvent) => {
-        listener(e.detail);
-      }) as EventListener,
-    );
+    this.addEventListener(event, ((e: CustomEvent) => {
+      listener(e.detail);
+    }) as EventListener);
   }
 
   async connect(): Promise<void> {
@@ -149,5 +141,5 @@ export const createWAClient = (config: ClientConfig): WhaTSClient => {
   return new WhaTSClient(config);
 };
 
-export { MemoryAuthState, WhaTSClient };
+export { WhaTSClient };
 export type { AuthenticationCreds, IAuthStateProvider, ILogger };

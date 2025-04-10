@@ -17,6 +17,8 @@
     "@noble/ciphers": "^1.2.1",
     "@noble/curves": "^1.8.1",
     "@noble/hashes": "^1.7.1",
+    "curve25519-js": "^0.0.4",
+    "unstorage": "^1.15.0",
     "uqr": "^0.1.2"
   }
 }

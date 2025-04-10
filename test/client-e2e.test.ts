@@ -1,13 +1,14 @@
 import { expect, test } from "vitest";
-import { createWAClient, MemoryAuthState } from "../src/client";
+import { createWAClient } from "../src/client";
 import type { ClientEvents } from "../src/client";
+import { UnstorageAuthState } from "../src/state/providers/unstorage";
 
 const E2E_TEST_TIMEOUT = 10_000;
 
 test(
   "Connect to WhatsApp, display QR",
   async () => {
-    const authState = new MemoryAuthState();
+    const authState = await UnstorageAuthState.init();
     const client = createWAClient({
       auth: authState,
       logger: console,

@@ -1,11 +1,16 @@
 import { renderUnicodeCompact } from "uqr";
-import { createWAClient, MemoryAuthState } from "./src/client";
+import { createWAClient } from "./src/client";
+import {
+  UnstorageAuthState,
+  createFsStorage,
+} from "./src/state/providers/unstorage";
 
 async function runExample() {
   console.log("Initializing Wha.ts client...");
 
-  const authState = new MemoryAuthState();
-  console.log("Using MemoryAuthState (no persistence).");
+  const storage = createFsStorage({ base: "./storage" });
+
+  const authState = await UnstorageAuthState.init(storage);
 
   const client = createWAClient({
     auth: authState,

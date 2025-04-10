@@ -11,7 +11,6 @@ import {
   S_WHATSAPP_NET,
   type SINGLE_BYTE_TOKENS_TYPE,
 } from "../binary";
-import type { ClientPayload } from "../gen/whatsapp_pb";
 import {
   bytesToBase64,
   bytesToHex,
@@ -27,10 +26,6 @@ import {
 } from "../gen/whatsapp_pb";
 import { hmacSign } from "../signal/crypto";
 import { Curve } from "../signal/crypto";
-import {
-  generateLoginPayload,
-  generateRegisterPayload,
-} from "./auth-payload-generators";
 
 interface AuthenticatorEvents {
   "connection.update": (
@@ -104,36 +99,14 @@ class Authenticator extends EventTarget {
     }
   }
 
-  public initiateAuthentication(): ClientPayload {
-    try {
-      let payload: ClientPayload;
-      if (this.authState.creds.registered && this.authState.creds.me?.id) {
-        payload = generateLoginPayload(this.authState.creds.me.id);
-        return payload;
-      } else {
-        payload = generateRegisterPayload(this.authState.creds);
-
-        return payload;
-      }
-    } catch (error: any) {
-      this.logger.error(
-        { err: error },
-        "Failed to prepare initial client payload"
-      );
-      this.dispatchEvent(
-        new CustomEvent("connection.update", {
-          detail: { connection: "close", error },
-        })
-      );
-      throw error;
-    }
-  }
-
   private handleHandshakeComplete = async (): Promise<void> => {};
 
   private handleNodeReceived = (node: BinaryNode): void => {
     if (node.tag === "iq") {
-      if (getBinaryNodeChild(node, "pair-device")) {
+      if (
+        getBinaryNodeChild(node, "pair-device") &&
+        node.attrs.type === "set"
+      ) {
         this.handlePairDeviceIQ(node);
       } else if (getBinaryNodeChild(node, "pair-success")) {
         this.handlePairSuccessIQ(node);
@@ -148,26 +121,30 @@ class Authenticator extends EventTarget {
   private handlePairDeviceIQ(node: BinaryNode): void {
     this.processingPairSuccess = false;
 
-    const pairDeviceNode = getBinaryNodeChild(node, "pair-device")!;
-    const refNodes = getBinaryNodeChildren(pairDeviceNode, "ref");
-
-    this.qrRetryCount = 0;
-    this.generateAndEmitQR(refNodes);
-
     if (!node.attrs.id) {
       throw new Error("Missing message ID in stanza for pair-device");
+    }
+
+    if (!node.attrs.from) {
+      throw new Error("Missing 'from' attribute in pair-device node");
     }
 
     const ack: BinaryNode = {
       tag: "iq",
       attrs: {
-        to: S_WHATSAPP_NET,
+        to: node.attrs.from,
         type: "result",
         id: node.attrs.id,
       },
     };
 
     this.dispatchEvent(new CustomEvent("_internal.sendNode", { detail: ack }));
+
+    const pairDeviceNode = getBinaryNodeChild(node, "pair-device")!;
+    const refNodes = getBinaryNodeChildren(pairDeviceNode, "ref");
+
+    this.qrRetryCount = 0;
+    this.generateAndEmitQR(refNodes);
   }
 
   private generateAndEmitQR(refNodes: BinaryNode[]): void {
@@ -200,7 +177,7 @@ class Authenticator extends EventTarget {
     const identityKeyB64 = bytesToBase64(
       this.authState.creds.signedIdentityKey.public
     );
-    const advSecretB64 = this.authState.creds.advSecretKey;
+    const advSecretB64 = bytesToBase64(this.authState.creds.advSecretKey);
 
     const qr = [ref, noiseKeyB64, identityKeyB64, advSecretB64].join(",");
 

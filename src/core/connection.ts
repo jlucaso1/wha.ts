@@ -38,12 +38,10 @@ class ConnectionManager extends EventTarget {
     "closed";
   private keepAliveInterval?: ReturnType<typeof setInterval>;
   private lastReceivedDataTime: number = 0;
-  private staticKeyPair: KeyPair;
   private routingInfo?: Uint8Array;
   private creds: AuthenticationCreds;
 
   private noiseProcessor: NoiseProcessor;
-  ephemeralKeys: KeyPair;
 
   constructor(
     wsConfig: Partial<WebSocketConfig>,
@@ -54,12 +52,10 @@ class ConnectionManager extends EventTarget {
     this.logger = logger;
     this.config = { ...DEFAULT_SOCKET_CONFIG, ...wsConfig } as WebSocketConfig;
     this.creds = creds;
-    this.staticKeyPair = creds.noiseKey;
     this.routingInfo = creds.routingInfo;
 
-    this.ephemeralKeys = Curve.generateKeyPair();
     this.noiseProcessor = new NoiseProcessor({
-      staticKeyPair: this.ephemeralKeys,
+      staticKeyPair: creds.pairingEphemeralKeyPair,
       noisePrologue: NOISE_WA_HEADER,
       logger: this.logger,
       routingInfo: this.routingInfo,
@@ -127,7 +123,7 @@ class ConnectionManager extends EventTarget {
 
     try {
       const handshakeMsg = this.noiseProcessor.generateInitialHandshakeMessage(
-        this.ephemeralKeys
+        this.creds.pairingEphemeralKeyPair
       );
 
       const frame = await this.noiseProcessor.encodeFrame(handshakeMsg);
@@ -145,10 +141,9 @@ class ConnectionManager extends EventTarget {
       if (handshakeMsg.serverHello) {
         const clientFinishStatic = await this.noiseProcessor.processHandshake(
           data,
-          this.staticKeyPair,
-          this.ephemeralKeys
+          this.creds.noiseKey,
+          this.creds.pairingEphemeralKeyPair
         );
-
         let clientPayload: ClientPayload;
         if (this.creds.registered && this.creds.me?.id) {
           clientPayload = generateLoginPayload(this.creds.me.id);
@@ -224,12 +219,6 @@ class ConnectionManager extends EventTarget {
 
     try {
       const node = await decodeBinaryNode(decryptedPayload);
-
-      if (node.tag === "stream:error") {
-        // here we need to reconnect the socket connection
-
-        return;
-      }
 
       this.dispatchEvent(new CustomEvent("node.received", { detail: node }));
     } catch (error: any) {

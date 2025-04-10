@@ -101,10 +101,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
       throw new Error("WebSocket is not open");
     }
 
-    this.config.logger.debug(
-      { data: data.length },
-      "WebSocket ⬆️"
-    );
+    this.config.logger.debug({ data: data.length }, "WebSocket ⬆️");
 
     try {
       this.socket!.send(data);
@@ -141,10 +138,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
   private handleMessage = (event: MessageEvent<ArrayBuffer>): void => {
     const data = new Uint8Array(event.data);
 
-    this.config.logger.debug(
-      { data: data.length },
-      "WebSocket ⬇️"
-    );
+    this.config.logger.debug({ data: data.length }, "WebSocket ⬇️");
 
     this.dispatchEvent(new CustomEvent("message", { detail: data }));
   };

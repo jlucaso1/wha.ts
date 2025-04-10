@@ -14,7 +14,7 @@ import {
 import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
 import { jidDecode } from "../binary";
 import { encodeBigEndian } from "../utils/generics";
-import { md5 } from "../signal/crypto";
+import { sha256 } from "../signal/crypto";
 import { utf8ToBytes } from "../utils/bytes-utils";
 import { create, toBinary } from "@bufbuild/protobuf";
 import type { AuthenticationCreds } from "../state/interface";
@@ -110,7 +110,7 @@ export const generateRegisterPayload = (
   version: number[] = WA_VERSION,
   browser: readonly [string, string, string] = DEFAULT_BROWSER,
 ): ClientPayload => {
-  const appVersionBuf = md5(utf8ToBytes(version.join(".")));
+  const appVersionBuf = sha256(utf8ToBytes(version.join("."))); // maybe md5
   const devicePropsObject = create(DevicePropsSchema, {
     os: browser[0],
     platformType: getPlatformType(browser[1]),
