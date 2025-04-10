@@ -4,14 +4,14 @@ import {
   gcm,
   randomBytes as nobleRandomBytes,
 } from "@noble/ciphers/webcrypto";
-import { ed25519, x25519 } from "@noble/curves/ed25519";
+import { x25519 } from "@noble/curves/ed25519";
 import { hkdf as nobleHkdf } from "@noble/hashes/hkdf";
 import { hmac as nobleHmac } from "@noble/hashes/hmac";
 import { sha256 as nobleSha256 } from "@noble/hashes/sha2";
 import type { KeyPair } from "../state/interface";
 import { concatBytes } from "../utils/bytes-utils";
 import { KEY_BUNDLE_TYPE } from "../defaults";
-import { sign } from "curve25519-js";
+import { sign, verify } from "curve25519-js";
 
 export const Curve = {
   generateKeyPair: (): KeyPair => {
@@ -32,7 +32,7 @@ export const Curve = {
   },
   verify: (pubKey: Uint8Array, message: Uint8Array, signature: Uint8Array) => {
     try {
-      return ed25519.verify(signature, message, pubKey);
+      return verify(pubKey, message, signature);
     } catch {
       return false;
     }

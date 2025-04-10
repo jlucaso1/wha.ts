@@ -21,10 +21,10 @@ import { TypedEventTarget } from "../utils/typed-event-target";
 import {
   type ConnectionManagerEventMap,
   type StateChangePayload,
-  type ErrorPayload,
-  type NodeReceivedPayload,
-  type NodeSentPayload,
-  type WsClosePayload
+  // type ErrorPayload,
+  // type NodeReceivedPayload,
+  // type NodeSentPayload,
+  // type WsClosePayload
 } from "./connection-events";
 
 class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {

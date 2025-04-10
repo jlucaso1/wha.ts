@@ -26,13 +26,16 @@ import {
 } from "../gen/whatsapp_pb";
 import { hmacSign } from "../signal/crypto";
 import { Curve } from "../signal/crypto";
-import { TypedEventTarget, type TypedCustomEvent } from "../utils/typed-event-target";
+import {
+  TypedEventTarget,
+  type TypedCustomEvent,
+} from "../utils/typed-event-target";
 import {
   type AuthenticatorEventMap,
-  type ConnectionUpdatePayload,
-  type CredsUpdatePayload,
-  type InternalSendNodePayload,
-  type InternalCloseConnectionPayload
+  // type ConnectionUpdatePayload,
+  // type CredsUpdatePayload,
+  // type InternalSendNodePayload,
+  // type InternalCloseConnectionPayload
 } from "./authenticator-events";
 
 class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
@@ -61,23 +64,25 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
       this.handleHandshakeComplete
     );
 
-    this.connectionManager.addEventListener("node.received", (
-      event: TypedCustomEvent<{ node: BinaryNode }>
-    ) => {
-      this.handleNodeReceived(event.detail.node);
-    });
+    this.connectionManager.addEventListener(
+      "node.received",
+      (event: TypedCustomEvent<{ node: BinaryNode }>) => {
+        this.handleNodeReceived(event.detail.node);
+      }
+    );
 
-    this.connectionManager.addEventListener("error", (
-      event: TypedCustomEvent<{ error: Error }>
-    ) => {
-      const error = event.detail.error;
-      this.logger.error({ err: error }, "Connection error");
-      this.clearQrTimeout();
-      this.dispatchTypedEvent("connection.update", {
-        connection: "close",
-        error
-      });
-    });
+    this.connectionManager.addEventListener(
+      "error",
+      (event: TypedCustomEvent<{ error: Error }>) => {
+        const error = event.detail.error;
+        this.logger.error({ err: error }, "Connection error");
+        this.clearQrTimeout();
+        this.dispatchTypedEvent("connection.update", {
+          connection: "close",
+          error,
+        });
+      }
+    );
 
     this.connectionManager.addEventListener("ws.close", () => {
       this.clearQrTimeout();
@@ -149,9 +154,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
         "No more QR refs available, pairing timed out/failed"
       );
       const error = new Error("QR code generation failed (no refs left)");
-      this.dispatchTypedEvent("connection.update", { 
-        connection: "close", 
-        error 
+      this.dispatchTypedEvent("connection.update", {
+        connection: "close",
+        error,
       });
       this.dispatchTypedEvent("_internal.closeConnection", { error });
       return;
@@ -231,10 +236,15 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
       );
     }
 
+    if (!(deviceIdentityNode.content instanceof Uint8Array)) {
+      throw new Error("Invalid device-identity content");
+    }
+
     const hmacIdentity = fromBinary(
       ADVSignedDeviceIdentityHMACSchema,
-      deviceIdentityNode.content as Uint8Array
+      deviceIdentityNode.content
     );
+
     if (!hmacIdentity.details || !hmacIdentity.hmac) {
       throw new Error("Invalid ADVSignedDeviceIdentityHMAC structure");
     }
@@ -374,9 +384,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
       this.logger.info("Sent pair-success confirmation reply");
 
       this.dispatchTypedEvent("creds.update", updatedCreds);
-      this.dispatchTypedEvent("connection.update", { 
-        isNewLogin: true, 
-        qr: undefined 
+      this.dispatchTypedEvent("connection.update", {
+        isNewLogin: true,
+        qr: undefined,
       });
 
       this.logger.info(
@@ -386,7 +396,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
       this.logger.error({ err: error }, "Error processing pair-success IQ");
       this.dispatchTypedEvent("connection.update", {
         connection: "close",
-        error
+        error,
       });
       this.dispatchTypedEvent("_internal.closeConnection", { error });
     } finally {
@@ -435,7 +445,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
     this.clearQrTimeout();
     this.dispatchTypedEvent("connection.update", {
       connection: "close",
-      error
+      error,
     });
     this.dispatchTypedEvent("_internal.closeConnection", { error });
   }
