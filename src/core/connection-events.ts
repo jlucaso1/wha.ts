@@ -1,4 +1,4 @@
-import type { BinaryNode } from "../binary";
+import type { BinaryNode } from "../binary/types";
 
 /**
  * Payload for state.change events
@@ -52,6 +52,6 @@ export interface ConnectionManagerEventMap {
   "handshake.complete": HandshakeCompletePayload;
   "node.received": NodeReceivedPayload;
   "node.sent": NodeSentPayload;
-  "error": ErrorPayload;
+  error: ErrorPayload;
   "ws.close": WsClosePayload;
 }

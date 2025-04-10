@@ -1,4 +1,4 @@
-import type { BinaryNode } from "../binary";
+import type { BinaryNode } from "../binary/types";
 import type { AuthenticationCreds } from "../state/interface";
 
 /**

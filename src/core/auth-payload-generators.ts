@@ -12,12 +12,12 @@ import {
   DeviceProps_PlatformType,
 } from "../gen/whatsapp_pb";
 import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
-import { jidDecode } from "../binary";
 import { encodeBigEndian } from "../utils/generics";
 import { sha256 } from "../signal/crypto";
 import { utf8ToBytes } from "../utils/bytes-utils";
 import { create, toBinary } from "@bufbuild/protobuf";
 import type { AuthenticationCreds } from "../state/interface";
+import { jidDecode } from "../binary/jid-utils";
 
 const getPlatformType = (platform: string): DeviceProps_PlatformType => {
   const platformUpper = platform.toUpperCase();

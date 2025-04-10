@@ -4,13 +4,7 @@ import type {
   IAuthStateProvider,
 } from "../state/interface";
 import type { ILogger } from "../transport/types";
-import {
-  type BinaryNode,
-  getBinaryNodeChild,
-  getBinaryNodeChildren,
-  S_WHATSAPP_NET,
-  type SINGLE_BYTE_TOKENS_TYPE,
-} from "../binary";
+
 import {
   bytesToBase64,
   bytesToHex,
@@ -37,6 +31,10 @@ import {
   // type InternalSendNodePayload,
   // type InternalCloseConnectionPayload
 } from "./authenticator-events";
+import type { SINGLE_BYTE_TOKENS_TYPE } from "../binary/constants";
+import { S_WHATSAPP_NET } from "../binary/jid-utils";
+import { getBinaryNodeChild, getBinaryNodeChildren } from "../binary/node-utils";
+import type { BinaryNode } from "../binary/types";
 
 class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
   private connectionManager: ConnectionManager;

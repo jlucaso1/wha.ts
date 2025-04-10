@@ -1,5 +1,4 @@
 import { NativeWebSocketClient } from "../transport/websocket";
-import { type BinaryNode, decodeBinaryNode, encodeBinaryNode } from "../binary";
 import type { ILogger, WebSocketConfig } from "../transport/types";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import { S_WHATSAPP_NET } from "../binary/jid-utils";
@@ -26,6 +25,9 @@ import {
   // type NodeSentPayload,
   // type WsClosePayload
 } from "./connection-events";
+import { decodeBinaryNode } from "../binary/decode";
+import { encodeBinaryNode } from "../binary/encode";
+import type { BinaryNode } from "../binary/types";
 
 class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
   private ws: NativeWebSocketClient;

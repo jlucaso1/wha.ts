@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
-import { decodeBinaryNode, encodeBinaryNode } from "../../src/binary";
 import type { BinaryNode } from "../../src/binary/types";
+import { encodeBinaryNode } from "../../src/binary/encode";
+import { decodeBinaryNode } from "../../src/binary/decode";
 
 const nodeCases: {
   description: string;
