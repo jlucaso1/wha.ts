@@ -9,11 +9,11 @@ export const NOISE_MODE = "Noise_XX_25519_AESGCM_SHA256\0\0\0\0";
 export const NOISE_WA_HEADER = new Uint8Array([87, 65, 6, 2]);
 
 export const DEFAULT_SOCKET_CONFIG = {
-  waWebSocketUrl: "wss://web.whatsapp.com/ws/chat",
-  connectTimeoutMs: 20_000,
-  keepAliveIntervalMs: 25_000,
-  defaultQueryTimeoutMs: 60_000,
-  origin: DEFAULT_ORIGIN,
+	waWebSocketUrl: "wss://web.whatsapp.com/ws/chat",
+	connectTimeoutMs: 20_000,
+	keepAliveIntervalMs: 25_000,
+	defaultQueryTimeoutMs: 60_000,
+	origin: DEFAULT_ORIGIN,
 };
 
 export const WA_CERT_DETAILS = { SERIAL: 0 };

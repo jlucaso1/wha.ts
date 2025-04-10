@@ -5,37 +5,37 @@ import type { AuthenticationCreds } from "../state/interface";
  * Payload for connection.update events
  */
 export interface ConnectionUpdatePayload {
-  connection?: "connecting" | "open" | "close";
-  isNewLogin?: boolean;
-  qr?: string;
-  error?: Error;
+	connection?: "connecting" | "open" | "close";
+	isNewLogin?: boolean;
+	qr?: string;
+	error?: Error;
 }
 
 /**
  * Payload for creds.update events
  */
-export interface CredsUpdatePayload extends Partial<AuthenticationCreds> {}
+export type CredsUpdatePayload = Partial<AuthenticationCreds>;
 
 /**
  * Payload for _internal.sendNode events
  */
 export interface InternalSendNodePayload {
-  node: BinaryNode;
+	node: BinaryNode;
 }
 
 /**
  * Payload for _internal.closeConnection events
  */
 export interface InternalCloseConnectionPayload {
-  error?: Error;
+	error?: Error;
 }
 
 /**
  * Map of event names to their respective payload types for Authenticator
  */
 export interface AuthenticatorEventMap {
-  "connection.update": ConnectionUpdatePayload;
-  "creds.update": CredsUpdatePayload;
-  "_internal.sendNode": InternalSendNodePayload;
-  "_internal.closeConnection": InternalCloseConnectionPayload;
+	"connection.update": ConnectionUpdatePayload;
+	"creds.update": CredsUpdatePayload;
+	"_internal.sendNode": InternalSendNodePayload;
+	"_internal.closeConnection": InternalCloseConnectionPayload;
 }

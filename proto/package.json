@@ -1,10 +1,10 @@
 {
-  "name": "wha.ts-proto-generator",
-  "private": true,
-  "scripts": {
-    "proto:gen": "npx @bufbuild/buf generate"
-  },
-  "devDependencies": {
-    "@bufbuild/protoc-gen-es": "^2.2.5"
-  }
+	"name": "wha.ts-proto-generator",
+	"private": true,
+	"scripts": {
+		"proto:gen": "npx @bufbuild/buf generate"
+	},
+	"devDependencies": {
+		"@bufbuild/protoc-gen-es": "^2.2.5"
+	}
 }

@@ -1,4 +1,4 @@
-#  Initial Connection & QR Code Pairing: Technical Deep Dive
+# Initial Connection & QR Code Pairing: Technical Deep Dive
 
 ---
 
@@ -11,32 +11,39 @@ This document details the **initial connection process** of , including the **No
 ## 1. Noise Protocol Handshake
 
 ### Purpose
+
 Establish a mutually authenticated, encrypted session over WebSocket using the Noise_XX_25519_AESGCM_SHA256 handshake.
 
 ### Sequence
 
 1. **Initialize Handshake**
+
    - Client generates ephemeral X25519 key pair.
    - Starts Noise handshake with XX pattern.
 
 2. **ClientHello**
+
    - Client sends protobuf `HandshakeMessage` with ephemeral public key.
    - Sent unencrypted.
 
 3. **ServerHello**
+
    - Server responds with:
      - Ephemeral public key
      - Encrypted static public key
      - Encrypted certificate chain
 
 4. **Mix Ephemeral Keys**
+
    - Client mixes DH(client ephemeral private, server ephemeral public) into Noise key.
 
 5. **Decrypt Server Static Key**
+
    - Client decrypts encrypted static key.
    - Mixes DH(client ephemeral private, server static public) into Noise key.
 
 6. **Decrypt & Verify Certificate**
+
    - Client decrypts encrypted certificate.
    - Verifies:
      - Intermediate cert signed by WhatsApp root key.
@@ -45,6 +52,7 @@ Establish a mutually authenticated, encrypted session over WebSocket using the N
      - Issuer serials match.
 
 7. **ClientFinish**
+
    - Client encrypts its static Noise public key.
    - Mixes DH(client static private, server ephemeral public) into Noise key.
    - Encrypts client payload (device info).
@@ -86,14 +94,17 @@ sequenceDiagram
 ## 2. QR Code Pairing & Authentication
 
 ### Purpose
+
 Authenticate a new device by linking it to an existing WhatsApp account via QR code scan.
 
 ### Sequence
 
 1. **Server Sends Pair-Device Request**
+
    - Contains multiple `<ref>` strings.
 
 2. **Generate QR Code Data**
+
    - For each `ref`, client constructs:
      ```
      ref,base64(client Noise pubkey),base64(client Identity pubkey),base64(ADV secret key)
@@ -101,10 +112,12 @@ Authenticate a new device by linking it to an existing WhatsApp account via QR c
    - Displayed as QR codes.
 
 3. **User Scans QR Code**
+
    - Main device scans QR code.
    - Initiates device linking with WhatsApp servers.
 
 4. **Server Sends Pair-Success**
+
    - Contains:
      - Signed, HMAC-protected device identity
      - Business info
@@ -112,23 +125,28 @@ Authenticate a new device by linking it to an existing WhatsApp account via QR c
      - Platform info
 
 5. **Verify Device Identity Container**
+
    - Parse `ADVSignedDeviceIdentityHMAC`.
    - Verify HMAC with ADV secret key.
    - Parse inner `ADVSignedDeviceIdentity`.
 
 6. **Verify Signatures**
+
    - Check account signature using client's Identity key.
    - Generate device signature and attach.
 
 7. **Extract Device Details**
+
    - Parse `ADVDeviceIdentity`.
    - Save device identity, JIDs, business info, platform info.
 
 8. **Acknowledge Pairing**
+
    - Marshal self-signed device identity.
    - Send `<pair-device-sign>` IQ stanza with signed identity.
 
 9. **Persist State**
+
    - Save updated store.
    - Map LID to JID.
    - Store main device's Signal identity.
