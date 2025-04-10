@@ -11,7 +11,7 @@ type ProtocolAddress = {
   deviceId: number;
 };
 
-export type SignalIdentity = {
+type SignalIdentity = {
   identifier: ProtocolAddress;
   identifierKey: Uint8Array;
 };
@@ -60,7 +60,7 @@ export type SignalDataSet = {
 export interface ISignalProtocolStore {
   get<T extends keyof SignalDataTypeMap>(
     type: T,
-    ids: string[],
+    ids: string[]
   ): Promise<{ [id: string]: SignalDataTypeMap[T] | undefined }>;
 
   set(data: SignalDataSet): Promise<void>;
