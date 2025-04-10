@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Wha.ts Inspector POC",
+  "version": "0.1.0",
+  "description": "POC: Intercepts WhatsApp Web WebSocket messages.",
+  "permissions": ["scripting"],
+  "host_permissions": ["https://web.whatsapp.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["dist/main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
