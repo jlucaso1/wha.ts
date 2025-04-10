@@ -1,2 +1,3 @@
 bunx biome check
 bun test
+bun tsc
