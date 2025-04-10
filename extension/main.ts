@@ -1,9 +1,17 @@
 import { decodeBinaryNode } from "../src/binary/decode";
+import { fromBinary, toJson } from "@bufbuild/protobuf";
+import {
+  HandshakeMessageSchema,
+  ClientPayloadSchema, // Import ClientPayload too, though less likely to be directly decoded from raw payload
+} from "../src/gen/whatsapp_pb"; // Adjust path if needed
 
 console.log("[Wha.ts Console POC] Content script injected.");
 
 // --- Utilities (You might eventually import these from wha.ts or a shared util file) ---
-function bytesToHex(bytes: string | any[] | Uint8Array<any>, maxLen = 64) {
+function bytesToHex(
+  bytes: string | any[] | Uint8Array<any>,
+  maxLen = 64
+): string {
   let hex = "";
   const len = Math.min(bytes.length, maxLen);
   for (let i = 0; i < len; i++) {
@@ -16,12 +24,11 @@ function bytesToHex(bytes: string | any[] | Uint8Array<any>, maxLen = 64) {
   return hex;
 }
 
-function arrayBufferToUint8Array(buffer: ArrayBuffer) {
+function arrayBufferToUint8Array(buffer: ArrayBuffer): Uint8Array {
   return new Uint8Array(buffer);
 }
 
-function arrayBufferToBase64Snippet(buffer: any, maxLength = 64) {
-  // ... (same as before) ...
+function arrayBufferToBase64Snippet(buffer: any, maxLength = 64): string {
   let binary = "";
   const bytes = new Uint8Array(buffer);
   const len = Math.min(bytes.byteLength, maxLength);
@@ -43,18 +50,67 @@ function arrayBufferToBase64Snippet(buffer: any, maxLength = 64) {
   }
 }
 
-// --- Log intercepted data helper (Improved) ---
-function logInterceptedData(
-  direction: string,
-  data: string | ArrayBufferLike | Blob | ArrayBufferView<ArrayBufferLike>
-) {
+// --- Protobuf Decoding Helpers ---
+
+/**
+ * Attempts to decode raw bytes using a specific Protobuf schema.
+ * Returns the decoded object (as JSON for logging) or null if decoding fails.
+ */
+async function tryDecodeProto(
+  payloadBytes: Uint8Array,
+  schema: typeof HandshakeMessageSchema | typeof ClientPayloadSchema // Add other schemas here if needed
+): Promise<object | null> {
+  if (!payloadBytes || payloadBytes.length === 0) {
+    return null; // Nothing to decode
+  }
+  try {
+    const message = fromBinary(schema, payloadBytes);
+    // Convert to a plain JSON object for easier console logging
+    // Use toJson for better representation than default toString
+    // @ts-ignore
+    return toJson(schema, message, { emitDefaultValues: true });
+  } catch (error) {
+    // Log decoding errors only if you need deep debugging, otherwise it clutters the console
+    // console.debug(`[Wha.ts POC] Failed to decode payload as ${schema.typeName}:`, error);
+    return null; // Decoding failed, likely wrong schema or encrypted data
+  }
+}
+
+/**
+ * Tries decoding the payload with a list of known schemas.
+ * Returns the first successful decoding result or null.
+ */
+async function tryDecodeWithKnownSchemas(
+  payloadBytes: Uint8Array
+): Promise<{ schemaName: string; decoded: object } | null> {
+  // Try decoding as HandshakeMessage first, as it's common during handshake
+  let decoded = await tryDecodeProto(payloadBytes, HandshakeMessageSchema);
+  if (decoded) {
+    return { schemaName: HandshakeMessageSchema.typeName, decoded };
+  }
+
+  // Add attempts for other schemas here if relevant for direct payload decoding
+  // decoded = await tryDecodeProto(payloadBytes, ClientPayloadSchema);
+  // if (decoded) {
+  //     return { schemaName: ClientPayloadSchema.typeName, decoded };
+  // }
+  // Note: ClientPayload is usually *inside* an encrypted ClientFinish message payload,
+  // so decoding the raw network payload directly as ClientPayload is unlikely to succeed after the initial ClientHello.
+
+  return null; // None of the known schemas matched
+}
+
+// --- Log intercepted data helper (Improved with Proto Decoding Attempt) ---
+async function logInterceptedData(direction: string, data: any) {
+  // Make the function async
   const timestamp = new Date().toLocaleTimeString();
   const arrow = direction === "send" ? "⬆️ SEND" : "⬇️ RECV";
   let size = 0;
   let dataType = typeof data;
   let frameLength = -1;
   let payloadLength = -1;
-  let dataBytes = null; // Hold Uint8Array version
+  let dataBytes: Uint8Array | null = null; // Hold Uint8Array version
+  let payloadBytes: Uint8Array | null = null; // Hold payload bytes specifically
 
   // Start Collapsed Group
   console.groupCollapsed(
@@ -75,35 +131,35 @@ function logInterceptedData(
       // --- De-framing Logic ---
       if (size >= 3) {
         const view = new DataView(data);
-        // WhatsApp uses Big Endian for frame length
         frameLength = (view.getUint8(0) << 16) | view.getUint16(1, false);
-        payloadLength = size - 3; // Assuming header is always 3 bytes for now
+        const calculatedPayloadLength = size - 3;
 
-        if (payloadLength !== frameLength && direction === "recv") {
-          // Common case for receive: Frame length field describes payload length
+        // Determine actual payload length and extract bytes
+        if (frameLength === calculatedPayloadLength) {
           payloadLength = frameLength;
-          console.warn(
-            `[Wha.ts POC] Frame length mismatch? Header says ${frameLength}, actual payload is ${
-              size - 3
-            }. Assuming header is correct for payload length.`
-          );
-          // Note: Send frames might include the 3-byte header in their length? Needs verification.
-          // For now, we'll log both based on calculation and header.
-        } else if (payloadLength !== frameLength && direction === "send") {
-          console.warn(
-            `[Wha.ts POC] Frame length mismatch on SEND? Header says ${frameLength}, actual payload is ${
-              size - 3
-            }.`
-          );
-          payloadLength = size - 3; // Trust calculated size for send more?
+          payloadBytes = dataBytes.slice(3);
         } else {
-          // If they match, simplifies things
-          payloadLength = frameLength;
+          // Handle potential discrepancies (e.g., routing info prefix)
+          // For simplicity in POC, let's prioritize the header length for now,
+          // but acknowledge the mismatch. A more robust solution would handle the prefix.
+          console.warn(
+            `[Wha.ts POC] Frame length mismatch! Header: ${frameLength}, Actual: ${calculatedPayloadLength}. Using header length for payload.`
+          );
+          if (size >= 3 + frameLength) {
+            payloadLength = frameLength;
+            payloadBytes = dataBytes.slice(3, 3 + frameLength); // Slice based on header
+          } else {
+            console.error(
+              `[Wha.ts POC] Cannot extract payload based on header length ${frameLength}, buffer too short (${size}).`
+            );
+            payloadLength = -1; // Indicate error
+          }
         }
       } else {
         console.warn("[Wha.ts POC] Data too short for framing info.", data);
       }
     } else if (data instanceof Blob) {
+      // ... (Blob handling remains the same) ...
       size = data.size;
       // @ts-ignore
       dataType = "Blob";
@@ -114,8 +170,8 @@ function logInterceptedData(
         "color: #555;",
         "color: black;"
       );
-      // Cannot easily deframe or show hexdump for Blob without reading it first
     } else if (typeof data === "string") {
+      // ... (String handling remains the same) ...
       size = data.length;
       dataType = "string";
       console.log("%cType: %cstring", "color: black;", "font-weight: bold;");
@@ -125,6 +181,7 @@ function logInterceptedData(
         data.substring(0, 100) + (data.length > 100 ? "..." : "")
       );
     } else {
+      // ... (Other type handling remains the same) ...
       // @ts-ignore
       dataType = data ? Object.prototype.toString.call(data) : "Empty/Null";
       console.log(
@@ -135,7 +192,7 @@ function logInterceptedData(
       );
     }
 
-    // Log Details
+    // Log General Details
     console.log(
       `%cTotal Size:%c ${size} bytes`,
       "color: black;",
@@ -147,36 +204,84 @@ function logInterceptedData(
         "color: black;",
         "font-weight: normal;"
       );
+      // Log calculated payload length based *only* on frame size - header size
       console.log(
-        `%cCalculated Payload Length:%c ${size - 3}`,
+        `%cCalculated Payload Length:%c ${size >= 3 ? size - 3 : "N/A"}`,
         "color: black;",
         "font-weight: normal;"
       );
+      // Log the payload length we actually used for extraction
+      if (payloadLength !== -1) {
+        console.log(
+          `%cExtracted Payload Length:%c ${payloadLength}`,
+          "color: black;",
+          "font-weight: bold;"
+        );
+      }
     }
 
-    // Log Hexdump and Base64 Snippets (only if we have bytes)
+    // Log Hex/Base64 Snippets (only if we have the full data bytes)
     if (dataBytes) {
       console.log(
-        "%cBase64 Snippet:%c %s",
+        "%cBase64 Snippet (Full Frame):%c %s",
         "color: black;",
         "font-family: monospace;",
         arrayBufferToBase64Snippet(dataBytes.buffer)
       );
       console.log(
-        "%cHexdump Snippet:%c %s",
+        "%cHexdump Snippet (Full Frame):%c %s",
         "color: black;",
         "font-family: monospace;",
         bytesToHex(dataBytes)
       );
-      if (payloadLength >= 0 && size >= 3) {
-        const payloadBytes = dataBytes.slice(3); // Get the payload part
+    }
+
+    // --- Attempt Proto Decode and Log Payload ---
+    if (payloadBytes) {
+      console.log(
+        "%cPayload Hexdump Snippet:%c %s",
+        "color: black;",
+        "font-family: monospace;",
+        bytesToHex(payloadBytes)
+      );
+
+      const decodeResult = await tryDecodeWithKnownSchemas(payloadBytes);
+      if (decodeResult) {
         console.log(
-          "%cPayload Hexdump Snippet:%c %s",
-          "color: black;",
-          "font-family: monospace;",
-          bytesToHex(payloadBytes)
+          `%cSuccessfully Decoded Payload As:%c ${decodeResult.schemaName}`,
+          "color: purple; font-weight: bold;",
+          "font-family: monospace; color: purple;"
+        );
+        // console.dir is often better for objects than JSON.stringify in the console
+        console.dir(decodeResult.decoded);
+      } else {
+        console.log(
+          "%cProto Decode Attempt:%c Failed (Likely encrypted or unknown format)",
+          "color: orange;",
+          "color: gray;"
         );
       }
+      // @ts-ignore
+    } else if (dataBytes && dataType === "ArrayBuffer" && size < 3) {
+      // Handle case where data is ArrayBuffer but too short for payload extraction
+      console.log(
+        "%cPayload Info:%c Too short to extract payload.",
+        "color: orange;",
+        "color: gray;"
+      );
+    } else if (
+      // @ts-ignore
+      dataType !== "ArrayBuffer" &&
+      // @ts-ignore
+      dataType !== "Blob" &&
+      dataType !== "string"
+    ) {
+      // If it's not a type we can easily get bytes from
+      console.log(
+        "%cPayload Info:%c Cannot extract payload from this data type.",
+        "color: orange;",
+        "color: gray;"
+      );
     }
   } catch (e) {
     console.error(
@@ -200,10 +305,10 @@ window.decodeWhaTsNode = async function (inputData: string, format = "hex") {
     `Attempting manual decode (format: ${format}). Input:`,
     inputData
   );
-  // @ts-ignore
+  // @ts-ignore (Check if the function exists, it might not be bundled)
   if (typeof decodeBinaryNode !== "function") {
     console.error(
-      "ERROR: `decodeBinaryNode` function is not available. Build/bundle wha.ts first."
+      "ERROR: `decodeBinaryNode` function is not available. Ensure 'wha.ts' source is correctly bundled."
     );
     return;
   }
@@ -262,7 +367,7 @@ console.log(
   "[Wha.ts Console POC] Manual decode function available as `decodeWhaTsNode(dataString, format?)`. Provide DECRYPTED payload data."
 );
 
-// --- Patch WebSocket (remains largely the same, calls the improved logger) ---
+// --- Patch WebSocket ---
 try {
   const originalWebSocket = window.WebSocket;
   // @ts-ignore
@@ -275,7 +380,10 @@ try {
       originalWebSocket.prototype.addEventListener;
 
     originalWebSocket.prototype.send = function (data) {
-      logInterceptedData("send", data); // Use improved logger
+      // Call async logger but don't await here to avoid blocking send
+      logInterceptedData("send", data).catch((err) =>
+        console.error("[Wha.ts POC] Error logging sent data:", err)
+      );
       return Reflect.apply(originalSend, this, [data]);
     };
     console.log("[Wha.ts Console POC] Patched send.");
@@ -290,7 +398,16 @@ try {
         // console.log('[Wha.ts Console POC] DEBUG: Wrapping "message" listener via addEventListener.');
         const originalListener = listener;
         const wrappedListener = (event: { data: any }) => {
-          logInterceptedData("receive", event ? event.data : "[No event data]"); // Use improved logger
+          // Call async logger but don't await
+          logInterceptedData(
+            "receive",
+            event ? event.data : "[No event data]"
+          ).catch((err) =>
+            console.error(
+              "[Wha.ts POC] Error logging received data (addEventListener):",
+              err
+            )
+          );
           try {
             // Safe call to original
             if (typeof originalListener === "function") {
@@ -320,7 +437,7 @@ try {
     };
     console.log("[Wha.ts Console POC] Patched addEventListener.");
 
-    // --- Patch 'onmessage' setter (remains largely the same, calls improved logger) ---
+    // --- Patch 'onmessage' setter ---
     const onmessageDescriptor = Object.getOwnPropertyDescriptor(
       WebSocket.prototype,
       "onmessage"
@@ -331,6 +448,7 @@ try {
         configurable: true,
         enumerable: true,
         get: function () {
+          // console.log('[Wha.ts Console POC] DEBUG: Getting onmessage property.');
           return (
             this._whaTsWrappedOnMessageGetterValue ||
             (onmessageDescriptor.get
@@ -341,12 +459,18 @@ try {
         set: function (listener) {
           // console.log('[Wha.ts Console POC] DEBUG: Setting onmessage property.');
           if (typeof listener === "function") {
-            this._whaTsOriginalOnMessage = listener;
+            this._whaTsOriginalOnMessage = listener; // Store original for potential future use/inspection
             const wrappedListener = (event: { data: any }) => {
+              // Call async logger but don't await
               logInterceptedData(
                 "receive",
                 event ? event.data : "[No event data]"
-              ); // Use improved logger
+              ).catch((err) =>
+                console.error(
+                  "[Wha.ts POC] Error logging received data (onmessage):",
+                  err
+                )
+              );
               try {
                 // Safe call to original
                 Reflect.apply(listener, this, [event]);
@@ -357,9 +481,10 @@ try {
                 );
               }
             };
-            this._whaTsWrappedOnMessageGetterValue = wrappedListener;
-            Reflect.apply(originalOnMessageSetter, this, [wrappedListener]);
+            this._whaTsWrappedOnMessageGetterValue = wrappedListener; // Store wrapped one for the getter
+            Reflect.apply(originalOnMessageSetter, this, [wrappedListener]); // Call original setter with wrapped
           } else {
+            // If the listener is not a function (e.g., null), just pass it through
             this._whaTsWrappedOnMessageGetterValue = listener;
             Reflect.apply(originalOnMessageSetter, this, [listener]);
           }
