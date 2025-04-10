@@ -1,0 +1,19 @@
+{
+	"name": "@wha.ts/core",
+	"version": "0.1.0",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
+	"scripts": {
+		"build": "bun build ./src/client.ts --outdir ./dist --target=node"
+	},
+	"dependencies": {
+		"@bufbuild/protobuf": "^2.2.5",
+		"@noble/ciphers": "^1.2.1",
+		"@noble/hashes": "^1.7.1",
+		"curve25519-js": "^0.0.4",
+		"@wha.ts/proto": "workspace:*"
+	}
+}

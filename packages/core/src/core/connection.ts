@@ -1,14 +1,14 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import {
+	type ClientPayload,
+	ClientPayloadSchema,
+	HandshakeMessageSchema,
+} from "@wha.ts/proto";
 import { decodeBinaryNode } from "../binary/decode";
 import { encodeBinaryNode } from "../binary/encode";
 import { S_WHATSAPP_NET } from "../binary/jid-utils";
 import type { BinaryNode } from "../binary/types";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
-import {
-	type ClientPayload,
-	ClientPayloadSchema,
-	HandshakeMessageSchema,
-} from "../gen/whatsapp_pb";
 import type { AuthenticationCreds } from "../state/interface";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";

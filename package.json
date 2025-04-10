@@ -1,26 +1,21 @@
 {
-	"name": "wha.ts",
-	"module": "example.ts",
-	"type": "module",
+	"name": "wha.ts-monorepo",
 	"private": true,
+	"type": "module",
+	"workspaces": ["packages/*"],
 	"scripts": {
-		"build:extension": "bun build --outfile=extension/dist/main.js --target=browser extension/main.ts",
-		"run:web": "bun example/index.html",
-		"run:example": "bun example/example.ts",
+		"build": "bun run --filter '*' build",
+		"build:core": "bun run --filter \"@wha.ts/core\" build",
+		"build:extension": "bun run --filter \"@wha.ts/extension\" build",
+		"test": "bun test",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"proto:gen": "bun --filter @wha.ts/proto \"proto:gen\"",
 		"prepare": "husky"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"@types/bun": "^1.2.9",
 		"husky": "^9.1.7",
 		"typescript": "^5"
-	},
-	"dependencies": {
-		"@bufbuild/protobuf": "^2.2.5",
-		"@noble/ciphers": "^1.2.1",
-		"@noble/hashes": "^1.7.1",
-		"curve25519-js": "^0.0.4",
-		"unstorage": "^1.15.0",
-		"uqr": "^0.1.2"
 	}
 }

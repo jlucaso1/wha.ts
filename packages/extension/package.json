@@ -1,0 +1,14 @@
+{
+	"name": "@wha.ts/extension",
+	"version": "0.1.0",
+	"private": false,
+	"type": "module",
+	"scripts": {
+		"build": "bun build ./src/main.ts --outdir ./dist --target=browser"
+	},
+	"dependencies": {
+		"@bufbuild/protobuf": "^2.2.5",
+		"@wha.ts/core": "workspace:*",
+		"@wha.ts/proto": "workspace:*"
+	}
+}

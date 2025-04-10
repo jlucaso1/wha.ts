@@ -6,6 +6,11 @@ import type { ILogger } from "../transport/types";
 import type { ConnectionManager } from "./connection";
 
 import { fromBinary, toBinary } from "@bufbuild/protobuf";
+import {
+	ADVDeviceIdentitySchema,
+	ADVSignedDeviceIdentityHMACSchema,
+	ADVSignedDeviceIdentitySchema,
+} from "@wha.ts/proto";
 import type { SINGLE_BYTE_TOKENS_TYPE } from "../binary/constants";
 import { S_WHATSAPP_NET } from "../binary/jid-utils";
 import {
@@ -13,11 +18,6 @@ import {
 	getBinaryNodeChildren,
 } from "../binary/node-utils";
 import type { BinaryNode } from "../binary/types";
-import {
-	ADVDeviceIdentitySchema,
-	ADVSignedDeviceIdentityHMACSchema,
-	ADVSignedDeviceIdentitySchema,
-} from "../gen/whatsapp_pb";
 import { hmacSign } from "../signal/crypto";
 import { Curve } from "../signal/crypto";
 import {

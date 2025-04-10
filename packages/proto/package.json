@@ -1,0 +1,11 @@
+{
+	"name": "@wha.ts/proto",
+	"private": true,
+	"scripts": {
+		"proto:gen": "@bufbuild/buf generate"
+	},
+	"devDependencies": {
+		"@bufbuild/protoc-gen-es": "^2.2.5",
+		"@bufbuild/buf": "^1.52.1"
+	}
+}

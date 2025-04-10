@@ -1,0 +1,11 @@
+{
+	"name": "@wha.ts/test-e2e",
+	"version": "0.1.0",
+	"scripts": {
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@wha.ts/proto": "workspace:*",
+		"@wha.ts/core": "workspace:*"
+	}
+}

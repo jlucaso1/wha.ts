@@ -1,9 +1,9 @@
+import { createWAClient } from "@wha.ts/core/src/client";
+import { GenericAuthState } from "@wha.ts/core/src/state/providers/generic-auth-state";
 import { createStorage } from "unstorage";
 import fsDriver from "unstorage/drivers/fs-lite";
 import localStorageDriver from "unstorage/drivers/localstorage";
 import { renderUnicodeCompact } from "uqr";
-import { createWAClient } from "../src/client";
-import { GenericAuthState } from "../src/state/providers/generic-auth-state";
 
 const IS_BROWSER = typeof window !== "undefined";
 

@@ -1,4 +1,4 @@
-import type { ADVSignedDeviceIdentity } from "../gen/whatsapp_pb";
+import type { ADVSignedDeviceIdentity } from "@wha.ts/proto";
 
 export type KeyPair = { public: Uint8Array; private: Uint8Array };
 

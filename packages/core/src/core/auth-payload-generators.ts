@@ -1,6 +1,4 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "../binary/jid-utils";
-import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
@@ -13,7 +11,9 @@ import {
 	ClientPayload_WebInfo_WebSubPlatform,
 	DevicePropsSchema,
 	DeviceProps_PlatformType,
-} from "../gen/whatsapp_pb";
+} from "@wha.ts/proto";
+import { jidDecode } from "../binary/jid-utils";
+import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
 import { sha256 } from "../signal/crypto";
 import type { AuthenticationCreds } from "../state/interface";
 import { utf8ToBytes } from "../utils/bytes-utils";

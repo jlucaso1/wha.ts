@@ -1,10 +1,10 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { NOISE_MODE, WA_CERT_DETAILS } from "../defaults";
 import {
 	CertChainSchema,
 	CertChain_NoiseCertificate_DetailsSchema,
 	HandshakeMessageSchema,
-} from "../gen/whatsapp_pb";
+} from "@wha.ts/proto";
+import { NOISE_MODE, WA_CERT_DETAILS } from "../defaults";
 import {
 	Curve,
 	aesDecryptGCM,
