@@ -1,30 +1,25 @@
-import {
-  cbc,
-  ctr,
-  gcm,
-  randomBytes as nobleRandomBytes,
-} from "@noble/ciphers/webcrypto";
-import { x25519 } from "@noble/curves/ed25519";
+import { cbc, ctr, gcm } from "@noble/ciphers/webcrypto";
 import { hkdf as nobleHkdf } from "@noble/hashes/hkdf";
 import { hmac as nobleHmac } from "@noble/hashes/hmac";
 import { sha256 as nobleSha256 } from "@noble/hashes/sha2";
 import type { KeyPair } from "../state/interface";
 import { concatBytes } from "../utils/bytes-utils";
 import { KEY_BUNDLE_TYPE } from "../defaults";
-import { sign, verify } from "curve25519-js";
+import { sign, verify, generateKeyPair, sharedKey } from "curve25519-js";
 
 export const Curve = {
   generateKeyPair: (): KeyPair => {
-    const priv = x25519.utils.randomPrivateKey();
-    const pub = x25519.getPublicKey(priv);
+    const { private: privateKey, public: publicKey } = generateKeyPair(
+      randomBytes(32)
+    );
 
     return {
-      private: priv,
-      public: pub,
+      private: privateKey,
+      public: publicKey,
     };
   },
   sharedKey: (privateKey: Uint8Array, publicKey: Uint8Array) => {
-    const shared = x25519.getSharedSecret(privateKey, publicKey);
+    const shared = sharedKey(privateKey, publicKey);
     return shared;
   },
   sign: (privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array => {
@@ -114,7 +109,7 @@ export async function aesEncrypt(
   buffer: Uint8Array,
   key: Uint8Array
 ): Promise<Uint8Array> {
-  const iv = nobleRandomBytes(16);
+  const iv = randomBytes(16);
   const cipher = cbc(key, iv);
   const ciphertext = await cipher.encrypt(buffer);
   const result = new Uint8Array(iv.length + ciphertext.length);
@@ -142,5 +137,5 @@ export function hkdf(
 }
 
 export function randomBytes(size: number): Uint8Array {
-  return nobleRandomBytes(size);
+  return crypto.getRandomValues(new Uint8Array(size));
 }

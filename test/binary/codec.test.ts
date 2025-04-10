@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import type { BinaryNode } from "../../src/binary/types";
 import { encodeBinaryNode } from "../../src/binary/encode";
 import { decodeBinaryNode } from "../../src/binary/decode";

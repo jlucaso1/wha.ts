@@ -4,21 +4,17 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest watch",
-    "coverage": "vitest run --coverage",
     "build:extension": "bun build --outfile=extension/dist/main.js --target=browser extension/main.ts",
     "run:web": "bun example/index.html",
     "run:example": "bun example/example.ts"
   },
   "devDependencies": {
-    "typescript": "^5",
-    "vitest": "^3.1.1"
+    "@types/bun": "^1.2.9",
+    "typescript": "^5"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",
     "@noble/ciphers": "^1.2.1",
-    "@noble/curves": "^1.8.1",
     "@noble/hashes": "^1.7.1",
     "curve25519-js": "^0.0.4",
     "unstorage": "^1.15.0",

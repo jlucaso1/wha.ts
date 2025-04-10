@@ -1,3 +1,4 @@
+import { bytesToBase64, bytesToHex } from "../utils/bytes-utils";
 import { IWebSocketClient, type WebSocketConfig } from "./types";
 
 const CONNECTING = 0;
@@ -92,8 +93,13 @@ export class NativeWebSocketClient extends IWebSocketClient {
 
   async send(data: Uint8Array): Promise<void> {
     if (!this.isOpen) {
-      this.config.logger.error({}, "WebSocket not open, cannot send");
-      throw new Error("WebSocket is not open");
+      this.config.logger.warn(
+        {
+          data: bytesToHex(data),
+        },
+        "WebSocket not open, cannot send"
+      );
+      return;
     }
 
     this.config.logger.debug({ data: data.length }, "WebSocket ⬆️");

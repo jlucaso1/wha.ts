@@ -408,7 +408,7 @@ async function logInterceptedData(
  * @param inputData - The data string (hex or base64 encoded).
  * @param format - The format of inputData ("hex" or "base64"). Defaults to "hex".
  */
-window.decodeWhaTsNode = async function (
+globalThis.decodeWhaTsNode = async function (
   inputData: string,
   format: "hex" | "base64" = "hex"
 ): Promise<void> {
@@ -427,7 +427,7 @@ window.decodeWhaTsNode = async function (
   let nodeBytes: Uint8Array;
   try {
     if (format === "base64") {
-      const binaryString = window.atob(inputData); // Decode base64
+      const binaryString = globalThis.atob(inputData); // Decode base64
       nodeBytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         nodeBytes[i] = binaryString.charCodeAt(i);
@@ -505,7 +505,7 @@ console.log(
 // --- WebSocket Patching ---
 
 try {
-  const originalWebSocket = window.WebSocket;
+  const originalWebSocket = globalThis.WebSocket;
   // Check flag using optional chaining and nullish coalescing for safety
   if (originalWebSocket.prototype._whaTsPatched ?? false) {
     console.log("[Wha.ts Console POC] WebSocket already patched. Skipping.");

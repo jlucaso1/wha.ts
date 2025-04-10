@@ -250,7 +250,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
       await this.ws.send(frame);
       this.dispatchTypedEvent("node.sent", { node });
     } catch (error: any) {
-      this.logger.error({ err: error, tag: node.tag }, "Failed to send node");
+      this.logger.error({ err: error, node }, "Failed to send node");
       throw error;
     }
   }

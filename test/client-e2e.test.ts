@@ -1,9 +1,11 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { createWAClient } from "../src/client";
 import type { ClientEventMap } from "../src/client-events";
 import { GenericAuthState } from "../src/state/providers/generic-auth-state";
 
 const E2E_TEST_TIMEOUT = 10_000;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 test(
   "Connect to WhatsApp, display QR",
@@ -26,34 +28,32 @@ test(
         }
 
         if (connection === "open") {
-          console.log(
-            "[E2E Test] ✅ Connection successfully opened!",
-          );
+          console.log("[E2E Test] ✅ Connection successfully opened!");
           connectionOpened = true;
         }
 
         if (connection === "close") {
           if (error) {
             console.error(
-              `[E2E Test] ❌ Connection closed with error: ${error.message}`,
+              `[E2E Test] ❌ Connection closed with error: ${error.message}`
             );
             if (!connectionOpened && !isNewLogin) {
               reject(error);
             } else {
               console.warn(
-                "[E2E Test] Connection closed after being open or during pairing, considered success for this test phase.",
+                "[E2E Test] Connection closed after being open or during pairing, considered success for this test phase."
               );
             }
           } else {
             if (!connectionOpened && !isNewLogin) {
               reject(
                 new Error(
-                  "Connection closed before pairing/opening successfully",
-                ),
+                  "Connection closed before pairing/opening successfully"
+                )
               );
             } else {
               console.log(
-                "[E2E Test] Connection closed normally after successful operation.",
+                "[E2E Test] Connection closed normally after successful operation."
               );
             }
           }
@@ -68,14 +68,15 @@ test(
       console.log("[E2E Test] Initiating connection...");
       await client.connect();
       console.log(
-        "[E2E Test] Connection initiated. Waiting for QR code or login...",
+        "[E2E Test] Connection initiated. Waiting for QR code or login..."
       );
 
       qrCode = await qrCodePromise;
       console.log("[E2E Test] QR Code received or connection event resolved.");
 
-      expect(qrCode || connectionOpened || client.auth.creds.registered)
-        .toBeDefined();
+      expect(
+        qrCode || connectionOpened || client.auth.creds.registered
+      ).toBeDefined();
 
       if (qrCode) {
         console.log("[E2E Test] QR Code was generated successfully.");
@@ -83,24 +84,24 @@ test(
 
       if (connectionOpened || client.auth.creds.registered) {
         console.log(
-          `[E2E Test] Successfully connected/paired as ${client.auth.creds.me?.id}`,
+          `[E2E Test] Successfully connected/paired as ${client.auth.creds.me?.id}`
         );
       }
 
       expect(
-        qrCode !== null || connectionOpened || client.auth.creds.registered,
+        qrCode !== null || connectionOpened || client.auth.creds.registered
       ).toBe(true);
     } catch (err: any) {
       console.error("[E2E Test] Test failed:", err.message);
       throw err;
     } finally {
       console.log("[E2E Test] Cleaning up: Closing connection...");
-      await client.logout("E2E test finished").catch((e) =>
-        console.error("Error during logout:", e)
-      );
+      await client
+        .logout("E2E test finished")
+        .catch((e) => console.error("Error during logout:", e));
       console.log("[E2E Test] Connection closed.");
       console.log("--- Finished Wha.ts E2E Connection Test ---\n");
     }
   },
-  E2E_TEST_TIMEOUT,
+  E2E_TEST_TIMEOUT
 );
