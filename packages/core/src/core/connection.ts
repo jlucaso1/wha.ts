@@ -360,7 +360,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		}
 	}
 
-	async reconnect(retryDelayMs = 5000): Promise<void> {
+	async reconnect(retryDelayMs = 500): Promise<void> {
 		this.logger.info("Attempting to reconnect...");
 		try {
 			// 1. Ensure current connection is closed
