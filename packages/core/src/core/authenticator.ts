@@ -34,6 +34,14 @@ import {
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { IConnectionActions } from "./types";
 
+enum AuthState {
+	IDLE = "IDLE",
+	AWAITING_QR = "AWAITING_QR",
+	PROCESSING_PAIR_SUCCESS = "PROCESSING_PAIR_SUCCESS",
+	AUTHENTICATED = "AUTHENTICATED",
+	FAILED = "FAILED",
+}
+
 class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private connectionManager: ConnectionManager;
 	private authStateProvider: IAuthStateProvider;
@@ -41,7 +49,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private connectionActions: IConnectionActions;
 	private qrTimeout?: ReturnType<typeof setTimeout>;
 	private qrRetryCount = 0;
-	private processingPairSuccess = false;
+	private state: AuthState = AuthState.IDLE;
 
 	private initialQrTimeoutMs = 60_000;
 	private subsequentQrTimeoutMs = 20_000;
@@ -76,6 +84,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				const error = event.detail.error;
 				this.logger.error({ err: error }, "Connection error");
 				this.clearQrTimeout();
+				this.state = AuthState.FAILED;
 				this.dispatchTypedEvent("connection.update", {
 					connection: "close",
 					error,
@@ -85,6 +94,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		this.connectionManager.addEventListener("ws.close", () => {
 			this.clearQrTimeout();
+			this.state = AuthState.IDLE;
 		});
 	}
 
@@ -115,7 +125,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	};
 
 	private handlePairDeviceIQ(node: BinaryNode): void {
-		this.processingPairSuccess = false;
+		this.state = AuthState.AWAITING_QR;
 
 		if (!node.attrs.id) {
 			throw new Error("Missing message ID in stanza for pair-device");
@@ -372,11 +382,11 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	}
 
 	private async handlePairSuccessIQ(node: BinaryNode): Promise<void> {
-		if (this.processingPairSuccess) {
+		if (this.state === AuthState.PROCESSING_PAIR_SUCCESS) {
 			this.logger.warn("Already processing pair-success, ignoring duplicate");
 			return;
 		}
-		this.processingPairSuccess = true;
+		this.state = AuthState.PROCESSING_PAIR_SUCCESS;
 		this.clearQrTimeout();
 
 		try {
@@ -409,6 +419,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.logger.info(
 				"Pairing complete, expecting connection close and restart",
 			);
+			this.state = AuthState.AUTHENTICATED;
 		} catch (error) {
 			if (!(error instanceof Error)) {
 				throw error;
@@ -424,14 +435,14 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				.catch((err) =>
 					this.logger.error({ err }, "Failed to trigger connection close"),
 				);
-		} finally {
-			this.processingPairSuccess = false;
+			this.state = AuthState.FAILED;
 		}
 	}
 
 	private handleLoginSuccess(node: BinaryNode): void {
 		this.logger.info({ attrs: node.attrs }, "Login successful");
 		this.clearQrTimeout();
+		this.state = AuthState.AUTHENTICATED;
 
 		const platform = node.attrs.platform;
 		const pushname = node.attrs.pushname;
@@ -471,6 +482,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		const error = new Error(`Login failed: ${reason}`);
 
 		this.clearQrTimeout();
+		this.state = AuthState.FAILED;
 		this.dispatchTypedEvent("connection.update", {
 			connection: "close",
 			error,

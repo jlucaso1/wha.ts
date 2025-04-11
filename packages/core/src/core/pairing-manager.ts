@@ -159,7 +159,10 @@ export class PairingManager extends TypedEventTarget<PairingManagerEventMap> {
 				creds: updatedCreds,
 				reply,
 			});
-		} catch (error: any) {
+		} catch (error) {
+			if (!(error instanceof Error)) {
+				throw error;
+			}
 			this.logger.error({ err: error }, "Error processing pair-success IQ");
 			this.dispatchTypedEvent("pairing.failure", { error });
 			this.closeConnection(error);
