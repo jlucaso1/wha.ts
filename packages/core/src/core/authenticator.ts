@@ -94,6 +94,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		this.connectionManager.addEventListener("ws.close", () => {
 			this.clearQrTimeout();
+			this.sentOfflineBatch = false;
 			this.state = AuthState.IDLE;
 		});
 	}
