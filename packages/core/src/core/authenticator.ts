@@ -48,7 +48,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private connectionActions: IConnectionActions;
 	private qrTimeout?: ReturnType<typeof setTimeout>;
 	private qrRetryCount = 0;
-	private sentOfflineBatch = false;
 	private state: AuthState = AuthState.IDLE;
 
 	private initialQrTimeoutMs = 60_000;
@@ -94,7 +93,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		this.connectionManager.addEventListener("ws.close", () => {
 			this.clearQrTimeout();
-			this.sentOfflineBatch = false;
 			this.state = AuthState.IDLE;
 		});
 	}
@@ -124,13 +122,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.handleLoginFailure(node);
 		}
 
-		// This is a temporary fix because the server is sending two exactly the same in the same time and if we send the two we got an error later
-		if (node.tag === ("ib" as any) && !this.sentOfflineBatch) {
+		if (node.tag === ("ib" as any)) {
 			const offlinePreviewNode = getBinaryNodeChild(node, "offline_preview");
 			if (offlinePreviewNode) {
-				console.log(JSON.stringify(node, null, 2));
-				this.sentOfflineBatch = true;
-
 				this.connectionActions.sendNode({
 					tag: "ib" as any,
 					attrs: {},

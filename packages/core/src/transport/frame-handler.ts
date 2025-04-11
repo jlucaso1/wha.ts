@@ -1,3 +1,4 @@
+import { Mutex } from "async-mutex";
 import { concatBytes } from "../utils/bytes-utils";
 import type { NoiseProcessor } from "./noise-processor";
 import type { ILogger } from "./types";
@@ -5,6 +6,7 @@ import type { ILogger } from "./types";
 export class FrameHandler {
 	private receivedBuffer: Uint8Array = new Uint8Array(0);
 	private hasSentPrologue = false;
+	private handleDataMutex = new Mutex();
 
 	constructor(
 		private readonly noiseProcessor: NoiseProcessor,
@@ -17,45 +19,47 @@ export class FrameHandler {
 	) {}
 
 	async handleReceivedData(newData: Uint8Array): Promise<void> {
-		this.receivedBuffer = concatBytes(this.receivedBuffer, newData);
+		await this.handleDataMutex.runExclusive(async () => {
+			this.receivedBuffer = concatBytes(this.receivedBuffer, newData);
 
-		while (this.receivedBuffer.length >= 3) {
-			const view = new DataView(
-				this.receivedBuffer.buffer,
-				this.receivedBuffer.byteOffset,
-				this.receivedBuffer.byteLength,
-			);
-			const frameLength = (view.getUint8(0) << 16) | view.getUint16(1, false);
+			while (this.receivedBuffer.length >= 3) {
+				const view = new DataView(
+					this.receivedBuffer.buffer,
+					this.receivedBuffer.byteOffset,
+					this.receivedBuffer.byteLength,
+				);
+				const frameLength = (view.getUint8(0) << 16) | view.getUint16(1, false);
 
-			if (this.receivedBuffer.length < 3 + frameLength) {
-				break;
-			}
-
-			const encryptedFrame = this.receivedBuffer.subarray(3, 3 + frameLength);
-			const remaining = this.receivedBuffer.subarray(3 + frameLength);
-
-			let decryptedPayload: Uint8Array;
-			try {
-				if (this.noiseProcessor.isHandshakeFinished) {
-					decryptedPayload =
-						await this.noiseProcessor.decryptMessage(encryptedFrame);
-				} else {
-					decryptedPayload = encryptedFrame;
+				if (this.receivedBuffer.length < 3 + frameLength) {
+					break;
 				}
-			} catch (err) {
-				this.logger.error({}, "Frame decryption failed");
+
+				const encryptedFrame = this.receivedBuffer.subarray(3, 3 + frameLength);
+				const remaining = this.receivedBuffer.subarray(3 + frameLength);
+
+				let decryptedPayload: Uint8Array;
+				try {
+					if (this.noiseProcessor.isHandshakeFinished) {
+						decryptedPayload =
+							await this.noiseProcessor.decryptMessage(encryptedFrame);
+					} else {
+						decryptedPayload = encryptedFrame;
+					}
+				} catch (err) {
+					this.logger.error({}, "Frame decryption failed");
+					this.receivedBuffer = remaining;
+					continue;
+				}
+
+				try {
+					await this.onFrame(decryptedPayload);
+				} catch (err) {
+					this.logger.error({ err }, "Error in frame callback");
+				}
+
 				this.receivedBuffer = remaining;
-				continue;
 			}
-
-			try {
-				await this.onFrame(decryptedPayload);
-			} catch (err) {
-				this.logger.error({ err }, "Error in frame callback");
-			}
-
-			this.receivedBuffer = remaining;
-		}
+		});
 	}
 
 	async framePayload(payload: Uint8Array): Promise<Uint8Array> {
