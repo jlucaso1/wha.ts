@@ -1,13 +1,13 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { decodeBinaryNode } from "@wha.ts/binary/src/decode";
+import { encodeBinaryNode } from "@wha.ts/binary/src/encode";
+import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
-import { decodeBinaryNode } from "../binary/decode";
-import { encodeBinaryNode } from "../binary/encode";
-import { S_WHATSAPP_NET } from "../binary/jid-utils";
-import type { BinaryNode } from "../binary/types";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import type { AuthenticationCreds } from "../state/interface";
 import { FrameHandler } from "../transport/frame-handler";
@@ -26,7 +26,6 @@ import type {
 } from "./connection-events";
 
 class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
-	private ws: NativeWebSocketClient;
 	private logger: ILogger;
 	private config: WebSocketConfig;
 	private state: "connecting" | "open" | "handshaking" | "closing" | "closed" =
@@ -36,8 +35,9 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private routingInfo?: Uint8Array;
 	private creds: AuthenticationCreds;
 
-	private noiseProcessor: NoiseProcessor;
-	private frameHandler: FrameHandler;
+	private ws!: NativeWebSocketClient;
+	private noiseProcessor!: NoiseProcessor;
+	private frameHandler!: FrameHandler;
 
 	constructor(
 		wsConfig: Partial<WebSocketConfig>,
@@ -50,24 +50,42 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		this.creds = creds;
 		this.routingInfo = creds.routingInfo;
 
+		this.initializeConnectionComponents();
+	}
+
+	private initializeConnectionComponents(): void {
+		this.logger.info("Initializing connection components...");
+
+		// Create new NoiseProcessor
 		this.noiseProcessor = new NoiseProcessor({
-			localStaticKeyPair: creds.pairingEphemeralKeyPair,
+			localStaticKeyPair: this.creds.pairingEphemeralKeyPair, // Note: Should use noiseKey after pairing
 			noisePrologue: NOISE_WA_HEADER,
 			logger: this.logger,
 			routingInfo: this.routingInfo,
 		});
 
+		// Create new FrameHandler with the new NoiseProcessor
 		this.frameHandler = new FrameHandler(
 			this.noiseProcessor,
 			this.logger,
-			this.handleDecryptedFrame,
+			this.handleDecryptedFrame, // Use the bound method
 			this.routingInfo,
 			NOISE_WA_HEADER,
 		);
 
+		// Create new WebSocket client instance
+		// Ensure previous instance listeners are removed if ws existed (close should handle this)
+		if (this.ws) {
+			this.removeWsListeners(); // Make sure old listeners are gone
+		}
 		this.ws = new NativeWebSocketClient(this.config.url, this.config);
 
+		// Setup listeners for the new WebSocket instance
 		this.setupWsListeners();
+
+		// Reset framing state
+		this.frameHandler.resetFramingState(); // Call reset here
+		this.lastReceivedDataTime = 0; // Reset last received time
 	}
 
 	private setState(newState: typeof this.state, error?: Error): void {
@@ -339,6 +357,59 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 				wsError.code || 1011,
 				wsError.message || "Forced close after error",
 			);
+		}
+	}
+
+	async reconnect(retryDelayMs = 5000): Promise<void> {
+		this.logger.info("Attempting to reconnect...");
+		try {
+			// 1. Ensure current connection is closed
+			if (this.state !== "closed") {
+				this.logger.info(
+					`Current state is ${this.state}, closing before reconnect...`,
+				);
+				await this.close(new Error("Reconnection requested"));
+				// Wait a bit for cleanup? handleWsClose should manage state transition
+				this.logger.warn("Waiting for connection to fully close...");
+				await new Promise<void>((resolve) => {
+					const listener = () => resolve();
+					this.addEventListener("ws.close", listener, { once: true });
+					// Timeout for waiting
+					setTimeout(
+						() => {
+							this.removeEventListener("ws.close", listener);
+							this.logger.warn("Timeout waiting for close, proceeding anyway.");
+							resolve();
+						},
+						Math.max(1000, retryDelayMs / 2),
+					); // Wait max half retry delay
+				});
+			} else {
+				this.logger.info("Connection already closed, proceeding to reconnect.");
+			}
+
+			// Optional delay before reconnecting
+			if (retryDelayMs > 0) {
+				this.logger.info(`Waiting ${retryDelayMs}ms before reconnecting...`);
+				await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+			}
+
+			// 2. Re-initialize components
+			this.logger.info(
+				"Re-initializing connection components for reconnect...",
+			);
+			this.initializeConnectionComponents(); // Creates new ws, noise, frame instances
+
+			// 3. Connect using the new components
+			this.logger.info("Initiating connection...");
+			await this.connect(); // Starts the connection process with the new ws instance
+
+			this.logger.info("Reconnect attempt initiated successfully.");
+		} catch (error) {
+			this.logger.error({ err: error }, "Reconnect attempt failed");
+			// Should the state be forced back to closed here? connect() should handle it.
+			// Rethrow or handle as needed
+			throw error;
 		}
 	}
 }

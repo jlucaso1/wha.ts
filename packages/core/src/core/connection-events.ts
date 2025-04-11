@@ -1,4 +1,4 @@
-import type { BinaryNode } from "../binary/types";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
 
 /**
  * Payload for state.change events

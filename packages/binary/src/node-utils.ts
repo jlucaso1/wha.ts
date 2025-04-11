@@ -1,4 +1,4 @@
-import { bytesToUtf8 } from "../utils/bytes-utils";
+import { bytesToUtf8 } from "@wha.ts/core/src/utils/bytes-utils";
 import type { BinaryNode } from "./types";
 
 export const getBinaryNodeChild = (

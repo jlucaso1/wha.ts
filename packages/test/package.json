@@ -6,6 +6,7 @@
 	},
 	"dependencies": {
 		"@wha.ts/proto": "workspace:*",
-		"@wha.ts/core": "workspace:*"
+		"@wha.ts/core": "workspace:*",
+		"@wha.ts/binary": "workspace:*"
 	}
 }

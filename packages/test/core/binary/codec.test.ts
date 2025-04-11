@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { decodeBinaryNode } from "@wha.ts/core/src/binary/decode";
-import { encodeBinaryNode } from "@wha.ts/core/src/binary/encode";
-import type { BinaryNode } from "@wha.ts/core/src/binary/types";
+import { decodeBinaryNode } from "@wha.ts/binary/src/decode";
+import { encodeBinaryNode } from "@wha.ts/binary/src/encode";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
 
 const nodeCases: {
 	description: string;

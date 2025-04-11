@@ -1,4 +1,5 @@
 import { create, toBinary } from "@bufbuild/protobuf";
+import { jidDecode } from "@wha.ts/binary/src/jid-utils";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
@@ -12,7 +13,6 @@ import {
 	DevicePropsSchema,
 	DeviceProps_PlatformType,
 } from "@wha.ts/proto";
-import { jidDecode } from "../binary/jid-utils";
 import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
 import { sha256 } from "../signal/crypto";
 import type { AuthenticationCreds } from "../state/interface";

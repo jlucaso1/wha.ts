@@ -8,7 +8,7 @@
 		"build:core": "bun run --filter \"@wha.ts/core\" build",
 		"build:extension": "bun run --filter \"@wha.ts/extension\" build",
 		"test": "bun test",
-		"lint": "biome check .",
+		"lint": "biome check . --write",
 		"format": "biome format --write .",
 		"proto:gen": "bun --filter @wha.ts/proto \"proto:gen\"",
 		"prepare": "husky"

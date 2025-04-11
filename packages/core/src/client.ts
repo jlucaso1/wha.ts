@@ -1,4 +1,4 @@
-import type { BinaryNode } from "./binary/types";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
 import type { ClientEventMap } from "./client-events";
 import { Authenticator } from "./core/authenticator";
 import type {
@@ -80,6 +80,9 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			"connection.update",
 			(event: TypedCustomEvent<ConnectionUpdatePayload>) => {
 				this.dispatchTypedEvent("connection.update", event.detail);
+				if (event.detail.isNewLogin) {
+					this.conn.reconnect();
+				}
 			},
 		);
 

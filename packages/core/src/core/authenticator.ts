@@ -6,18 +6,18 @@ import type { ILogger } from "../transport/types";
 import type { ConnectionManager } from "./connection";
 
 import { fromBinary, toBinary } from "@bufbuild/protobuf";
+import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/constants";
+import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
+import {
+	getBinaryNodeChild,
+	getBinaryNodeChildren,
+} from "@wha.ts/binary/src/node-utils";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	ADVDeviceIdentitySchema,
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
-import type { SINGLE_BYTE_TOKENS_TYPE } from "../binary/constants";
-import { S_WHATSAPP_NET } from "../binary/jid-utils";
-import {
-	getBinaryNodeChild,
-	getBinaryNodeChildren,
-} from "../binary/node-utils";
-import type { BinaryNode } from "../binary/types";
 import { hmacSign } from "../signal/crypto";
 import { Curve } from "../signal/crypto";
 import {
@@ -394,6 +394,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.logger.info("Sent pair-success confirmation reply");
 
 			this.dispatchTypedEvent("creds.update", updatedCreds);
+
+			await new Promise((resolve) => setTimeout(resolve, 500));
+
 			this.dispatchTypedEvent("connection.update", {
 				isNewLogin: true,
 				qr: undefined,
