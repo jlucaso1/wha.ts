@@ -43,7 +43,7 @@ export class FrameHandler {
 					decryptedPayload = encryptedFrame;
 				}
 			} catch (err) {
-				this.logger.error({ err }, "Frame decryption failed");
+				this.logger.error({}, "Frame decryption failed");
 				this.receivedBuffer = remaining;
 				continue;
 			}

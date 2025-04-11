@@ -138,10 +138,6 @@ export class GenericAuthState implements IAuthStateProvider {
 			if (credsValue !== null && typeof credsValue === "string") {
 				creds = JSON.parse(credsValue, BufferJSON.reviver);
 			} else if (credsValue !== null) {
-				console.warn(
-					"[GenericAuthState] Unexpected non-string value for creds, attempting recovery:",
-					credsValue,
-				);
 				try {
 					creds = JSON.parse(JSON.stringify(credsValue), BufferJSON.reviver);
 				} catch {

@@ -5,7 +5,7 @@ import type {
 import type { ILogger } from "../transport/types";
 import type { ConnectionManager } from "./connection";
 
-import { fromBinary, toBinary } from "@bufbuild/protobuf";
+import { fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
 import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/constants";
 import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
 import {
@@ -18,8 +18,7 @@ import {
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
-import { hmacSign } from "../signal/crypto";
-import { Curve } from "../signal/crypto";
+import { Curve, hmacSign } from "../signal/crypto";
 import {
 	bytesToBase64,
 	bytesToHex,
@@ -49,6 +48,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private connectionActions: IConnectionActions;
 	private qrTimeout?: ReturnType<typeof setTimeout>;
 	private qrRetryCount = 0;
+	private sentOfflineBatch = false;
 	private state: AuthState = AuthState.IDLE;
 
 	private initialQrTimeoutMs = 60_000;
@@ -121,6 +121,21 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.handleLoginSuccess(node);
 		} else if (node.tag === "fail") {
 			this.handleLoginFailure(node);
+		}
+
+		// This is a temporary fix because the server is sending two exactly the same in the same time and if we send the two we got an error later
+		if (node.tag === ("ib" as any) && !this.sentOfflineBatch) {
+			const offlinePreviewNode = getBinaryNodeChild(node, "offline_preview");
+			if (offlinePreviewNode) {
+				console.log(JSON.stringify(node, null, 2));
+				this.sentOfflineBatch = true;
+
+				this.connectionActions.sendNode({
+					tag: "ib" as any,
+					attrs: {},
+					content: [{ tag: "offline_batch" as any, attrs: { count: "100" } }],
+				});
+			}
 		}
 	};
 
@@ -334,7 +349,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		const authUpdate: Partial<AuthenticationCreds> = {
 			me: { id: jid, name: bizName },
-			account: updatedAccount,
+			account: toJson(ADVSignedDeviceIdentitySchema, updatedAccount) as any,
 			signalIdentities: [...(creds.signalIdentities || []), identity],
 			platform: platformNode?.attrs.name,
 			registered: true,
@@ -440,7 +455,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	}
 
 	private handleLoginSuccess(node: BinaryNode): void {
-		this.logger.info({ attrs: node.attrs }, "Login successful");
 		this.clearQrTimeout();
 		this.state = AuthState.AUTHENTICATED;
 

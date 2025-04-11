@@ -20,7 +20,9 @@ const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
 	return buffer;
 };
 
-const decodeDecompressedBinaryNode = (reader: BinaryReader): BinaryNode => {
+export const decodeDecompressedBinaryNode = (
+	reader: BinaryReader,
+): BinaryNode => {
 	const unpackHex = (value: number) => {
 		if (value >= 0 && value < 16) {
 			return value < 10
@@ -189,8 +191,6 @@ const decodeDecompressedBinaryNode = (reader: BinaryReader): BinaryNode => {
 		}
 	}
 
-	console.debug({ listSize, tag: tag, attrs });
-
 	return {
 		tag: tag as SINGLE_BYTE_TOKENS_TYPE,
 		attrs,
@@ -203,5 +203,7 @@ export const decodeBinaryNode = async (
 ): Promise<BinaryNode> => {
 	const decompressedBuffer = await decompressingIfRequired(encodedBuffer);
 	const reader = new BinaryReader(decompressedBuffer);
-	return decodeDecompressedBinaryNode(reader);
+	const decodedNode = decodeDecompressedBinaryNode(reader);
+	console.log(decodedNode);
+	return decodedNode;
 };

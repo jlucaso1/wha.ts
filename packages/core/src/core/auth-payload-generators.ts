@@ -109,6 +109,7 @@ export const generateLoginPayload = (
 		username: BigInt(user || "0"),
 		device: device || 0,
 		pull: true,
+		passive: false,
 	});
 };
 

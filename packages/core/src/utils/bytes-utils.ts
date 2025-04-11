@@ -4,6 +4,7 @@ export {
 	concatBytes,
 	equalBytes,
 	utf8ToBytes,
+	hexToBytes,
 } from "@noble/ciphers/utils";
 
 export const bytesToBase64 = (bytes: Uint8Array): string => {
