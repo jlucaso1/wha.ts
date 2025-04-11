@@ -44,11 +44,7 @@ export const jidDecode = (jid: string | undefined): FullJid | undefined => {
 	const server = jid?.slice(sepIdx + 1);
 	const userCombined = jid?.slice(0, sepIdx);
 
-	if (!userCombined) {
-		return undefined;
-	}
-
-	const [userAgent, device] = userCombined.split(":");
+	const [userAgent, device] = userCombined?.split(":") || [];
 	const user = userAgent?.split("_")[0];
 
 	return {
