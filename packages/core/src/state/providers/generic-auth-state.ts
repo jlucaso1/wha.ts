@@ -23,42 +23,58 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 		type: T,
 		ids: string[],
 	): Promise<{ [id: string]: SignalDataTypeMap[T] | undefined }> {
-		const results: { [id: string]: SignalDataTypeMap[T] | undefined } = {};
-		const fetchPromises = ids.map(async (id) => {
-			const key = this.getSignalKey(type, id);
-			try {
-				const value = await this.storage.getItem(key);
-				if (value !== null && typeof value === "string") {
-					results[id] = JSON.parse(
-						value,
-						BufferJSON.reviver,
-					) as SignalDataTypeMap[T];
-				} else if (value !== null) {
-					console.warn(
-						`[UnstorageSignalKeyStore] Unexpected non-string value for key ${key}:`,
-						value,
-					);
-					try {
-						results[id] = JSON.parse(
-							JSON.stringify(value),
-							BufferJSON.reviver,
-						) as SignalDataTypeMap[T];
-					} catch {}
-				}
-			} catch (error) {
-				console.error(
-					`[UnstorageSignalKeyStore] Error getting item ${key}:`,
-					error,
+		if (!ids || ids.length === 0) {
+			return {};
+		}
+
+		const storageKeys = ids.map((id) => this.getSignalKey(type, id));
+
+		const finalResults: { [id: string]: SignalDataTypeMap[T] | undefined } = {};
+
+		try {
+			const batchResults = await this.storage.getItems(storageKeys);
+
+			const resultMap = new Map<string, string | null>();
+			for (const item of batchResults) {
+				resultMap.set(
+					item.key,
+					item.value === undefined ? null : String(item.value),
 				);
 			}
-		});
-		await Promise.all(fetchPromises);
 
-		return results;
+			for (const id of ids) {
+				const storageKey = this.getSignalKey(type, id);
+				const rawValue = resultMap.get(storageKey);
+
+				if (rawValue !== null && rawValue !== undefined) {
+					try {
+						const parsedValue = JSON.parse(
+							rawValue,
+							BufferJSON.reviver,
+						) as SignalDataTypeMap[T];
+						finalResults[id] = parsedValue;
+					} catch (error) {
+						console.error(
+							`[GenericSignalKeyStore] Error parsing item ${storageKey} for id ${id}:`,
+							error,
+							"Raw value:",
+							rawValue,
+						);
+					}
+				}
+			}
+		} catch (error) {
+			console.error(
+				`[GenericSignalKeyStore] Error using getItems for type ${type} and keys ${storageKeys.join(", ")}:`,
+				error,
+			);
+		}
+
+		return finalResults;
 	}
 
 	async set(data: SignalDataSet): Promise<void> {
-		const setPromises: Promise<void>[] = [];
+		const itemsToSet: { key: string; value: string | null }[] = [];
 
 		for (const typeStr in data) {
 			const type = typeStr as keyof SignalDataTypeMap;
@@ -70,39 +86,35 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 				const value = dataOfType[id];
 
 				if (value === null || value === undefined) {
-					setPromises.push(
-						this.storage
-							.removeItem(key)
-							.catch((error) =>
-								console.error(
-									`[UnstorageSignalKeyStore] Error removing item ${key}:`,
-									error,
-								),
-							),
-					);
+					itemsToSet.push({ key: key, value: null });
 				} else {
 					try {
 						const serializedValue = JSON.stringify(value, BufferJSON.replacer);
-						setPromises.push(
-							this.storage
-								.setItem(key, serializedValue)
-								.catch((error) =>
-									console.error(
-										`[UnstorageSignalKeyStore] Error setting item ${key}:`,
-										error,
-									),
-								),
-						);
+						itemsToSet.push({ key: key, value: serializedValue });
 					} catch (error) {
 						console.error(
-							`[UnstorageSignalKeyStore] Error serializing value for key ${key}:`,
+							`[GenericSignalKeyStore] Error serializing value for key ${key} (id: ${id}, type: ${type}):`,
 							error,
 						);
 					}
 				}
 			}
 		}
-		await Promise.all(setPromises);
+
+		if (itemsToSet.length === 0) {
+			return;
+		}
+
+		try {
+			await this.storage.setItems(itemsToSet);
+		} catch (error) {
+			const keys = itemsToSet.map((i) => i.key).join(", ");
+			console.error(
+				`[GenericSignalKeyStore] Error using setItems for keys ${keys}:`,
+				error,
+			);
+			throw error;
+		}
 	}
 }
 
@@ -126,9 +138,16 @@ export class GenericAuthState implements IAuthStateProvider {
 			if (credsValue !== null && typeof credsValue === "string") {
 				creds = JSON.parse(credsValue, BufferJSON.reviver);
 			} else if (credsValue !== null) {
+				console.warn(
+					"[GenericAuthState] Unexpected non-string value for creds, attempting recovery:",
+					credsValue,
+				);
 				try {
 					creds = JSON.parse(JSON.stringify(credsValue), BufferJSON.reviver);
 				} catch {
+					console.warn(
+						"[GenericAuthState] Recovery failed, initializing new creds.",
+					);
 					creds = initAuthCreds();
 				}
 			} else {
@@ -140,7 +159,7 @@ export class GenericAuthState implements IAuthStateProvider {
 			}
 		} catch (error) {
 			console.error(
-				"[UnstorageAuthState] Error loading credentials, initializing new ones:",
+				"[GenericAuthState] Error loading credentials, initializing new ones:",
 				error,
 			);
 			creds = initAuthCreds();
@@ -151,7 +170,7 @@ export class GenericAuthState implements IAuthStateProvider {
 				);
 			} catch (saveError) {
 				console.error(
-					"[UnstorageAuthState] Error saving newly initialized credentials after load failure:",
+					"[GenericAuthState] Error saving newly initialized credentials after load failure:",
 					saveError,
 				);
 			}
@@ -167,28 +186,26 @@ export class GenericAuthState implements IAuthStateProvider {
 			const serializedCreds = JSON.stringify(this.creds, BufferJSON.replacer);
 			await this.storage.setItem(CREDS_KEY, serializedCreds);
 		} catch (error) {
-			console.error("[UnstorageAuthState] Error saving credentials:", error);
+			console.error("[GenericAuthState] Error saving credentials:", error);
+			throw error;
 		}
 	}
 
 	async clearData(): Promise<void> {
-		console.warn("[UnstorageAuthState] Clearing all authentication data!");
+		console.warn("[GenericAuthState] Clearing all authentication data!");
 		try {
 			await this.storage.removeItem(CREDS_KEY);
 
-			const signalKeys = await this.storage.getKeys(SIGNAL_KEY_PREFIX);
-			const removePromises = signalKeys.map((key) =>
-				this.storage.removeItem(key),
-			);
-			await Promise.all(removePromises);
+			await this.storage.clear(SIGNAL_KEY_PREFIX);
 
 			this.creds = initAuthCreds();
 			this.keys = new GenericSignalKeyStore(this.storage);
 		} catch (error) {
 			console.error(
-				"[UnstorageAuthState] Error clearing authentication data:",
+				"[GenericAuthState] Error clearing authentication data:",
 				error,
 			);
+			throw error;
 		}
 	}
 }
