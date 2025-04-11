@@ -3,6 +3,8 @@
 	"version": "1.0.0",
 	"main": "example.ts",
 	"dependencies": {
-		"@wha.ts/core": "workspace:*"
+		"@wha.ts/core": "workspace:*",
+		"unstorage": "^1.15.0",
+		"uqr": "^0.1.2"
 	}
 }
