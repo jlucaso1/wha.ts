@@ -12,7 +12,6 @@ export interface WebSocketConfig {
 	logger: ILogger;
 	origin?: string;
 	headers?: { [key: string]: string };
-	keepAliveIntervalMs?: number;
 }
 
 export abstract class IWebSocketClient extends EventTarget {

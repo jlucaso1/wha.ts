@@ -65,3 +65,13 @@ export const BufferJSON = {
 		return value;
 	},
 };
+
+export const generateMdTagPrefix = () => {
+	const bytes = randomBytes(4);
+
+	const view = new DataView(bytes.buffer);
+	const part1 = view.getUint16(0, false);
+	const part2 = view.getUint16(2, false);
+
+	return `${part1}.${part2}`;
+};

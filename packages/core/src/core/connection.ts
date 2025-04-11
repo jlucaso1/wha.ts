@@ -10,6 +10,7 @@ import {
 } from "@wha.ts/proto";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import type { AuthenticationCreds } from "../state/interface";
+import { generateMdTagPrefix } from "../state/utils";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";
 import type { ILogger, WebSocketConfig } from "../transport/types";
@@ -30,14 +31,13 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private config: WebSocketConfig;
 	private state: "connecting" | "open" | "handshaking" | "closing" | "closed" =
 		"closed";
-	private keepAliveInterval?: ReturnType<typeof setInterval>;
-	private lastReceivedDataTime = 0;
 	private routingInfo?: Uint8Array;
 	private creds: AuthenticationCreds;
 
 	private ws!: NativeWebSocketClient;
 	private noiseProcessor!: NoiseProcessor;
 	private frameHandler!: FrameHandler;
+	private epoch = 0;
 
 	constructor(
 		wsConfig: Partial<WebSocketConfig>,
@@ -79,7 +79,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		this.setupWsListeners();
 
 		this.frameHandler.resetFramingState();
-		this.lastReceivedDataTime = 0;
 	}
 
 	private setState(newState: typeof this.state, error?: Error): void {
@@ -137,7 +136,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 	private handleWsOpen = async (): Promise<void> => {
 		this.setState("handshaking");
-		this.lastReceivedDataTime = Date.now();
 
 		try {
 			const handshakeMsg = this.noiseProcessor.generateInitialHandshakeMessage(
@@ -209,7 +207,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	};
 
 	private handleWsMessage = async (data: Uint8Array): Promise<void> => {
-		this.lastReceivedDataTime = Date.now();
 		try {
 			await this.frameHandler.handleReceivedData(data);
 		} catch (error) {
@@ -246,6 +243,29 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		try {
 			const node = await decodeBinaryNode(decryptedPayload);
 
+			if (
+				node.tag === "iq" &&
+				node.attrs.from === S_WHATSAPP_NET &&
+				node.attrs.type === "get" &&
+				node.attrs.xmlns === "urn:xmpp:ping"
+			) {
+				const pongNode: BinaryNode = {
+					tag: "iq",
+					attrs: {
+						to: node.attrs.from,
+						type: "result",
+						xmlns: "w:p",
+						id: `${generateMdTagPrefix()}-${this.epoch++}`,
+					},
+				};
+				this.sendNode(pongNode).catch((err) => {
+					this.logger.warn(
+						{ err, id: node.attrs.id },
+						"Failed to send pong response",
+					);
+				});
+			}
+
 			this.dispatchTypedEvent("node.received", { node });
 		} catch (error) {
 			if (!(error instanceof Error)) {
@@ -278,49 +298,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		}
 	}
 
-	private startKeepAlive(): void {
-		this.stopKeepAlive();
-
-		this.keepAliveInterval = setInterval(() => {
-			if (this.state !== "open") {
-				this.stopKeepAlive();
-				return;
-			}
-
-			const timeSinceLastReceive = Date.now() - this.lastReceivedDataTime;
-			if (
-				timeSinceLastReceive >
-				(this.config.keepAliveIntervalMs || 30000) + 5000
-			) {
-				this.logger.warn(
-					`No data received in ${timeSinceLastReceive}ms, closing connection.`,
-				);
-				this.close(new Error("Connection timed out (keep-alive)"));
-			} else {
-				this.sendNode({
-					tag: "iq",
-					attrs: {
-						id: `ping_${Date.now()}`,
-						to: S_WHATSAPP_NET,
-						type: "get",
-						xmlns: "w:p",
-					},
-					content: [{ tag: "ping", attrs: {} }],
-				}).catch((err) => {
-					this.logger.warn({ err }, "Keep-alive ping send failed");
-				});
-			}
-		}, this.config.keepAliveIntervalMs);
-	}
-
-	private stopKeepAlive(): void {
-		if (this.keepAliveInterval) {
-			clearInterval(this.keepAliveInterval);
-			this.keepAliveInterval = undefined;
-			this.logger.info("Stopped keep-alive interval");
-		}
-	}
-
 	private handleWsError = (error: Error): void => {
 		this.logger.error({ err: error }, "WebSocket error occurred");
 		this.dispatchTypedEvent("error", { error });
@@ -340,7 +317,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 					? undefined
 					: new Error("Unknown close reason")),
 		);
-		this.stopKeepAlive();
 		this.removeWsListeners();
 		this.dispatchTypedEvent("ws.close", { code, reason });
 		if (error) this.dispatchTypedEvent("error", { error });
@@ -351,7 +327,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			return;
 		}
 		this.setState("closing", error);
-		this.stopKeepAlive();
 		try {
 			const closeCode = 1000;
 			const closeReason = error?.message || "User initiated close";

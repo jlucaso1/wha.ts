@@ -11,7 +11,6 @@ export const NOISE_WA_HEADER = new Uint8Array([87, 65, 6, 2]);
 export const DEFAULT_SOCKET_CONFIG = {
 	waWebSocketUrl: "wss://web.whatsapp.com/ws/chat",
 	connectTimeoutMs: 20_000,
-	keepAliveIntervalMs: 25_000,
 	defaultQueryTimeoutMs: 60_000,
 	origin: DEFAULT_ORIGIN,
 };
