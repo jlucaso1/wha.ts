@@ -3,7 +3,7 @@ import {
 	SINGLE_BYTE_TOKENS,
 	type SINGLE_BYTE_TOKENS_TYPE,
 	TAGS,
-} from "@wha.ts/binary/constants";
+} from "../constants";
 import { jidEncode } from "./jid-utils";
 import { decompressData } from "./node-utils";
 import { BinaryReader } from "./reader";

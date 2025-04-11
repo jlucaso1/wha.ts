@@ -12,6 +12,9 @@
     },
     "packages/binary": {
       "name": "@wha.ts/binary",
+      "dependencies": {
+        "@wha.ts/core": "workspace:*",
+      },
     },
     "packages/core": {
       "name": "@wha.ts/core",
@@ -46,6 +49,9 @@
     },
     "packages/proto": {
       "name": "@wha.ts/proto",
+      "dependencies": {
+        "@bufbuild/protobuf": "^2.2.5",
+      },
       "devDependencies": {
         "@bufbuild/buf": "^1.52.1",
         "@bufbuild/protoc-gen-es": "^2.2.5",

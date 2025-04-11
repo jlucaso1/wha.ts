@@ -4,6 +4,9 @@
 	"scripts": {
 		"proto:gen": "@bufbuild/buf generate"
 	},
+	"dependencies": {
+		"@bufbuild/protobuf": "^2.2.5"
+	},
 	"devDependencies": {
 		"@bufbuild/protoc-gen-es": "^2.2.5",
 		"@bufbuild/buf": "^1.52.1"

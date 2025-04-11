@@ -1,5 +1,5 @@
-import { TAGS, TOKEN_MAP } from "@wha.ts/binary/constants";
 import { utf8ToBytes } from "@wha.ts/core/src/utils/bytes-utils";
+import { TAGS, TOKEN_MAP } from "../constants";
 import { type FullJid, jidDecode } from "./jid-utils";
 import type { BinaryNode } from "./types";
 import { BinaryWriter } from "./writer";

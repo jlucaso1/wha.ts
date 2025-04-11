@@ -1,4 +1,4 @@
-import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/constants";
+import type { SINGLE_BYTE_TOKENS_TYPE } from "../constants";
 
 export type BinaryNode = {
 	tag: SINGLE_BYTE_TOKENS_TYPE;
