@@ -1,4 +1,3 @@
-import type { BinaryNode } from "@wha.ts/binary/src/types";
 import type { ClientEventMap } from "./client-events";
 import { Authenticator } from "./core/authenticator";
 import type {
@@ -6,6 +5,7 @@ import type {
 	CredsUpdatePayload,
 } from "./core/authenticator-events";
 import { ConnectionManager } from "./core/connection";
+import type { IConnectionActions } from "./core/types";
 import { DEFAULT_BROWSER, DEFAULT_SOCKET_CONFIG, WA_VERSION } from "./defaults";
 import type {
 	AuthenticationCreds,
@@ -74,7 +74,17 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			this.auth.creds,
 		);
 
-		this.authenticator = new Authenticator(this.conn, this.auth, this.logger);
+		const connectionActions: IConnectionActions = {
+			sendNode: (node) => this.conn.sendNode(node),
+			closeConnection: (error) => this.conn.close(error),
+		};
+
+		this.authenticator = new Authenticator(
+			this.conn,
+			this.auth,
+			this.logger,
+			connectionActions,
+		);
 
 		this.authenticator.addEventListener(
 			"connection.update",
@@ -97,31 +107,6 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 					.catch((err) => {
 						this.logger.error({ err }, "Failed to save credentials");
 					});
-			},
-		);
-
-		this.authenticator.addEventListener(
-			"_internal.sendNode",
-			(event: TypedCustomEvent<{ node: BinaryNode }>) => {
-				this.conn.sendNode(event.detail.node).catch((err) => {
-					this.logger.error(
-						{ err },
-						"Failed to send node requested by Authenticator",
-					);
-				});
-			},
-		);
-
-		this.authenticator.addEventListener(
-			"_internal.closeConnection",
-			(event: TypedCustomEvent<{ error?: Error }>) => {
-				const error = event.detail.error;
-				this.conn.close(error).catch((err) => {
-					this.logger.error(
-						{ err },
-						"Error closing connection on Authenticator request",
-					);
-				});
 			},
 		);
 	}

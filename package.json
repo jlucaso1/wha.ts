@@ -16,6 +16,12 @@
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
 		"husky": "^9.1.7",
+		"lint-staged": "^15.5.0",
 		"typescript": "^5"
+	},
+	"lint-staged": {
+		"*": [
+			"biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
+		]
 	}
 }

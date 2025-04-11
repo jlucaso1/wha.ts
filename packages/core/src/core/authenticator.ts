@@ -32,11 +32,13 @@ import {
 	TypedEventTarget,
 } from "../utils/typed-event-target";
 import type { AuthenticatorEventMap } from "./authenticator-events";
+import type { IConnectionActions } from "./types";
 
 class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private connectionManager: ConnectionManager;
 	private authStateProvider: IAuthStateProvider;
 	private logger: ILogger;
+	private connectionActions: IConnectionActions;
 	private qrTimeout?: ReturnType<typeof setTimeout>;
 	private qrRetryCount = 0;
 	private processingPairSuccess = false;
@@ -48,11 +50,13 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		connectionManager: ConnectionManager,
 		authStateProvider: IAuthStateProvider,
 		logger: ILogger,
+		connectionActions: IConnectionActions,
 	) {
 		super();
 		this.connectionManager = connectionManager;
 		this.authStateProvider = authStateProvider;
 		this.logger = logger;
+		this.connectionActions = connectionActions;
 
 		this.connectionManager.addEventListener(
 			"handshake.complete",
@@ -130,7 +134,11 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			},
 		};
 
-		this.dispatchTypedEvent("_internal.sendNode", { node: ackNode });
+		this.connectionActions
+			.sendNode(ackNode)
+			.catch((err) =>
+				this.logger.error({ err }, "Failed to send pair-device ACK"),
+			);
 
 		const pairDeviceNode = getBinaryNodeChild(node, "pair-device");
 
@@ -158,7 +166,11 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				connection: "close",
 				error,
 			});
-			this.dispatchTypedEvent("_internal.closeConnection", { error });
+			this.connectionActions
+				.closeConnection(error)
+				.catch((err) =>
+					this.logger.error({ err }, "Failed to trigger connection close"),
+				);
 			return;
 		}
 
@@ -384,12 +396,10 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			Object.assign(this.authStateProvider.creds, updatedCreds);
 			await this.authStateProvider.saveCreds();
 
-			this.dispatchTypedEvent("_internal.sendNode", { node: reply });
+			await this.connectionActions.sendNode(reply);
 			this.logger.info("Sent pair-success confirmation reply");
 
 			this.dispatchTypedEvent("creds.update", updatedCreds);
-
-			await new Promise((resolve) => setTimeout(resolve, 500));
 
 			this.dispatchTypedEvent("connection.update", {
 				isNewLogin: true,
@@ -399,13 +409,21 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.logger.info(
 				"Pairing complete, expecting connection close and restart",
 			);
-		} catch (error: any) {
+		} catch (error) {
+			if (!(error instanceof Error)) {
+				throw error;
+			}
+
 			this.logger.error({ err: error }, "Error processing pair-success IQ");
 			this.dispatchTypedEvent("connection.update", {
 				connection: "close",
 				error,
 			});
-			this.dispatchTypedEvent("_internal.closeConnection", { error });
+			this.connectionActions
+				.closeConnection(error)
+				.catch((err) =>
+					this.logger.error({ err }, "Failed to trigger connection close"),
+				);
 		} finally {
 			this.processingPairSuccess = false;
 		}
@@ -452,14 +470,16 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.logger.error({ code, attrs: node.attrs }, "Login failed");
 		const error = new Error(`Login failed: ${reason}`);
 
-		(error as any).code = code;
-
 		this.clearQrTimeout();
 		this.dispatchTypedEvent("connection.update", {
 			connection: "close",
 			error,
 		});
-		this.dispatchTypedEvent("_internal.closeConnection", { error });
+		this.connectionActions
+			.closeConnection(error)
+			.catch((err) =>
+				this.logger.error({ err }, "Failed to trigger connection close"),
+			);
 	}
 }
 
