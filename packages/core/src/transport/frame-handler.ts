@@ -1,5 +1,5 @@
+import { concatBytes } from "@wha.ts/utils/src/bytes-utils";
 import { Mutex } from "async-mutex";
-import { concatBytes } from "../utils/bytes-utils";
 import type { NoiseProcessor } from "./noise-processor";
 import type { ILogger } from "./types";
 

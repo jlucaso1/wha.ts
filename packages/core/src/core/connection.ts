@@ -8,15 +8,15 @@ import {
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
+import { bytesToHex, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
+import { TypedEventTarget } from "../generics/typed-event-target";
 import type { AuthenticationCreds } from "../state/interface";
 import { generateMdTagPrefix } from "../state/utils";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";
 import type { ILogger, WebSocketConfig } from "../transport/types";
 import { NativeWebSocketClient } from "../transport/websocket";
-import { bytesToHex, utf8ToBytes } from "../utils/bytes-utils";
-import { TypedEventTarget } from "../utils/typed-event-target";
 import {
 	generateLoginPayload,
 	generateRegisterPayload,

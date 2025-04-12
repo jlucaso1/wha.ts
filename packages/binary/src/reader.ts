@@ -1,4 +1,4 @@
-import { bytesToUtf8 } from "@wha.ts/core/src/utils/bytes-utils";
+import { bytesToUtf8 } from "@wha.ts/utils/src/bytes-utils";
 
 export class BinaryReader {
 	private buffer: Uint8Array;

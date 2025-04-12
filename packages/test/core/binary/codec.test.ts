@@ -6,7 +6,7 @@ import {
 import { encodeBinaryNode } from "@wha.ts/binary/src/encode";
 import { BinaryReader } from "@wha.ts/binary/src/reader";
 import type { BinaryNode } from "@wha.ts/binary/src/types";
-import { hexToBytes } from "@wha.ts/core/src/utils/bytes-utils";
+import { hexToBytes } from "@wha.ts/utils/src/bytes-utils";
 
 const nodeCases: {
 	description: string;

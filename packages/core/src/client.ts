@@ -1,3 +1,5 @@
+import type { ISignalProtocolManager } from "@wha.ts/signal/src/interface";
+import { SignalManager } from "@wha.ts/signal/src/signal-manager";
 import type { ClientEventMap } from "./client-events";
 import { Authenticator } from "./core/authenticator";
 import type {
@@ -7,15 +9,15 @@ import type {
 import { ConnectionManager } from "./core/connection";
 import type { IConnectionActions } from "./core/types";
 import { DEFAULT_BROWSER, DEFAULT_SOCKET_CONFIG, WA_VERSION } from "./defaults";
+import {
+	type TypedCustomEvent,
+	TypedEventTarget,
+} from "./generics/typed-event-target";
 import type {
 	AuthenticationCreds,
 	IAuthStateProvider,
 } from "./state/interface";
 import type { ILogger, WebSocketConfig } from "./transport/types";
-import {
-	type TypedCustomEvent,
-	TypedEventTarget,
-} from "./utils/typed-event-target";
 
 export interface ClientConfig {
 	auth: IAuthStateProvider;
@@ -43,6 +45,7 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	private config: Required<Omit<ClientConfig, "logger">> & { logger: ILogger };
 	private conn: ConnectionManager;
 	private authenticator: Authenticator;
+	private signalManager: ISignalProtocolManager;
 
 	constructor(config: ClientConfig) {
 		super();
@@ -85,6 +88,8 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			this.logger,
 			connectionActions,
 		);
+
+		this.signalManager = new SignalManager(this.auth, this.logger);
 
 		this.authenticator.addEventListener(
 			"connection.update",

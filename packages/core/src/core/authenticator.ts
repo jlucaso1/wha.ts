@@ -18,18 +18,20 @@ import {
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
-import { Curve, hmacSign } from "../signal/crypto";
+
 import {
 	bytesToBase64,
 	bytesToHex,
 	bytesToUtf8,
 	concatBytes,
 	equalBytes,
-} from "../utils/bytes-utils";
+} from "@wha.ts/utils/src/bytes-utils";
+import { hmacSign } from "@wha.ts/utils/src/crypto";
+import { Curve } from "@wha.ts/utils/src/curve";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
-} from "../utils/typed-event-target";
+} from "../generics/typed-event-target";
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { IConnectionActions } from "./types";
 
@@ -200,10 +202,10 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		const ref = bytesToUtf8(refNode.content);
 		const noiseKeyB64 = bytesToBase64(
-			this.authStateProvider.creds.noiseKey.public,
+			this.authStateProvider.creds.noiseKey.publicKey,
 		);
 		const identityKeyB64 = bytesToBase64(
-			this.authStateProvider.creds.signedIdentityKey.public,
+			this.authStateProvider.creds.signedIdentityKey.publicKey,
 		);
 		const advSecretB64 = bytesToBase64(
 			this.authStateProvider.creds.advSecretKey,
@@ -306,7 +308,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		const accountMsg = concatBytes(
 			new Uint8Array([6, 0]),
 			account.details,
-			creds.signedIdentityKey.public,
+			creds.signedIdentityKey.publicKey,
 		);
 
 		if (
@@ -322,12 +324,12 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		const deviceMsg = concatBytes(
 			new Uint8Array([6, 1]),
 			account.details,
-			creds.signedIdentityKey.public,
+			creds.signedIdentityKey.publicKey,
 			account.accountSignatureKey,
 		);
 
 		const deviceSignature = Curve.sign(
-			creds.signedIdentityKey.private,
+			creds.signedIdentityKey.privateKey,
 			deviceMsg,
 		);
 		const updatedAccount = {

@@ -1,5 +1,5 @@
-import { bytesToHex } from "../utils/bytes-utils";
-import { IWebSocketClient, type WebSocketConfig } from "./types";
+import { bytesToHex } from "@wha.ts/utils/src/bytes-utils";
+import { IWebSocketClient } from "./types";
 
 const CONNECTING = 0;
 const OPEN = 1;

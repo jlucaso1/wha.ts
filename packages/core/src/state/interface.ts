@@ -1,6 +1,5 @@
 import type { ADVSignedDeviceIdentity } from "@wha.ts/proto";
-
-export type KeyPair = { public: Uint8Array; private: Uint8Array };
+import type { KeyPair } from "@wha.ts/utils/src/types";
 
 type SignedKeyPair = {
 	keyPair: KeyPair;

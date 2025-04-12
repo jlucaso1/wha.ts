@@ -2,6 +2,6 @@
 	"name": "@wha.ts/binary",
 	"private": true,
 	"dependencies": {
-		"@wha.ts/core": "workspace:*"
+		"@wha.ts/utils": "workspace:*"
 	}
 }

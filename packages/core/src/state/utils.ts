@@ -1,5 +1,5 @@
-import { Curve, randomBytes, signedKeyPair } from "../signal/crypto";
-import { base64ToBytes, bytesToBase64 } from "../utils/bytes-utils";
+import { randomBytes } from "@wha.ts/utils/src/crypto";
+import { Curve } from "@wha.ts/utils/src/curve";
 import type { AuthenticationCreds } from "./interface";
 
 const generateRegistrationId = (): number => {
@@ -23,7 +23,7 @@ export const initAuthCreds = (): AuthenticationCreds => {
 		noiseKey: Curve.generateKeyPair(),
 		pairingEphemeralKeyPair: Curve.generateKeyPair(),
 		signedIdentityKey: identityKey,
-		signedPreKey: signedKeyPair(identityKey, 1),
+		signedPreKey: Curve.signedKeyPair(identityKey, 1),
 		registrationId: generateRegistrationId(),
 		advSecretKey: randomBytes(32),
 		nextPreKeyId: 1,
@@ -36,34 +36,6 @@ export const initAuthCreds = (): AuthenticationCreds => {
 		pairingCode: undefined,
 		routingInfo: undefined,
 	};
-};
-
-export const BufferJSON = {
-	replacer: (_k: string, value: any) => {
-		if (value instanceof Uint8Array || value?.type === "Buffer") {
-			return {
-				type: "Buffer",
-				data: bytesToBase64(value?.data || value),
-			};
-		}
-
-		return value;
-	},
-
-	reviver: (_k: string, value: any) => {
-		if (
-			typeof value === "object" &&
-			!!value &&
-			(value.buffer === true || value.type === "Buffer")
-		) {
-			const val = value.data || value.value;
-			return typeof val === "string"
-				? base64ToBytes(val)
-				: new Uint8Array(val || []);
-		}
-
-		return value;
-	},
 };
 
 export const generateMdTagPrefix = () => {

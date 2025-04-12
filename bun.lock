@@ -13,7 +13,7 @@
     "packages/binary": {
       "name": "@wha.ts/binary",
       "dependencies": {
-        "@wha.ts/core": "workspace:*",
+        "@wha.ts/utils": "workspace:*",
       },
     },
     "packages/core": {
@@ -21,12 +21,11 @@
       "version": "0.1.0",
       "dependencies": {
         "@bufbuild/protobuf": "^2.2.5",
-        "@noble/ciphers": "^1.2.1",
-        "@noble/hashes": "^1.7.1",
         "@wha.ts/binary": "workspace:*",
         "@wha.ts/proto": "workspace:*",
+        "@wha.ts/signal": "workspace:*",
+        "@wha.ts/utils": "workspace:*",
         "async-mutex": "^0.5.0",
-        "curve25519-js": "^0.0.4",
         "unstorage": "^1.15.0",
       },
     },
@@ -44,8 +43,8 @@
       "version": "0.1.0",
       "dependencies": {
         "@bufbuild/protobuf": "^2.2.5",
-        "@wha.ts/core": "workspace:*",
         "@wha.ts/proto": "workspace:*",
+        "@wha.ts/utils": "workspace:*",
       },
     },
     "packages/proto": {
@@ -58,6 +57,16 @@
         "@bufbuild/protoc-gen-es": "^2.2.5",
       },
     },
+    "packages/signal": {
+      "name": "@wha.ts/signal",
+      "dependencies": {
+        "@bufbuild/protobuf": "^2.2.5",
+        "@wha.ts/core": "workspace:*",
+        "@wha.ts/proto": "workspace:*",
+        "@wha.ts/utils": "workspace:*",
+        "async-mutex": "0.5.0",
+      },
+    },
     "packages/test": {
       "name": "@wha.ts/test-e2e",
       "version": "0.1.0",
@@ -65,9 +74,19 @@
         "@wha.ts/binary": "workspace:*",
         "@wha.ts/core": "workspace:*",
         "@wha.ts/proto": "workspace:*",
+        "@wha.ts/signal": "workspace:*",
+        "@wha.ts/utils": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.9",
+      },
+    },
+    "packages/utils": {
+      "name": "@wha.ts/utils",
+      "dependencies": {
+        "@noble/ciphers": "^1.2.1",
+        "@noble/hashes": "^1.7.1",
+        "curve25519-js": "^0.0.4",
       },
     },
   },
@@ -132,7 +151,11 @@
 
     "@wha.ts/proto": ["@wha.ts/proto@workspace:packages/proto"],
 
+    "@wha.ts/signal": ["@wha.ts/signal@workspace:packages/signal"],
+
     "@wha.ts/test-e2e": ["@wha.ts/test-e2e@workspace:packages/test"],
+
+    "@wha.ts/utils": ["@wha.ts/utils@workspace:packages/utils"],
 
     "ansi-escapes": ["ansi-escapes@7.0.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-GdYO7a61mR0fOlAsvC9/rIHf7L96sBc6dEWzeOu+KAea5bZyQRPIpojrVoI4AXGJS/ycu/fBTdLrUkA4ODrvjw=="],
 

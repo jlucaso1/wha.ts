@@ -1,0 +1,18 @@
+
+// Signal Protocol Messages (Analogous to WhisperMessage)
+message SignalMessage {
+  optional bytes  ratchetKey = 1;     // Corresponds to ephemeralKey
+  optional uint32 counter = 2;
+  optional uint32 previousCounter = 3;
+  optional bytes  ciphertext = 4;      // This will contain the *actual* encrypted inner WA message (e.g., waE2E.Message)
+}
+
+// Signal Protocol PreKey Message (Analogous to PreKeyWhisperMessage)
+message PreKeySignalMessage {
+  optional uint32 registrationId = 5; // Sender's registration ID
+  optional uint32 preKeyId = 1;       // ID of the pre-key used by the sender
+  optional uint32 signedPreKeyId = 6; // ID of the signed pre-key used
+  optional bytes  baseKey = 2;        // Sender's ephemeral key for this session setup
+  optional bytes  identityKey = 3;    // Sender's long-term identity key
+  optional bytes  message = 4;        // The encrypted SignalMessage (containing the actual ciphertext)
+}

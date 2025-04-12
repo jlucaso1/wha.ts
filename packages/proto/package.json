@@ -2,7 +2,7 @@
 	"name": "@wha.ts/proto",
 	"private": true,
 	"scripts": {
-		"proto:gen": "@bufbuild/buf generate"
+		"proto:gen": "bunx @bufbuild/buf generate"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5"

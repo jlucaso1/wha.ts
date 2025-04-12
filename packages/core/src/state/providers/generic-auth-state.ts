@@ -1,3 +1,4 @@
+import { BufferJSON } from "@wha.ts/utils/src/serializer";
 import { type Storage, createStorage } from "unstorage";
 import type {
 	AuthenticationCreds,
@@ -6,7 +7,7 @@ import type {
 	SignalDataSet,
 	SignalDataTypeMap,
 } from "../interface";
-import { BufferJSON, initAuthCreds } from "../utils";
+import { initAuthCreds } from "../utils";
 
 const CREDS_KEY = "auth:creds";
 const SIGNAL_KEY_PREFIX = "signal:";

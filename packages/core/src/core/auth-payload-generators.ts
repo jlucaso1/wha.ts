@@ -13,11 +13,11 @@ import {
 	DevicePropsSchema,
 	DeviceProps_PlatformType,
 } from "@wha.ts/proto";
+import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import { sha256 } from "@wha.ts/utils/src/crypto";
+import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
 import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
-import { sha256 } from "../signal/crypto";
 import type { AuthenticationCreds } from "../state/interface";
-import { utf8ToBytes } from "../utils/bytes-utils";
-import { encodeBigEndian } from "../utils/generics";
 
 const getPlatformType = (platform: string): DeviceProps_PlatformType => {
 	const platformUpper = platform.toUpperCase();
@@ -137,9 +137,9 @@ export const generateRegisterPayload = (
 			deviceProps: devicePropsBytes,
 			eRegid: encodeBigEndian(creds.registrationId),
 			eKeytype: KEY_BUNDLE_TYPE,
-			eIdent: creds.signedIdentityKey.public,
+			eIdent: creds.signedIdentityKey.publicKey,
 			eSkeyId: encodeBigEndian(creds.signedPreKey.keyId, 3),
-			eSkeyVal: creds.signedPreKey.keyPair.public,
+			eSkeyVal: creds.signedPreKey.keyPair.publicKey,
 			eSkeySig: creds.signedPreKey.signature,
 		},
 	});
