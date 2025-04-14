@@ -1,6 +1,6 @@
 {
 	"name": "@wha.ts/core",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Core functionality for WhatsApp communication",
 	"type": "module",
 	"main": "./dist/client.js",
@@ -18,7 +18,7 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsc && bun build ./src/client.ts --outdir ./dist"
+		"build": "tsup src/*.ts --format=esm --dts"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5",

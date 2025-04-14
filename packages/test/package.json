@@ -1,6 +1,5 @@
 {
-	"name": "@wha.ts/test-e2e",
-	"version": "0.1.0",
+	"name": "@wha.ts/test",
 	"scripts": {
 		"test": "bun test"
 	},

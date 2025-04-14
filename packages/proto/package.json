@@ -1,6 +1,6 @@
 {
 	"name": "@wha.ts/proto",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Protobuf definitions for WhatsApp communication",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -19,7 +19,7 @@
 	},
 	"scripts": {
 		"proto:gen": "@bufbuild/buf generate",
-		"build": "tsc && bun build ./index.ts --outdir ./dist"
+		"build": "tsup src/*.ts --format=esm --dts"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5"

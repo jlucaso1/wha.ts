@@ -1,6 +1,6 @@
 {
 	"name": "@wha.ts/extension",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Browser extension for WhatsApp communication",
 	"type": "module",
 	"main": "./dist/main.js",
@@ -13,12 +13,6 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/jlucaso1/wha.ts.git"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"scripts": {
-		"build": "tsc && bun build ./src/main.ts --outdir ./dist --target=browser"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5",
