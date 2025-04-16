@@ -1,11 +1,4 @@
-import type {
-	AuthenticationCreds,
-	IAuthStateProvider,
-} from "../state/interface";
-import type { ILogger } from "../transport/types";
-import type { ConnectionManager } from "./connection";
-
-import { fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
+import { create, fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
 import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/constants";
 import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
 import {
@@ -18,6 +11,12 @@ import {
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
+import type {
+	AuthenticationCreds,
+	IAuthStateProvider,
+} from "../state/interface";
+import type { ILogger } from "../transport/types";
+import type { ConnectionManager } from "./connection";
 
 import {
 	bytesToBase64,
@@ -27,11 +26,19 @@ import {
 	equalBytes,
 } from "@wha.ts/utils/src/bytes-utils";
 import { hmacSign } from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
+import { Curve, KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
+import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
+import type { KeyPair } from "@wha.ts/utils/src/types";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "../generics/typed-event-target";
+import { SignalProtocolStoreAdapter } from "../signal/signal-store";
+import { generatePreKeys } from "../state/utils";
+import {
+	formatPreKeyForXMPP,
+	formatSignedPreKeyForXMPP,
+} from "./auth-payload-generators";
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { IConnectionActions } from "./types";
 
@@ -68,11 +75,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.connectionActions = connectionActions;
 
 		this.connectionManager.addEventListener(
-			"handshake.complete",
-			this.handleHandshakeComplete,
-		);
-
-		this.connectionManager.addEventListener(
 			"node.received",
 			(event: TypedCustomEvent<{ node: BinaryNode }>) => {
 				this.handleNodeReceived(event.detail.node);
@@ -106,7 +108,26 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		}
 	}
 
-	private handleHandshakeComplete = async (): Promise<void> => {};
+	private handleHandshakeComplete = async (): Promise<void> => {
+		try {
+			if (!this.authStateProvider.creds.registered) {
+				this.logger.info("Performing initial registration: uploading pre-keys");
+				const { node: regNode, updateCreds } =
+					await this.generateRegistrationIQ();
+				await this.connectionActions.sendNode(regNode);
+				Object.assign(this.authStateProvider.creds, updateCreds);
+				await this.authStateProvider.saveCreds();
+				this.logger.info("Initial pre-keys uploaded and state updated");
+			}
+		} catch (error: any) {
+			this.logger.error({ err: error }, "Registration (pre-key upload) failed");
+			this.dispatchTypedEvent("connection.update", {
+				connection: "close",
+				error,
+			});
+			await this.connectionActions.closeConnection(error as Error);
+		}
+	};
 
 	private handleNodeReceived = (node: BinaryNode): void => {
 		if (node.tag === "iq") {
@@ -122,15 +143,13 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.handleLoginSuccess(node);
 		} else if (node.tag === "fail") {
 			this.handleLoginFailure(node);
-		}
-
-		if (node.tag === ("ib" as any)) {
+		} else if (node.tag === ("ib" as any)) {
 			const offlinePreviewNode = getBinaryNodeChild(node, "offline_preview");
 			if (offlinePreviewNode) {
 				this.connectionActions.sendNode({
 					tag: "ib" as any,
 					attrs: {},
-					content: [{ tag: "offline_batch" as any, attrs: { count: "100" } }],
+					content: [{ tag: "offline_batch" as any, attrs: { count: "30" } }],
 				});
 			}
 		}
@@ -283,7 +302,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			throw new Error("Invalid ADVSignedDeviceIdentityHMAC structure");
 		}
 
-		const advSign = hmacSign(hmacIdentity.details, creds.advSecretKey);
+		const advSign = hmacSign(creds.advSecretKey, hmacIdentity.details);
 
 		if (!equalBytes(hmacIdentity.hmac, advSign)) {
 			console.error("HMAC Details:", bytesToHex(hmacIdentity.details));
@@ -349,12 +368,11 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			account: toJson(ADVSignedDeviceIdentitySchema, updatedAccount) as any,
 			signalIdentities: [...(creds.signalIdentities || []), identity],
 			platform: platformNode?.attrs.name,
-			registered: true,
 			pairingCode: undefined,
 		};
 
 		const encodeReplyAccount = (acc: typeof updatedAccount): Uint8Array => {
-			const replyAcc = { ...acc, accountSignatureKey: undefined };
+			const replyAcc = create(ADVSignedDeviceIdentitySchema, acc);
 			return toBinary(ADVSignedDeviceIdentitySchema, replyAcc);
 		};
 		const accountEnc = encodeReplyAccount(updatedAccount);
@@ -455,6 +473,8 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.clearQrTimeout();
 		this.state = AuthState.AUTHENTICATED;
 
+		this.handleHandshakeComplete();
+
 		const platform = node.attrs.platform;
 		const pushname = node.attrs.pushname;
 		const updates: Partial<AuthenticationCreds> = {};
@@ -477,7 +497,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			Object.assign(this.authStateProvider.creds, updates);
 			this.authStateProvider
 				.saveCreds()
-				.then(() => this.dispatchTypedEvent("creds.update", updates))
+				.then(() => {
+					this.dispatchTypedEvent("creds.update", updates);
+				})
 				.catch((err) =>
 					this.logger.error({ err }, "Failed to save creds after login"),
 				);
@@ -503,6 +525,72 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			.catch((err) =>
 				this.logger.error({ err }, "Failed to trigger connection close"),
 			);
+	}
+
+	private async prepareRegistrationPreKeys(batchCount = 30): Promise<{
+		preKeys: { [id: number]: KeyPair };
+		updateCreds: Partial<AuthenticationCreds>;
+	}> {
+		const { creds, keys } = this.authStateProvider;
+		const localKeyCount = creds.nextPreKeyId - creds.firstUnuploadedPreKeyId;
+		const keysToUploadCount = batchCount;
+		const startId = creds.firstUnuploadedPreKeyId;
+		let newKeys: { [id: number]: KeyPair } = {};
+
+		if (localKeyCount < batchCount) {
+			const needed = batchCount - localKeyCount;
+			const generationStartId = creds.nextPreKeyId;
+			newKeys = generatePreKeys(generationStartId, needed);
+			await keys.set({ "pre-key": newKeys });
+			creds.nextPreKeyId += needed;
+		}
+
+		const endId = startId + keysToUploadCount - 1;
+		const idsToFetch = Array.from({ length: keysToUploadCount }, (_, i) =>
+			(startId + i).toString(),
+		);
+		const fetchedKeys = await keys.get("pre-key", idsToFetch);
+		const updateCreds: Partial<AuthenticationCreds> = {
+			firstUnuploadedPreKeyId: endId + 1,
+			nextPreKeyId: creds.nextPreKeyId,
+		};
+		return { preKeys: fetchedKeys as { [id: number]: KeyPair }, updateCreds };
+	}
+
+	private async generateRegistrationIQ(): Promise<{
+		node: BinaryNode;
+		updateCreds: Partial<AuthenticationCreds>;
+	}> {
+		const { creds } = this.authStateProvider;
+		const { preKeys, updateCreds } = await this.prepareRegistrationPreKeys();
+		const preKeyNodes = Object.entries(preKeys).map(([id, keyPair]) =>
+			formatPreKeyForXMPP(keyPair, Number.parseInt(id, 10)),
+		);
+		const registrationIQ: BinaryNode = {
+			tag: "iq",
+			attrs: {
+				xmlns: "encrypt",
+				type: "set",
+				to: S_WHATSAPP_NET,
+				id: `reg-${Date.now()}`,
+			},
+			content: [
+				{
+					tag: "registration",
+					attrs: {},
+					content: encodeBigEndian(creds.registrationId),
+				},
+				{ tag: "type", attrs: {}, content: KEY_BUNDLE_TYPE },
+				{
+					tag: "identity",
+					attrs: {},
+					content: creds.signedIdentityKey.publicKey,
+				},
+				formatSignedPreKeyForXMPP(creds.signedPreKey),
+				{ tag: "list", attrs: {}, content: preKeyNodes },
+			],
+		};
+		return { node: registrationIQ, updateCreds };
 	}
 }
 

@@ -1,5 +1,3 @@
-import type { ISignalProtocolManager } from "@wha.ts/signal/src/interface";
-import { SignalManager } from "@wha.ts/signal/src/signal-manager";
 import type { ClientEventMap } from "./client-events";
 import { Authenticator } from "./core/authenticator";
 import type {
@@ -13,6 +11,7 @@ import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "./generics/typed-event-target";
+import { MessageProcessor } from "./messaging/message-processor";
 import type {
 	AuthenticationCreds,
 	IAuthStateProvider,
@@ -43,9 +42,9 @@ declare interface WhaTSClient {
 // biome-ignore lint/suspicious/noUnsafeDeclarationMerging: solve later
 class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	private config: Required<Omit<ClientConfig, "logger">> & { logger: ILogger };
+	private messageProcessor: MessageProcessor;
 	private conn: ConnectionManager;
 	private authenticator: Authenticator;
-	private signalManager: ISignalProtocolManager;
 
 	constructor(config: ClientConfig) {
 		super();
@@ -71,10 +70,13 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		this.auth = this.config.auth;
 		this.logger = this.config.logger;
 
+		this.messageProcessor = new MessageProcessor(this.logger, this.auth);
+
 		this.conn = new ConnectionManager(
 			this.config.wsOptions as WebSocketConfig,
 			this.logger,
 			this.auth.creds,
+			this.messageProcessor,
 		);
 
 		const connectionActions: IConnectionActions = {
@@ -88,8 +90,6 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			this.logger,
 			connectionActions,
 		);
-
-		this.signalManager = new SignalManager(this.auth, this.logger);
 
 		this.authenticator.addEventListener(
 			"connection.update",
@@ -112,6 +112,23 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 					.catch((err) => {
 						this.logger.error({ err }, "Failed to save credentials");
 					});
+			},
+		);
+		this.messageProcessor.addEventListener(
+			"message.decrypted",
+			(event: TypedCustomEvent<ClientEventMap["message.received"]>) => {
+				this.dispatchTypedEvent("message.received", event.detail);
+			},
+		);
+
+		this.messageProcessor.addEventListener(
+			"message.decryption_error",
+			(event: TypedCustomEvent<ClientEventMap["message.decryption_error"]>) => {
+				this.logger.warn(
+					{ err: event.detail.error, sender: event.detail.sender?.toString() },
+					"Message decryption failed",
+				);
+				this.dispatchTypedEvent("message.decryption_error", event.detail);
 			},
 		);
 	}
