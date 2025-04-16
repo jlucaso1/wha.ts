@@ -14,6 +14,7 @@
       "name": "@wha.ts/binary",
       "dependencies": {
         "@wha.ts/utils": "workspace:*",
+        "fflate": "^0.8.2",
       },
     },
     "packages/core": {
@@ -25,7 +26,6 @@
         "@wha.ts/proto": "workspace:*",
         "@wha.ts/signal": "workspace:*",
         "@wha.ts/utils": "workspace:*",
-        "async-mutex": "^0.5.0",
         "unstorage": "^1.15.0",
       },
     },
@@ -61,10 +61,8 @@
       "name": "@wha.ts/signal",
       "dependencies": {
         "@bufbuild/protobuf": "^2.2.5",
-        "@wha.ts/core": "workspace:*",
         "@wha.ts/proto": "workspace:*",
         "@wha.ts/utils": "workspace:*",
-        "async-mutex": "0.5.0",
       },
     },
     "packages/test": {
@@ -86,6 +84,7 @@
       "dependencies": {
         "@noble/ciphers": "^1.2.1",
         "@noble/hashes": "^1.7.1",
+        "async-mutex": "^0.5.0",
         "curve25519-js": "^0.0.4",
       },
     },
@@ -206,6 +205,8 @@
     "example": ["example@workspace:packages/example"],
 
     "execa": ["execa@8.0.1", "", { "dependencies": { "cross-spawn": "^7.0.3", "get-stream": "^8.0.1", "human-signals": "^5.0.0", "is-stream": "^3.0.0", "merge-stream": "^2.0.0", "npm-run-path": "^5.1.0", "onetime": "^6.0.0", "signal-exit": "^4.1.0", "strip-final-newline": "^3.0.0" } }, "sha512-VyhnebXciFV2DESc+p6B+y0LjSm0krU4OgJN44qFAhBY0TJ+1V61tYD2+wHusZ6F9n5K+vl8k0sTy7PEfV4qpg=="],
+
+    "fflate": ["fflate@0.8.2", "", {}, "sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A=="],
 
     "fill-range": ["fill-range@7.1.1", "", { "dependencies": { "to-regex-range": "^5.0.1" } }, "sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg=="],
 

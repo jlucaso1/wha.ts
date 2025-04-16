@@ -8,8 +8,8 @@
 		"@wha.ts/proto": "workspace:*",
 		"@wha.ts/core": "workspace:*",
 		"@wha.ts/binary": "workspace:*",
-		"@wha.ts/signal": "workspace:*",
-		"@wha.ts/utils": "workspace:*"
+		"@wha.ts/utils": "workspace:*",
+		"@wha.ts/signal": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.2.9"

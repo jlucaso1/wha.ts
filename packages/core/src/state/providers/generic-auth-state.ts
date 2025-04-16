@@ -7,7 +7,7 @@ import type {
 	SignalDataSet,
 	SignalDataTypeMap,
 } from "../interface";
-import { initAuthCreds } from "../utils";
+import { generatePreKeys, initAuthCreds } from "../utils";
 
 const CREDS_KEY = "auth:creds";
 const SIGNAL_KEY_PREFIX = "signal:";
@@ -37,10 +37,7 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 
 			const resultMap = new Map<string, string | null>();
 			for (const item of batchResults) {
-				resultMap.set(
-					item.key,
-					item.value === undefined ? null : String(item.value),
-				);
+				resultMap.set(item.key, item.value as any);
 			}
 
 			for (const id of ids) {
@@ -50,7 +47,7 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
 						const parsedValue = JSON.parse(
-							rawValue,
+							JSON.stringify(rawValue),
 							BufferJSON.reviver,
 						) as SignalDataTypeMap[T];
 						finalResults[id] = parsedValue;
@@ -66,7 +63,9 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 			}
 		} catch (error) {
 			console.error(
-				`[GenericSignalKeyStore] Error using getItems for type ${type} and keys ${storageKeys.join(", ")}:`,
+				`[GenericSignalKeyStore] Error using getItems for type ${type} and keys ${storageKeys.join(
+					", ",
+				)}:`,
 				error,
 			);
 		}
@@ -134,13 +133,16 @@ export class GenericAuthState implements IAuthStateProvider {
 
 	static async init(storage = createStorage()): Promise<GenericAuthState> {
 		let creds: AuthenticationCreds;
+		let loadedCreds = false;
 		try {
 			const credsValue = await storage.getItem(CREDS_KEY);
 			if (credsValue !== null && typeof credsValue === "string") {
 				creds = JSON.parse(credsValue, BufferJSON.reviver);
+				loadedCreds = true;
 			} else if (credsValue !== null) {
 				try {
 					creds = JSON.parse(JSON.stringify(credsValue), BufferJSON.reviver);
+					loadedCreds = true;
 				} catch {
 					console.warn(
 						"[GenericAuthState] Recovery failed, initializing new creds.",
@@ -149,10 +151,6 @@ export class GenericAuthState implements IAuthStateProvider {
 				}
 			} else {
 				creds = initAuthCreds();
-				await storage.setItem(
-					CREDS_KEY,
-					JSON.stringify(creds, BufferJSON.replacer),
-				);
 			}
 		} catch (error) {
 			console.error(
@@ -160,22 +158,21 @@ export class GenericAuthState implements IAuthStateProvider {
 				error,
 			);
 			creds = initAuthCreds();
-			try {
-				await storage.setItem(
-					CREDS_KEY,
-					JSON.stringify(creds, BufferJSON.replacer),
-				);
-			} catch (saveError) {
-				console.error(
-					"[GenericAuthState] Error saving newly initialized credentials after load failure:",
-					saveError,
-				);
-			}
 		}
 
 		const keyStore = new GenericSignalKeyStore(storage);
+		const authState = new GenericAuthState(creds, keyStore, storage);
 
-		return new GenericAuthState(creds, keyStore, storage);
+		// Generate and store initial pre-keys ONLY if creds were newly initialized
+		if (!loadedCreds) {
+			const INITIAL_PREKEY_COUNT = 30;
+			const preKeys = generatePreKeys(creds.nextPreKeyId, INITIAL_PREKEY_COUNT);
+			await keyStore.set({ "pre-key": preKeys });
+			creds.nextPreKeyId += INITIAL_PREKEY_COUNT;
+			await authState.saveCreds();
+		}
+
+		return authState;
 	}
 
 	async saveCreds(): Promise<void> {

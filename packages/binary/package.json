@@ -2,6 +2,7 @@
 	"name": "@wha.ts/binary",
 	"private": true,
 	"dependencies": {
-		"@wha.ts/utils": "workspace:*"
+		"@wha.ts/utils": "workspace:*",
+		"fflate": "^0.8.2"
 	}
 }

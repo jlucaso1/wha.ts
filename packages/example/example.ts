@@ -7,13 +7,12 @@ import { renderUnicodeCompact } from "uqr";
 
 const IS_BROWSER = typeof window !== "undefined";
 
+const storage = IS_BROWSER
+	? createStorage({ driver: localStorageDriver({ base: "wha.ts" }) })
+	: createStorage({ driver: fsDriver({ base: "./storage" }) });
+
+const authState = await GenericAuthState.init(storage);
 async function runExample() {
-	const storage = IS_BROWSER
-		? createStorage({ driver: localStorageDriver({ base: "wha.ts" }) })
-		: createStorage({ driver: fsDriver({ base: "./storage" }) });
-
-	const authState = await GenericAuthState.init(storage);
-
 	const client = createWAClient({
 		auth: authState,
 		logger: console,

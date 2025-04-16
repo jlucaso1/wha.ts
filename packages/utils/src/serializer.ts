@@ -9,6 +9,13 @@ export const BufferJSON = {
 			};
 		}
 
+		if (typeof value === "bigint") {
+			return {
+				type: "BigInt",
+				data: value.toString(),
+			};
+		}
+
 		return value;
 	},
 
@@ -22,6 +29,10 @@ export const BufferJSON = {
 			return typeof val === "string"
 				? base64ToBytes(val)
 				: new Uint8Array(val || []);
+		}
+
+		if (typeof value === "object" && !!value && value.type === "BigInt") {
+			return BigInt(value.data);
 		}
 
 		return value;

@@ -1,5 +1,6 @@
 import { create, toBinary } from "@bufbuild/protobuf";
 import { jidDecode } from "@wha.ts/binary/src/jid-utils";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
@@ -15,9 +16,12 @@ import {
 } from "@wha.ts/proto";
 import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
 import { sha256 } from "@wha.ts/utils/src/crypto";
+import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
 import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
-import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
+import type { KeyPair } from "@wha.ts/utils/src/types";
+import { DEFAULT_BROWSER, WA_VERSION } from "../defaults";
 import type { AuthenticationCreds } from "../state/interface";
+import type { SignedKeyPair } from "../state/interface";
 
 const getPlatformType = (platform: string): DeviceProps_PlatformType => {
 	const platformUpper = platform.toUpperCase();
@@ -132,7 +136,7 @@ export const generateRegisterPayload = (
 		passive: false,
 		pull: false,
 		devicePairingData: {
-			$typeName: "ClientPayload.DevicePairingRegistrationData",
+			$typeName: "proto.ClientPayload.DevicePairingRegistrationData",
 			buildHash: appVersionBuf,
 			deviceProps: devicePropsBytes,
 			eRegid: encodeBigEndian(creds.registrationId),
@@ -144,3 +148,27 @@ export const generateRegisterPayload = (
 		},
 	});
 };
+
+export const formatPreKeyForXMPP = (
+	keyPair: KeyPair,
+	id: number,
+): BinaryNode => ({
+	tag: "key",
+	attrs: {},
+	content: [
+		{ tag: "id", attrs: {}, content: encodeBigEndian(id, 3) },
+		{ tag: "value", attrs: {}, content: keyPair.publicKey },
+	],
+});
+
+export const formatSignedPreKeyForXMPP = (
+	signedKeyPair: SignedKeyPair,
+): BinaryNode => ({
+	tag: "skey" as any,
+	attrs: {},
+	content: [
+		{ tag: "id", attrs: {}, content: encodeBigEndian(signedKeyPair.keyId, 3) },
+		{ tag: "value", attrs: {}, content: signedKeyPair.keyPair.publicKey },
+		{ tag: "signature", attrs: {}, content: signedKeyPair.signature },
+	],
+});

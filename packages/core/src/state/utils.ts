@@ -1,5 +1,6 @@
 import { randomBytes } from "@wha.ts/utils/src/crypto";
 import { Curve } from "@wha.ts/utils/src/curve";
+import type { KeyPair } from "@wha.ts/utils/src/types";
 import type { AuthenticationCreds } from "./interface";
 
 const generateRegistrationId = (): number => {
@@ -46,4 +47,16 @@ export const generateMdTagPrefix = () => {
 	const part2 = view.getUint16(2, false);
 
 	return `${part1}.${part2}`;
+};
+
+export const generatePreKeys = (
+	startId: number,
+	count: number,
+): { [id: number]: KeyPair } => {
+	const keys: { [id: number]: KeyPair } = {};
+	for (let i = 0; i < count; i++) {
+		const id = startId + i;
+		keys[id] = Curve.generateKeyPair();
+	}
+	return keys;
 };
