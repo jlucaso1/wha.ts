@@ -42,49 +42,22 @@ export interface Chain {
 	messageKeys: { [messageNumber: number]: Uint8Array };
 }
 
-interface SerializedEphemeralKeyPair {
-	publicKey: string;
-	privateKey: string;
+/**
+ * Utility functions for base64 serialization of objects with Uint8Array fields.
+ */
+function toBase64(obj: any, fields: string[]): any {
+	const out: any = { ...obj };
+	for (const key of fields) {
+		if (obj[key] instanceof Uint8Array) out[key] = bytesToBase64(obj[key]);
+	}
+	return out;
 }
-
-interface SerializedCurrentRatchet {
-	ephemeralKeyPair: SerializedEphemeralKeyPair;
-	lastRemoteEphemeralKey: string;
-	previousCounter: number;
-	rootKey: string;
-}
-
-interface SerializedIndexInfo {
-	baseKey: string;
-	baseKeyType: BaseKeyType;
-	closed: number;
-	used: number;
-	created: number;
-	remoteIdentityKey: string;
-}
-
-interface SerializedPendingPreKey {
-	signedKeyId: number;
-	baseKey: string;
-	preKeyId?: number;
-	[key: string]: unknown;
-}
-
-interface SerializedChain {
-	chainKey: {
-		counter: number;
-		key: string | null;
-	};
-	chainType: ChainType;
-	messageKeys: { [messageNumber: number]: string };
-}
-
-interface SerializedSessionEntry {
-	registrationId?: number;
-	currentRatchet: SerializedCurrentRatchet;
-	indexInfo: SerializedIndexInfo;
-	pendingPreKey?: SerializedPendingPreKey;
-	_chains: { [ephemeralKeyBase64: string]: SerializedChain };
+function fromBase64(obj: any, fields: string[]): any {
+	const out: any = { ...obj };
+	for (const key of fields) {
+		if (typeof obj[key] === "string") out[key] = base64ToBytes(obj[key]);
+	}
+	return out;
 }
 
 export class SessionEntry {
@@ -130,12 +103,13 @@ export class SessionEntry {
 		}
 	}
 
-	serialize(): SerializedSessionEntry {
-		const serializedChains: {
-			[ephemeralKeyBase64: string]: SerializedChain;
-		} = {};
+	/**
+	 * Serialize this session entry to a plain object with base64-encoded fields.
+	 */
+	serialize(): Record<string, any> {
+		const serializedChains: Record<string, any> = {};
 		for (const [keyBase64, chain] of Object.entries(this._chains)) {
-			const serializedMessageKeys: { [num: number]: string } = {};
+			const serializedMessageKeys: Record<number, string> = {};
 			for (const [msgNum, msgKey] of Object.entries(chain.messageKeys)) {
 				serializedMessageKeys[Number(msgNum)] = bytesToBase64(msgKey);
 			}
@@ -149,62 +123,43 @@ export class SessionEntry {
 			};
 		}
 
-		const data: SerializedSessionEntry = {
+		const data: Record<string, any> = {
 			registrationId: this.registrationId,
 			currentRatchet: {
-				ephemeralKeyPair: {
-					publicKey: bytesToBase64(
-						this.currentRatchet.ephemeralKeyPair.publicKey,
-					),
-					privateKey: bytesToBase64(
-						this.currentRatchet.ephemeralKeyPair.privateKey,
-					),
-				},
+				ephemeralKeyPair: toBase64(this.currentRatchet.ephemeralKeyPair, [
+					"publicKey",
+					"privateKey",
+				]),
 				lastRemoteEphemeralKey: bytesToBase64(
 					this.currentRatchet.lastRemoteEphemeralKey,
 				),
 				previousCounter: this.currentRatchet.previousCounter,
 				rootKey: bytesToBase64(this.currentRatchet.rootKey),
 			},
-			indexInfo: {
-				baseKey: bytesToBase64(this.indexInfo.baseKey),
-				baseKeyType: this.indexInfo.baseKeyType,
-				closed: this.indexInfo.closed,
-				used: this.indexInfo.used,
-				created: this.indexInfo.created,
-				remoteIdentityKey: bytesToBase64(this.indexInfo.remoteIdentityKey),
-			},
+			indexInfo: toBase64(this.indexInfo, ["baseKey", "remoteIdentityKey"]),
 			_chains: serializedChains,
 		};
 
 		if (this.pendingPreKey) {
-			const serializedPending: SerializedPendingPreKey = {
-				...(this.pendingPreKey as Omit<PendingPreKey, "baseKey"> & {
-					baseKey: Uint8Array;
-				}),
-				baseKey: bytesToBase64(this.pendingPreKey.baseKey),
-				signedKeyId: this.pendingPreKey.signedKeyId,
-			};
-			data.pendingPreKey = serializedPending;
+			data.pendingPreKey = toBase64(this.pendingPreKey, ["baseKey"]);
 		}
 
 		return data;
 	}
 
-	static deserialize(data: SerializedSessionEntry): SessionEntry {
+	/**
+	 * Deserialize a plain object with base64-encoded fields into a SessionEntry.
+	 */
+	static deserialize(data: Record<string, any>): SessionEntry {
 		const obj = new SessionEntry();
 
 		obj.registrationId = data.registrationId;
 
 		obj.currentRatchet = {
-			ephemeralKeyPair: {
-				publicKey: base64ToBytes(
-					data.currentRatchet.ephemeralKeyPair.publicKey,
-				),
-				privateKey: base64ToBytes(
-					data.currentRatchet.ephemeralKeyPair.privateKey,
-				),
-			},
+			ephemeralKeyPair: fromBase64(data.currentRatchet.ephemeralKeyPair, [
+				"publicKey",
+				"privateKey",
+			]),
 			lastRemoteEphemeralKey: base64ToBytes(
 				data.currentRatchet.lastRemoteEphemeralKey,
 			),
@@ -212,41 +167,35 @@ export class SessionEntry {
 			rootKey: base64ToBytes(data.currentRatchet.rootKey),
 		};
 
-		obj.indexInfo = {
-			baseKey: base64ToBytes(data.indexInfo.baseKey),
-			baseKeyType: data.indexInfo.baseKeyType,
-			closed: data.indexInfo.closed,
-			used: data.indexInfo.used,
-			created: data.indexInfo.created,
-			remoteIdentityKey: base64ToBytes(data.indexInfo.remoteIdentityKey),
-		};
+		obj.indexInfo = fromBase64(data.indexInfo, [
+			"baseKey",
+			"remoteIdentityKey",
+		]);
 
 		const deserializedChains: { [ephemeralKeyBase64: string]: Chain } = {};
-		for (const [keyBase64, sChain] of Object.entries(data._chains)) {
+		for (const [keyBase64, sChain] of Object.entries(data._chains ?? {})) {
 			const deserializedMessageKeys: { [num: number]: Uint8Array } = {};
-			for (const [msgNum, msgKeyBase64] of Object.entries(sChain.messageKeys)) {
-				deserializedMessageKeys[Number(msgNum)] = base64ToBytes(msgKeyBase64);
+			const msgKeys = (sChain as any).messageKeys ?? {};
+			for (const [msgNum, msgKeyBase64] of Object.entries(msgKeys)) {
+				deserializedMessageKeys[Number(msgNum)] = base64ToBytes(
+					msgKeyBase64 as string,
+				);
 			}
 			deserializedChains[keyBase64] = {
 				chainKey: {
-					counter: sChain.chainKey.counter,
-					key: sChain.chainKey.key ? base64ToBytes(sChain.chainKey.key) : null,
+					counter: (sChain as any).chainKey.counter,
+					key: (sChain as any).chainKey.key
+						? base64ToBytes((sChain as any).chainKey.key)
+						: null,
 				},
-				chainType: sChain.chainType,
+				chainType: (sChain as any).chainType,
 				messageKeys: deserializedMessageKeys,
 			};
 		}
 		obj._chains = deserializedChains;
 
 		if (data.pendingPreKey) {
-			const deserializedPending: PendingPreKey = {
-				...(data.pendingPreKey as Omit<SerializedPendingPreKey, "baseKey"> & {
-					baseKey: string;
-				}),
-				baseKey: base64ToBytes(data.pendingPreKey.baseKey),
-				signedKeyId: data.pendingPreKey.signedKeyId,
-			};
-			obj.pendingPreKey = deserializedPending;
+			obj.pendingPreKey = fromBase64(data.pendingPreKey, ["baseKey"]);
 		}
 
 		return obj;
@@ -283,11 +232,6 @@ const migrations: Migration[] = [
 		},
 	},
 ];
-
-interface SerializedSessionRecord {
-	_sessions: { [baseKeyBase64: string]: SerializedSessionEntry };
-	version: string;
-}
 
 export class SessionRecord {
 	sessions: { [baseKeyBase64: string]: SessionEntry } = {};
@@ -337,22 +281,24 @@ export class SessionRecord {
 	}
 
 	static deserialize(
-		data: SerializedSessionRecord | Record<string, unknown>,
+		data: Record<string, any> | Record<string, unknown>,
 	): SessionRecord {
 		let dataToUse = data;
-		if ((data as SerializedSessionRecord).version !== SESSION_RECORD_VERSION) {
+		if ((data as any).version !== SESSION_RECORD_VERSION) {
 			const dataToMigrate = JSON.parse(JSON.stringify(data));
 			SessionRecord.migrate(dataToMigrate);
 			dataToUse = dataToMigrate;
 		}
 
 		const obj = new SessionRecord();
-		const sessionData = (dataToUse as SerializedSessionRecord)._sessions;
+		const sessionData = (dataToUse as any)._sessions;
 
 		if (sessionData) {
 			for (const [baseKeyBase64, entryData] of Object.entries(sessionData)) {
 				try {
-					obj.sessions[baseKeyBase64] = SessionEntry.deserialize(entryData);
+					obj.sessions[baseKeyBase64] = SessionEntry.deserialize(
+						entryData as Record<string, any>,
+					);
 				} catch (e) {
 					console.error(
 						`Failed to deserialize session entry for key ${baseKeyBase64}:`,
@@ -368,16 +314,13 @@ export class SessionRecord {
 			);
 		}
 
-		obj.version =
-			(data as SerializedSessionRecord).version || SESSION_RECORD_VERSION;
+		obj.version = (data as any).version || SESSION_RECORD_VERSION;
 
 		return obj;
 	}
 
-	serialize(): SerializedSessionRecord {
-		const serializedSessions: {
-			[baseKeyBase64: string]: SerializedSessionEntry;
-		} = {};
+	serialize(): Record<string, any> {
+		const serializedSessions: Record<string, any> = {};
 		for (const [baseKeyBase64, entry] of Object.entries(this.sessions)) {
 			try {
 				serializedSessions[baseKeyBase64] = entry.serialize();
