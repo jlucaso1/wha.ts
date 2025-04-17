@@ -11,33 +11,33 @@ export interface StateChangePayload {
 /**
  * Payload for handshake.complete events (empty for now, structure can be expanded later)
  */
-export type HandshakeCompletePayload = object;
+type HandshakeCompletePayload = object;
 
 /**
  * Payload for node.received events
  */
-export interface NodeReceivedPayload {
+interface NodeReceivedPayload {
 	node: BinaryNode;
 }
 
 /**
  * Payload for node.sent events
  */
-export interface NodeSentPayload {
+interface NodeSentPayload {
 	node: BinaryNode;
 }
 
 /**
  * Payload for error events
  */
-export interface ErrorPayload {
+interface ErrorPayload {
 	error: Error;
 }
 
 /**
  * Payload for ws.close events
  */
-export interface WsClosePayload {
+interface WsClosePayload {
 	code: number;
 	reason: string;
 }

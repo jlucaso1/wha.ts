@@ -10,7 +10,7 @@ import { SignalProtocolStoreAdapter } from "../signal/signal-store";
 import type { IAuthStateProvider } from "../state/interface";
 import type { ILogger } from "../transport/types";
 
-export interface MessageProcessorEventMap {
+interface MessageProcessorEventMap {
 	"message.decrypted": {
 		message: ReturnType<typeof fromBinary<typeof MessageSchema>>;
 		sender: ProtocolAddress;

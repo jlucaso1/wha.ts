@@ -12,7 +12,7 @@ type NonStandardTag =
 	| "pair-device-sign"
 	| "dirty";
 
-export type BinaryNodeTag = SINGLE_BYTE_TOKENS_TYPE | NonStandardTag;
+type BinaryNodeTag = SINGLE_BYTE_TOKENS_TYPE | NonStandardTag;
 
 export type BinaryNode = {
 	tag: BinaryNodeTag;

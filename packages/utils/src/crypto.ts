@@ -26,26 +26,6 @@ export function aesDecryptGCM(
 	return plaintext;
 }
 
-export function aesEncryptCTR(
-	plaintext: Uint8Array,
-	key: Uint8Array,
-	iv: Uint8Array,
-): Uint8Array {
-	const cipher = ctr(key, iv);
-	const ciphertext = cipher.encrypt(plaintext);
-	return ciphertext;
-}
-
-export function aesDecryptCTR(
-	ciphertext: Uint8Array,
-	key: Uint8Array,
-	iv: Uint8Array,
-): Uint8Array {
-	const cipher = ctr(key, iv);
-	const plaintext = cipher.decrypt(ciphertext);
-	return plaintext;
-}
-
 export function aesDecrypt(
 	key: Uint8Array,
 	buffer: Uint8Array,
@@ -107,15 +87,6 @@ export function hmacSha256Verify(
 	if (!equalBytes(mac, calculatedMac)) {
 		throw new Error("Invalid MAC");
 	}
-}
-
-export function hkdfSha256Expand(
-	inputKeyMaterial: Uint8Array,
-	salt: Uint8Array | undefined,
-	info: string | Uint8Array | undefined,
-	outputLength: number,
-): Uint8Array {
-	return nobleHkdf(nobleSha256, inputKeyMaterial, salt, info, outputLength);
 }
 
 export function hkdfSignalDeriveSecrets(

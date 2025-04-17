@@ -1,9 +1,9 @@
 export const S_WHATSAPP_NET = "@s.whatsapp.net";
-export const GROUP_JID_SUFFIX = "@g.us";
-export const BROADCAST_JID_SUFFIX = "@broadcast";
-export const STATUS_JID_SUFFIX = "status@broadcast";
-export const NEWSLETTER_JID_SUFFIX = "@newsletter";
-export const LID_JID_SUFFIX = "@lid";
+const GROUP_JID_SUFFIX = "@g.us";
+const BROADCAST_JID_SUFFIX = "@broadcast";
+const STATUS_JID_SUFFIX = "status@broadcast";
+const NEWSLETTER_JID_SUFFIX = "@newsletter";
+const LID_JID_SUFFIX = "@lid";
 
 type JidServer =
 	| "s.whatsapp.net"
@@ -24,7 +24,6 @@ export type FullJid = JidWithDevice & {
 	domainType?: number;
 };
 
-/** Encodes JID components into a string */
 export const jidEncode = (
 	user?: string | number | null,
 	server?: JidServer,
@@ -34,7 +33,6 @@ export const jidEncode = (
 	return `${user != null ? user : ""}${deviceSuffix}@${server}`;
 };
 
-/** Decodes a JID string into its components */
 export const jidDecode = (jid: string | undefined): FullJid | undefined => {
 	const sepIdx = typeof jid === "string" ? jid.indexOf("@") : -1;
 	if (sepIdx < 0) {
@@ -55,7 +53,6 @@ export const jidDecode = (jid: string | undefined): FullJid | undefined => {
 	};
 };
 
-/** Checks if two JIDs belong to the same user (ignoring device and server type changes like c.us vs s.whatsapp.net) */
 export const areJidsSameUser = (
 	jid1: string | undefined,
 	jid2: string | undefined,
@@ -66,31 +63,24 @@ export const areJidsSameUser = (
 	);
 };
 
-/** Is the JID a standard user JID (@s.whatsapp.net)? */
 export const isJidUser = (jid: string | undefined): boolean =>
 	!!jid && jid.endsWith(S_WHATSAPP_NET);
 
-/** Is the JID a LID user JID (@lid)? */
 export const isLidUser = (jid: string | undefined): boolean =>
 	!!jid && jid.endsWith(LID_JID_SUFFIX);
 
-/** Is the JID a broadcast JID (@broadcast)? */
 export const isJidBroadcast = (jid: string | undefined): boolean =>
 	!!jid && jid.endsWith(BROADCAST_JID_SUFFIX);
 
-/** Is the JID a group JID (@g.us)? */
 export const isJidGroup = (jid: string | undefined): boolean =>
 	!!jid && jid.endsWith(GROUP_JID_SUFFIX);
 
-/** Is the JID the specific status broadcast JID? */
 export const isJidStatusBroadcast = (jid: string | undefined): boolean =>
 	jid === STATUS_JID_SUFFIX;
 
-/** Is the JID a newsletter JID (@newsletter)? */
 export const isJidNewsletter = (jid: string | undefined): boolean =>
 	!!jid && jid.endsWith(NEWSLETTER_JID_SUFFIX);
 
-/** Normalizes a JID for user comparison (changes @c.us to @s.whatsapp.net) */
 export const jidNormalizedUser = (jid: string | undefined): string => {
 	const result = jidDecode(jid);
 	if (!result) {

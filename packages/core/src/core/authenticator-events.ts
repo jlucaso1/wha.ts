@@ -19,14 +19,14 @@ export type CredsUpdatePayload = Partial<AuthenticationCreds>;
 /**
  * Payload for _internal.sendNode events
  */
-export interface InternalSendNodePayload {
+interface InternalSendNodePayload {
 	node: BinaryNode;
 }
 
 /**
  * Payload for _internal.closeConnection events
  */
-export interface InternalCloseConnectionPayload {
+interface InternalCloseConnectionPayload {
 	error?: Error;
 }
 

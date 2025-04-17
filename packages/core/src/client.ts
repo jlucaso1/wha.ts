@@ -18,7 +18,7 @@ import type {
 } from "./state/interface";
 import type { ILogger, WebSocketConfig } from "./transport/types";
 
-export interface ClientConfig {
+interface ClientConfig {
 	auth: IAuthStateProvider;
 	logger?: ILogger;
 	wsOptions?: Partial<WebSocketConfig>;
@@ -159,6 +159,3 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 export const createWAClient = (config: ClientConfig): WhaTSClient => {
 	return new WhaTSClient(config);
 };
-
-export { WhaTSClient };
-export type { AuthenticationCreds, IAuthStateProvider, ILogger };

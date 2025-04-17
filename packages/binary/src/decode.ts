@@ -20,9 +20,7 @@ const decompressingIfRequired = (originalBuffer: Uint8Array) => {
 	return buffer;
 };
 
-export const decodeDecompressedBinaryNode = (
-	reader: BinaryReader,
-): BinaryNode => {
+const decodeDecompressedBinaryNode = (reader: BinaryReader): BinaryNode => {
 	const unpackHex = (value: number) => {
 		if (value >= 0 && value < 16) {
 			return value < 10

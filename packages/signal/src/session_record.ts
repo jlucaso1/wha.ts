@@ -46,7 +46,7 @@ interface PendingPreKey {
 	preKeyId?: number;
 }
 
-export interface Chain {
+interface Chain {
 	chainKey: {
 		counter: number;
 		key: Uint8Array | null;
