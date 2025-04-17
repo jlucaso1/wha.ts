@@ -473,7 +473,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.clearQrTimeout();
 		this.state = AuthState.AUTHENTICATED;
 
-		this.handleHandshakeComplete();
+		this.handleHandshakeComplete().catch((err) => {
+			this.logger.error({ err }, "Error during handshake completion");
+		});
 
 		const platform = node.attrs.platform;
 		const pushname = node.attrs.pushname;
