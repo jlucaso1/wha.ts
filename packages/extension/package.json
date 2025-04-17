@@ -1,10 +1,18 @@
 {
 	"name": "@wha.ts/extension",
-	"version": "0.1.0",
-	"private": false,
+	"version": "0.1.1",
+	"description": "Browser extension for WhatsApp communication",
 	"type": "module",
-	"scripts": {
-		"build": "bun build ./src/main.ts --outdir ./dist --target=browser"
+	"main": "./dist/main.js",
+	"module": "./dist/main.js",
+	"types": "./dist/main.d.ts",
+	"files": ["dist"],
+	"keywords": ["whatsapp", "typescript", "api"],
+	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jlucaso1/wha.ts.git"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5",

@@ -1,6 +1,25 @@
 {
 	"name": "@wha.ts/binary",
-	"private": true,
+	"version": "0.1.1",
+	"description": "Binary utilities for WhatsApp communication",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
+	"keywords": ["whatsapp", "typescript", "api"],
+	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jlucaso1/wha.ts.git"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsup src/*.ts --format=esm --dts"
+	},
 	"dependencies": {
 		"@wha.ts/utils": "workspace:*",
 		"fflate": "^0.8.2"

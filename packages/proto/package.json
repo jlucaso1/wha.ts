@@ -1,8 +1,25 @@
 {
 	"name": "@wha.ts/proto",
-	"private": true,
+	"version": "0.1.1",
+	"description": "Protobuf definitions for WhatsApp communication",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
+	"keywords": ["whatsapp", "typescript", "api", "protobuf"],
+	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jlucaso1/wha.ts.git"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
-		"proto:gen": "bunx @bufbuild/buf generate"
+		"proto:gen": "@bufbuild/buf generate",
+		"build": "tsup src/*.ts --format=esm --dts"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5"
