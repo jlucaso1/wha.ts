@@ -1,0 +1,9 @@
+{
+	"name": "@wha.ts/signal",
+	"private": true,
+	"dependencies": {
+		"@wha.ts/utils": "workspace:*",
+		"@wha.ts/proto": "workspace:*",
+		"@bufbuild/protobuf": "^2.2.5"
+	}
+}

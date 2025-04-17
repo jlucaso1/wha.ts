@@ -22,12 +22,10 @@
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5",
-		"@noble/ciphers": "^1.2.1",
-		"@noble/hashes": "^1.7.1",
 		"@wha.ts/binary": "workspace:*",
 		"@wha.ts/proto": "workspace:*",
-		"async-mutex": "^0.5.0",
-		"curve25519-js": "^0.0.4",
+		"@wha.ts/utils": "workspace:*",
+		"@wha.ts/signal": "workspace:*",
 		"unstorage": "^1.15.0"
 	}
 }

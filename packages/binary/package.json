@@ -21,6 +21,7 @@
 		"build": "tsup src/*.ts --format=esm --dts"
 	},
 	"dependencies": {
-		"@wha.ts/core": "workspace:*"
+		"@wha.ts/utils": "workspace:*",
+		"fflate": "^0.8.2"
 	}
 }

@@ -2,21 +2,23 @@ import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import { decodeBinaryNode } from "@wha.ts/binary/src/decode";
 import { encodeBinaryNode } from "@wha.ts/binary/src/encode";
 import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
+import { getBinaryNodeChild } from "@wha.ts/binary/src/node-utils";
 import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
+import { bytesToHex, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
+import { TypedEventTarget } from "../generics/typed-event-target";
+import type { MessageProcessor } from "../messaging/message-processor";
 import type { AuthenticationCreds } from "../state/interface";
 import { generateMdTagPrefix } from "../state/utils";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";
 import type { ILogger, WebSocketConfig } from "../transport/types";
 import { NativeWebSocketClient } from "../transport/websocket";
-import { bytesToHex, utf8ToBytes } from "../utils/bytes-utils";
-import { TypedEventTarget } from "../utils/typed-event-target";
 import {
 	generateLoginPayload,
 	generateRegisterPayload,
@@ -39,16 +41,20 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private frameHandler!: FrameHandler;
 	private epoch = 0;
 
+	private messageProcessor!: MessageProcessor;
+
 	constructor(
 		wsConfig: Partial<WebSocketConfig>,
 		logger: ILogger,
 		creds: AuthenticationCreds,
+		messageProcessor: MessageProcessor,
 	) {
 		super();
 		this.logger = logger;
 		this.config = { ...DEFAULT_SOCKET_CONFIG, ...wsConfig } as WebSocketConfig;
 		this.creds = creds;
 		this.routingInfo = creds.routingInfo;
+		this.messageProcessor = messageProcessor;
 
 		this.initializeConnectionComponents();
 	}
@@ -164,7 +170,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 					this.creds.pairingEphemeralKeyPair,
 				);
 				let clientPayload: ClientPayload;
-				if (this.creds.registered && this.creds.me?.id) {
+				if (this.creds.me?.id) {
 					clientPayload = generateLoginPayload(this.creds.me.id);
 				} else {
 					clientPayload = generateRegisterPayload(this.creds);
@@ -240,43 +246,64 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			return;
 		}
 
-		try {
-			const node = await decodeBinaryNode(decryptedPayload);
+		// If state is 'open'
+		if (this.state === "open") {
+			try {
+				const node = decodeBinaryNode(decryptedPayload);
 
-			if (
-				node.tag === "iq" &&
-				node.attrs.from === S_WHATSAPP_NET &&
-				node.attrs.type === "get" &&
-				node.attrs.xmlns === "urn:xmpp:ping"
-			) {
-				const pongNode: BinaryNode = {
-					tag: "iq",
-					attrs: {
-						to: node.attrs.from,
-						type: "result",
-						xmlns: "w:p",
-						id: `${generateMdTagPrefix()}-${this.epoch++}`,
-					},
-				};
-				this.sendNode(pongNode).catch((err) => {
-					this.logger.warn(
-						{ err, id: node.attrs.id },
-						"Failed to send pong response",
-					);
-				});
+				// Handle pings directly in ConnectionManager
+				if (
+					node.tag === "iq" &&
+					node.attrs.from === S_WHATSAPP_NET &&
+					node.attrs.type === "get" &&
+					node.attrs.xmlns === "urn:xmpp:ping"
+				) {
+					this.logger.debug({ id: node.attrs.id }, "Responding to ping");
+					const pongNode: BinaryNode = {
+						tag: "iq",
+						attrs: {
+							to: node.attrs.from,
+							type: "result",
+							xmlns: "w:p",
+							id: `${generateMdTagPrefix()}-${this.epoch++}`,
+						},
+					};
+					this.sendNode(pongNode).catch((err) => {
+						this.logger.warn(
+							{ err, id: node.attrs.id },
+							"Failed to send pong response",
+						);
+					});
+					return;
+				}
+
+				// Check if it's an encrypted message node
+				const isEncryptedMessage =
+					node.tag === "message" && getBinaryNodeChild(node, "enc");
+
+				if (isEncryptedMessage) {
+					// Route to MessageProcessor
+					this.messageProcessor.processIncomingNode(node).catch((err) => {
+						this.logger.error(
+							{ err, nodeTag: node.tag, from: node.attrs.from },
+							"Error processing encrypted node in MessageProcessor",
+						);
+					});
+					// DO NOT dispatch 'node.received' for the raw encrypted message here
+				} else {
+					// Dispatch other nodes (receipts, notifications, non-encrypted messages, specific IQs)
+					this.dispatchTypedEvent("node.received", { node });
+				}
+			} catch (error) {
+				if (!(error instanceof Error)) {
+					throw error;
+				}
+				this.logger.error(
+					{ err: error, data: bytesToHex(decryptedPayload) },
+					"Failed to decode BinaryNode from decrypted frame in 'open' state",
+				);
+				this.dispatchTypedEvent("error", { error });
 			}
-
-			this.dispatchTypedEvent("node.received", { node });
-		} catch (error) {
-			if (!(error instanceof Error)) {
-				throw error;
-			}
-			this.logger.error(
-				{ err: error, hex: bytesToHex(decryptedPayload) },
-				"Failed to decode BinaryNode from decrypted frame",
-			);
-
-			this.dispatchTypedEvent("error", { error });
 		}
 	};
 

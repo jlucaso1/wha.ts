@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package wha_ts.signal;
+
+// Corresponds to BaseKeyType enum in base_key_type.ts
+enum ProtoBaseKeyType {
+  PROTO_BASE_KEY_TYPE_UNSPECIFIED = 0;
+  PROTO_BASE_KEY_TYPE_OURS = 1;
+  PROTO_BASE_KEY_TYPE_THEIRS = 2;
+}
+
+// Corresponds to ChainType enum in chain_type.ts
+enum ProtoChainType {
+  PROTO_CHAIN_TYPE_UNSPECIFIED = 0;
+  PROTO_CHAIN_TYPE_SENDING = 1;
+  PROTO_CHAIN_TYPE_RECEIVING = 2;
+}
+
+// Represents KeyPair from utils/src/types.ts
+message ProtoKeyPair {
+  bytes public_key = 1;
+  bytes private_key = 2;
+}
+
+// Represents CurrentRatchet within SessionEntry
+message ProtoCurrentRatchet {
+  ProtoKeyPair ephemeral_key_pair = 1;
+  bytes last_remote_ephemeral_key = 2;
+  uint32 previous_counter = 3;
+  bytes root_key = 4;
+}
+
+// Represents IndexInfo within SessionEntry
+message ProtoIndexInfo {
+  bytes base_key = 1;
+  ProtoBaseKeyType base_key_type = 2;
+  sint64 closed = 3; // Using sint64 for potential -1 value and timestamps
+  sint64 used = 4;   // Using sint64 for timestamps
+  sint64 created = 5; // Using sint64 for timestamps
+  bytes remote_identity_key = 6;
+}
+
+// Represents PendingPreKey within SessionEntry
+message ProtoPendingPreKey {
+  uint32 signed_key_id = 1;
+  bytes base_key = 2;
+  optional uint32 pre_key_id = 3;
+  // Note: The dynamic [key: string]: unknown part from the original
+  //       is omitted as it doesn't map well to Protobuf directly.
+  //       If needed, a map<string, google.protobuf.Value> could be used,
+  //       but adds complexity. Assumed not essential for core function here.
+}
+
+// Represents ChainKey within Chain
+message ProtoChainKey {
+  sint32 counter = 1; // Can be -1
+  optional bytes key = 2; // Represents nullable key
+}
+
+// Represents Chain within SessionEntry._chains map value
+message ProtoChain {
+  ProtoChainKey chain_key = 1;
+  ProtoChainType chain_type = 2;
+  map<sint32, bytes> message_keys = 3; // Key is message number (counter)
+}
+
+// Represents SessionEntry class
+message ProtoSessionEntry {
+  optional uint32 registration_id = 1;
+  ProtoCurrentRatchet current_ratchet = 2;
+  ProtoIndexInfo index_info = 3;
+  optional ProtoPendingPreKey pending_pre_key = 4;
+  map<string, ProtoChain> chains = 5; // Key is ephemeral public key bytes
+}
+
+// Represents SessionRecord class
+message ProtoSessionRecord {
+  map<string, ProtoSessionEntry> sessions = 1; // Key is base key bytes
+  string version = 2; // Keep for potential future protobuf-level migrations
+}

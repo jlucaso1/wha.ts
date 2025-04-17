@@ -1,3 +1,4 @@
+import { deflateSync } from "fflate";
 import {
 	DOUBLE_BYTE_TOKENS,
 	SINGLE_BYTE_TOKENS,
@@ -5,16 +6,15 @@ import {
 	TAGS,
 } from "../constants";
 import { jidEncode } from "./jid-utils";
-import { decompressData } from "./node-utils";
 import { BinaryReader } from "./reader";
 import type { BinaryNode } from "./types";
 
-const decompressingIfRequired = async (originalBuffer: Uint8Array) => {
+const decompressingIfRequired = (originalBuffer: Uint8Array) => {
 	const prefix = originalBuffer[0];
 
 	const buffer = originalBuffer.slice(1);
 	if (prefix && (prefix & 2) !== 0) {
-		const decompressedData = await decompressData(buffer);
+		const decompressedData = deflateSync(buffer);
 		return decompressedData;
 	}
 	return buffer;
@@ -198,12 +198,13 @@ export const decodeDecompressedBinaryNode = (
 	};
 };
 
-export const decodeBinaryNode = async (
-	encodedBuffer: Uint8Array,
-): Promise<BinaryNode> => {
-	const decompressedBuffer = await decompressingIfRequired(encodedBuffer);
+export const decodeBinaryNode = (encodedBuffer: Uint8Array): BinaryNode => {
+	const decompressedBuffer = decompressingIfRequired(encodedBuffer);
 	const reader = new BinaryReader(decompressedBuffer);
 	const decodedNode = decodeDecompressedBinaryNode(reader);
-	console.log(decodedNode);
+	console.log({
+		tag: decodedNode.tag,
+		attrs: decodedNode.attrs,
+	});
 	return decodedNode;
 };

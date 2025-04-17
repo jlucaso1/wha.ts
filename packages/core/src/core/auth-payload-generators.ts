@@ -1,5 +1,6 @@
 import { create, toBinary } from "@bufbuild/protobuf";
 import { jidDecode } from "@wha.ts/binary/src/jid-utils";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
@@ -13,11 +14,14 @@ import {
 	DevicePropsSchema,
 	DeviceProps_PlatformType,
 } from "@wha.ts/proto";
-import { DEFAULT_BROWSER, KEY_BUNDLE_TYPE, WA_VERSION } from "../defaults";
-import { sha256 } from "../signal/crypto";
+import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import { sha256 } from "@wha.ts/utils/src/crypto";
+import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
+import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
+import type { KeyPair } from "@wha.ts/utils/src/types";
+import { DEFAULT_BROWSER, WA_VERSION } from "../defaults";
 import type { AuthenticationCreds } from "../state/interface";
-import { utf8ToBytes } from "../utils/bytes-utils";
-import { encodeBigEndian } from "../utils/generics";
+import type { SignedKeyPair } from "../state/interface";
 
 const getPlatformType = (platform: string): DeviceProps_PlatformType => {
 	const platformUpper = platform.toUpperCase();
@@ -132,15 +136,39 @@ export const generateRegisterPayload = (
 		passive: false,
 		pull: false,
 		devicePairingData: {
-			$typeName: "ClientPayload.DevicePairingRegistrationData",
+			$typeName: "proto.ClientPayload.DevicePairingRegistrationData",
 			buildHash: appVersionBuf,
 			deviceProps: devicePropsBytes,
 			eRegid: encodeBigEndian(creds.registrationId),
 			eKeytype: KEY_BUNDLE_TYPE,
-			eIdent: creds.signedIdentityKey.public,
+			eIdent: creds.signedIdentityKey.publicKey,
 			eSkeyId: encodeBigEndian(creds.signedPreKey.keyId, 3),
-			eSkeyVal: creds.signedPreKey.keyPair.public,
+			eSkeyVal: creds.signedPreKey.keyPair.publicKey,
 			eSkeySig: creds.signedPreKey.signature,
 		},
 	});
 };
+
+export const formatPreKeyForXMPP = (
+	keyPair: KeyPair,
+	id: number,
+): BinaryNode => ({
+	tag: "key",
+	attrs: {},
+	content: [
+		{ tag: "id", attrs: {}, content: encodeBigEndian(id, 3) },
+		{ tag: "value", attrs: {}, content: keyPair.publicKey },
+	],
+});
+
+export const formatSignedPreKeyForXMPP = (
+	signedKeyPair: SignedKeyPair,
+): BinaryNode => ({
+	tag: "skey" as any,
+	attrs: {},
+	content: [
+		{ tag: "id", attrs: {}, content: encodeBigEndian(signedKeyPair.keyId, 3) },
+		{ tag: "value", attrs: {}, content: signedKeyPair.keyPair.publicKey },
+		{ tag: "signature", attrs: {}, content: signedKeyPair.signature },
+	],
+});

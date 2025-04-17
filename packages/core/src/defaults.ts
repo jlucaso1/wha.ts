@@ -1,7 +1,6 @@
 export const DEFAULT_ORIGIN = "https://web.whatsapp.com";
 export const WA_VERSION = [2, 3000, 1021636778];
 export const WA_DEFAULT_EPHEMERAL = 0;
-export const KEY_BUNDLE_TYPE = new Uint8Array([5]);
 
 export const DEFAULT_BROWSER = ["Wha.ts", "Desktop", "0.1"] as const;
 

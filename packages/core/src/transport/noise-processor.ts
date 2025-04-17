@@ -5,15 +5,16 @@ import {
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
 import { NOISE_MODE, WA_CERT_DETAILS } from "../defaults";
+
+import { concatBytes, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
 import {
-	Curve,
 	aesDecryptGCM,
 	aesEncryptGCM,
 	hkdf,
 	sha256,
-} from "../signal/crypto";
-import type { KeyPair } from "../state/interface";
-import { concatBytes, utf8ToBytes } from "../utils/bytes-utils";
+} from "@wha.ts/utils/src/crypto";
+import { Curve } from "@wha.ts/utils/src/curve";
+import type { KeyPair } from "@wha.ts/utils/src/types";
 import type { ILogger } from "./types";
 
 interface NoiseState {
@@ -54,7 +55,7 @@ export class NoiseProcessor {
 
 		handshakeHash = sha256(concatBytes(handshakeHash, noisePrologue));
 		handshakeHash = sha256(
-			concatBytes(handshakeHash, localStaticKeyPair.public),
+			concatBytes(handshakeHash, localStaticKeyPair.publicKey),
 		);
 
 		this.state = {
@@ -82,7 +83,7 @@ export class NoiseProcessor {
 	generateInitialHandshakeMessage(localEphemeralKeyPair: KeyPair): Uint8Array {
 		const helloMsg = create(HandshakeMessageSchema, {
 			clientHello: {
-				ephemeral: localEphemeralKeyPair.public,
+				ephemeral: localEphemeralKeyPair.publicKey,
 			},
 		});
 		return toBinary(HandshakeMessageSchema, helloMsg);
@@ -190,11 +191,11 @@ export class NoiseProcessor {
 		}
 		this.mixIntoHandshakeHash(serverHello.ephemeral);
 		this.mixKeys(
-			Curve.sharedKey(localEphemeralKeyPair.private, serverHello.ephemeral),
+			Curve.sharedKey(localEphemeralKeyPair.privateKey, serverHello.ephemeral),
 		);
 		const decryptedServerStatic = await this.decryptMessage(serverHello.static);
 		this.mixKeys(
-			Curve.sharedKey(localEphemeralKeyPair.private, decryptedServerStatic),
+			Curve.sharedKey(localEphemeralKeyPair.privateKey, decryptedServerStatic),
 		);
 		const decryptedPayload = await this.decryptMessage(serverHello.payload);
 		const certChain = fromBinary(CertChainSchema, decryptedPayload);
@@ -222,10 +223,10 @@ export class NoiseProcessor {
 			);
 		}
 		const encryptedLocalStaticPublic = await this.encryptMessage(
-			localStaticKeyPair.public,
+			localStaticKeyPair.publicKey,
 		);
 		this.mixKeys(
-			Curve.sharedKey(localStaticKeyPair.private, serverHello.ephemeral),
+			Curve.sharedKey(localStaticKeyPair.privateKey, serverHello.ephemeral),
 		);
 		return encryptedLocalStaticPublic;
 	}
