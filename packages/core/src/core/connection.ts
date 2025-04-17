@@ -43,6 +43,20 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 	private messageProcessor!: MessageProcessor;
 
+	private handleWsOpenEvent = () => this.handleWsOpen();
+	private handleWsMessageEvent = (event: Event) => {
+		if (event instanceof CustomEvent) this.handleWsMessage(event.detail);
+	};
+	private handleWsErrorEvent = (event: Event) => {
+		if (event instanceof CustomEvent) this.handleWsError(event.detail);
+	};
+	private handleWsCloseEvent = (event: Event) => {
+		if (event instanceof CustomEvent) {
+			const { code, reason } = event.detail;
+			this.handleWsClose(code, reason);
+		}
+	};
+
 	constructor(
 		wsConfig: Partial<WebSocketConfig>,
 		logger: ILogger,
@@ -80,11 +94,37 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		if (this.ws) {
 			this.removeWsListeners();
 		}
-		this.ws = new NativeWebSocketClient(this.config.url, this.config);
 
+		this.ws = new NativeWebSocketClient(this.config.url, this.config);
 		this.setupWsListeners();
 
 		this.frameHandler.resetFramingState();
+	}
+
+	private setupWsListeners(): void {
+		this.ws.addEventListener("open", this.handleWsOpenEvent);
+		this.ws.addEventListener(
+			"message",
+			this.handleWsMessageEvent as EventListener,
+		);
+		this.ws.addEventListener("error", this.handleWsErrorEvent as EventListener);
+		this.ws.addEventListener("close", this.handleWsCloseEvent as EventListener);
+	}
+
+	private removeWsListeners(): void {
+		this.ws.removeEventListener("open", this.handleWsOpenEvent);
+		this.ws.removeEventListener(
+			"message",
+			this.handleWsMessageEvent as EventListener,
+		);
+		this.ws.removeEventListener(
+			"error",
+			this.handleWsErrorEvent as EventListener,
+		);
+		this.ws.removeEventListener(
+			"close",
+			this.handleWsCloseEvent as EventListener,
+		);
 	}
 
 	private setState(newState: typeof this.state, error?: Error): void {
@@ -93,29 +133,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			const payload: StateChangePayload = { state: newState, error };
 			this.dispatchTypedEvent("state.change", payload);
 		}
-	}
-
-	private setupWsListeners(): void {
-		this.ws.addEventListener("open", this.handleWsOpen);
-		this.ws.addEventListener("message", ((event: Event) => {
-			if (event instanceof CustomEvent) {
-				this.handleWsMessage(event.detail);
-			}
-		}) as EventListener);
-		this.ws.addEventListener("error", ((event: Event) => {
-			if (event instanceof CustomEvent) {
-				this.handleWsError(event.detail);
-			}
-		}) as EventListener);
-		this.ws.addEventListener("close", ((event: Event) => {
-			if (event instanceof CustomEvent) {
-				this.handleWsClose(event.detail.code, event.detail.reason);
-			}
-		}) as EventListener);
-	}
-
-	private removeWsListeners(): void {
-		this.ws.removeEventListener("open", this.handleWsOpen);
 	}
 
 	async connect(): Promise<void> {
@@ -246,12 +263,10 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			return;
 		}
 
-		// If state is 'open'
 		if (this.state === "open") {
 			try {
 				const node = decodeBinaryNode(decryptedPayload);
 
-				// Handle pings directly in ConnectionManager
 				if (
 					node.tag === "iq" &&
 					node.attrs.from === S_WHATSAPP_NET &&
@@ -277,21 +292,17 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 					return;
 				}
 
-				// Check if it's an encrypted message node
 				const isEncryptedMessage =
 					node.tag === "message" && getBinaryNodeChild(node, "enc");
 
 				if (isEncryptedMessage) {
-					// Route to MessageProcessor
 					this.messageProcessor.processIncomingNode(node).catch((err) => {
 						this.logger.error(
 							{ err, nodeTag: node.tag, from: node.attrs.from },
 							"Error processing encrypted node in MessageProcessor",
 						);
 					});
-					// DO NOT dispatch 'node.received' for the raw encrypted message here
 				} else {
-					// Dispatch other nodes (receipts, notifications, non-encrypted messages, specific IQs)
 					this.dispatchTypedEvent("node.received", { node });
 				}
 			} catch (error) {

@@ -31,7 +31,7 @@ export const jidEncode = (
 	device?: number,
 ): string => {
 	const deviceSuffix = device !== undefined ? `:${device}` : "";
-	return `${user || ""}${deviceSuffix}@${server}`;
+	return `${user != null ? user : ""}${deviceSuffix}@${server}`;
 };
 
 /** Decodes a JID string into its components */

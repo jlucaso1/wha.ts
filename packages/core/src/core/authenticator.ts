@@ -8,6 +8,7 @@ import {
 import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	ADVDeviceIdentitySchema,
+	type ADVSignedDeviceIdentity,
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
@@ -143,13 +144,13 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.handleLoginSuccess(node);
 		} else if (node.tag === "fail") {
 			this.handleLoginFailure(node);
-		} else if (node.tag === ("ib" as any)) {
+		} else if (node.tag === "ib") {
 			const offlinePreviewNode = getBinaryNodeChild(node, "offline_preview");
 			if (offlinePreviewNode) {
 				this.connectionActions.sendNode({
-					tag: "ib" as any,
+					tag: "ib",
 					attrs: {},
-					content: [{ tag: "offline_batch" as any, attrs: { count: "30" } }],
+					content: [{ tag: "offline_batch", attrs: { count: "30" } }],
 				});
 			}
 		}
@@ -365,7 +366,10 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		const authUpdate: Partial<AuthenticationCreds> = {
 			me: { id: jid, name: bizName },
-			account: toJson(ADVSignedDeviceIdentitySchema, updatedAccount) as any,
+			account: toJson(
+				ADVSignedDeviceIdentitySchema,
+				updatedAccount,
+			) as unknown as ADVSignedDeviceIdentity,
 			signalIdentities: [...(creds.signalIdentities || []), identity],
 			platform: platformNode?.attrs.name,
 			pairingCode: undefined,

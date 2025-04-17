@@ -37,7 +37,7 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 
 			const resultMap = new Map<string, string | null>();
 			for (const item of batchResults) {
-				resultMap.set(item.key, item.value as any);
+				resultMap.set(item.key, item.value as string);
 			}
 
 			for (const id of ids) {

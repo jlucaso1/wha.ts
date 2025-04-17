@@ -164,7 +164,7 @@ export const formatPreKeyForXMPP = (
 export const formatSignedPreKeyForXMPP = (
 	signedKeyPair: SignedKeyPair,
 ): BinaryNode => ({
-	tag: "skey" as any,
+	tag: "skey",
 	attrs: {},
 	content: [
 		{ tag: "id", attrs: {}, content: encodeBigEndian(signedKeyPair.keyId, 3) },

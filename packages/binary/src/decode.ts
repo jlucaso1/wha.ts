@@ -202,9 +202,6 @@ export const decodeBinaryNode = (encodedBuffer: Uint8Array): BinaryNode => {
 	const decompressedBuffer = decompressingIfRequired(encodedBuffer);
 	const reader = new BinaryReader(decompressedBuffer);
 	const decodedNode = decodeDecompressedBinaryNode(reader);
-	console.log({
-		tag: decodedNode.tag,
-		attrs: decodedNode.attrs,
-	});
+
 	return decodedNode;
 };

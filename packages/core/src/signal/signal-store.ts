@@ -5,7 +5,7 @@ import {
 	concatBytes,
 	utf8ToBytes,
 } from "@wha.ts/utils/src/bytes-utils";
-import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
+import { Curve, KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
 import { BufferJSON } from "@wha.ts/utils/src/serializer";
 import type { KeyPair } from "@wha.ts/utils/src/types";
 import type { IAuthStateProvider, SignedKeyPair } from "../state/interface";
@@ -52,10 +52,6 @@ export class SignalProtocolStoreAdapter {
 			console.warn(`[SignalStore] Pre-key ${idStr} not found!`);
 			return undefined;
 		}
-		// this.logger.trace(
-		// 	{ preKey, idStr },
-		// 	`[SignalStore] Found pre-key ${idStr}`,
-		// );
 		return {
 			privateKey: preKey.privateKey,
 			publicKey: preKey.publicKey,
@@ -83,20 +79,13 @@ export class SignalProtocolStoreAdapter {
 		const result = await this.authState.keys.get("session", [identifier]);
 		const sessionData = result[identifier];
 
-		// this.logger.trace(
-		// 	`Loading session for ${identifier}. Stored type: ${sessionData?.constructor?.name}`,
-		// 	sessionData instanceof Uint8Array ? `Length: ${sessionData.length}` : "",
-		// );
-
 		if (sessionData instanceof Uint8Array) {
 			try {
 				const jsonString = bytesToUtf8(sessionData);
 				const plainObject = JSON.parse(jsonString, BufferJSON.reviver);
 
 				const recordInstance = SessionRecord.deserialize(plainObject);
-				this.logger.trace(
-					`Deserialized session for ${identifier} successfully`,
-				);
+
 				return recordInstance;
 			} catch (e: any) {
 				this.logger.error(
@@ -105,20 +94,8 @@ export class SignalProtocolStoreAdapter {
 				);
 				return undefined;
 			}
-		} else if (sessionData) {
-			this.logger.warn(
-				`[SignalStore] Session for ${identifier} was not stored as Uint8Array, attempting deserialization.`,
-			);
-			try {
-				return SessionRecord.deserialize(sessionData as any);
-			} catch (e: any) {
-				this.logger.error(
-					{ err: e, jid: identifier },
-					`Failed to deserialize non-Uint8Array session for ${identifier}`,
-				);
-				return undefined;
-			}
 		}
+
 		return undefined;
 	}
 
@@ -126,19 +103,12 @@ export class SignalProtocolStoreAdapter {
 		identifier: string,
 		sessionRecordInstance: SessionRecord,
 	): Promise<void> {
-		// this.logger.trace(
-		// 	`Storing session for ${identifier}. Received SessionRecord instance.`,
-		// );
-
 		let sessionDataToStore: Uint8Array;
 
 		try {
 			const plainObject = sessionRecordInstance.serialize();
 			const jsonString = JSON.stringify(plainObject, BufferJSON.replacer);
 			sessionDataToStore = utf8ToBytes(jsonString);
-			// this.logger.trace(
-			// 	`Storing session object for ${identifier} as JSON string, length: ${sessionDataToStore.length}`,
-			// );
 		} catch (e: any) {
 			this.logger.error(
 				{ err: e, jid: identifier },
@@ -174,13 +144,32 @@ export class SignalProtocolStoreAdapter {
 
 	async removeSignedPreKey(keyId: number | string): Promise<void> {
 		const keyIdStr = keyId.toString();
-		console.warn(
-			`Removal of signed pre-key ${keyIdStr} requested but not implemented`,
+		const current = this.authState.creds.signedPreKey;
+
+		if (current.keyId.toString() !== keyIdStr) {
+			console.warn(
+				`Attempted to remove non-current signed pre-key ${keyIdStr}`,
+			);
+			return;
+		}
+
+		const identityKeyPair = await this.getIdentityKeyPair();
+		const newKeyId = current.keyId + 1;
+		const { keyPair, signature } = Curve.signedKeyPair(
+			identityKeyPair,
+			newKeyId,
 		);
+
+		this.authState.creds.signedPreKey = {
+			keyId: newKeyId,
+			keyPair: { privateKey: keyPair.privateKey, publicKey: keyPair.publicKey },
+			signature: signature,
+		};
+		await this.authState.saveCreds();
 	}
 
 	async loadIdentityKey(identifier: string): Promise<Uint8Array | undefined> {
-		const result = await this.authState.keys.get("peer-identity-key" as any, [
+		const result = await this.authState.keys.get("peer-identity-key", [
 			identifier,
 		]);
 		const key = result[identifier] as Uint8Array | undefined;
@@ -193,7 +182,7 @@ export class SignalProtocolStoreAdapter {
 	): Promise<void> {
 		await this.authState.keys.set({
 			"peer-identity-key": { [identifier]: identityKey },
-		} as any);
+		});
 	}
 
 	async saveIdentity(
@@ -222,9 +211,7 @@ export class SignalProtocolStoreAdapter {
 	}
 
 	async loadSenderKey(senderKeyName: string): Promise<any> {
-		const result = await this.authState.keys.get("sender-key" as any, [
-			senderKeyName,
-		]);
+		const result = await this.authState.keys.get("sender-key", [senderKeyName]);
 		const record = result[senderKeyName];
 		if (record) {
 			return record;
@@ -236,7 +223,7 @@ export class SignalProtocolStoreAdapter {
 		const serialized = keyRecord;
 		await this.authState.keys.set({
 			"sender-key": { [senderKeyName]: serialized },
-		} as any);
+		});
 	}
 
 	async getOurIdentity(): Promise<KeyPair> {

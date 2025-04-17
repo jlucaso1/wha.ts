@@ -78,25 +78,13 @@ export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap>
 				decodedJid.device ?? 0,
 			);
 
-			const cipher = new SessionCipher(
-				// @ts-ignore - Ensure SessionCipher constructor matches expected type
-				this.signalStore,
-				senderAddress,
-			);
+			const cipher = new SessionCipher(this.signalStore, senderAddress);
 
 			let plaintextBuffer: Uint8Array;
 
 			if (type === "pkmsg") {
-				this.logger.trace(
-					{ from: senderAddress.toString() },
-					"[MessageProcessor] Decrypting pkmsg",
-				);
 				plaintextBuffer = await cipher.decryptPreKeyWhisperMessage(ciphertext);
 			} else if (type === "msg") {
-				this.logger.trace(
-					{ from: senderAddress.toString() },
-					"[MessageProcessor] Decrypting msg",
-				);
 				plaintextBuffer = await cipher.decryptWhisperMessage(ciphertext);
 			} else {
 				this.logger.warn(
@@ -133,20 +121,23 @@ export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap>
 				rawNode: node,
 			});
 		} catch (error: any) {
-			this.logger.error(
-				{
-					err: error,
-					type,
-					from: effectiveSenderJid,
-					sender: senderAddress?.toString(),
-				},
-				`[MessageProcessor] Failed to decrypt ${type}`,
+			const isKeyError = /Key used already or never filled/i.test(
+				error.message,
 			);
-			this.dispatchTypedEvent("message.decryption_error", {
-				error,
-				rawNode: node,
-				sender: senderAddress,
-			});
+
+			if (isKeyError) {
+				this.dispatchTypedEvent("message.decryption_error", {
+					error: new Error(`Discarded: ${error.message}`),
+					rawNode: node,
+					sender: senderAddress,
+				});
+			} else {
+				this.dispatchTypedEvent("message.decryption_error", {
+					error,
+					rawNode: node,
+					sender: senderAddress,
+				});
+			}
 		}
 	}
 }

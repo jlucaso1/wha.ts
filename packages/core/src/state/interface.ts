@@ -49,6 +49,8 @@ export type SignalDataTypeMap = {
 	session: Uint8Array;
 	"signed-identity-key": KeyPair;
 	"signed-pre-key": SignedKeyPair;
+	"peer-identity-key": Uint8Array;
+	"sender-key": Uint8Array;
 };
 
 export type SignalDataSet = {

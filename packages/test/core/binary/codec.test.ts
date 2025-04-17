@@ -31,13 +31,13 @@ const dirtyNodeBuffer = hexToBytes(
 );
 
 const expectedDirtyNode: BinaryNode = {
-	tag: "ib" as any,
+	tag: "ib",
 	attrs: {
 		from: "@s.whatsapp.net",
 	},
 	content: [
 		{
-			tag: "dirty" as any,
+			tag: "dirty",
 			attrs: {
 				type: "account_sync",
 				timestamp: "1744381049",
