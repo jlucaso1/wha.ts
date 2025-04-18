@@ -1,5 +1,5 @@
 import { create, fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
-import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/constants";
+import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/src/constants";
 import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
 import {
 	getBinaryNodeChild,

@@ -1299,9 +1299,11 @@ for (const [i, SINGLE_BYTE_TOKEN] of SINGLE_BYTE_TOKENS.entries()) {
 	TOKEN_MAP[SINGLE_BYTE_TOKEN] = { index: i };
 }
 
-for (const [i, DOUBLE_BYTE_TOKEN] of DOUBLE_BYTE_TOKENS.entries()) {
-	for (const [j, element] of DOUBLE_BYTE_TOKEN.entries()) {
-		TOKEN_MAP[element] = { dict: i, index: j };
+for (let i = 0; i < DOUBLE_BYTE_TOKENS.length; i++) {
+	const dict = DOUBLE_BYTE_TOKENS[i];
+	if (!Array.isArray(dict)) continue;
+	for (let j = 0; j < dict.length; j++) {
+		TOKEN_MAP[dict[j]] = { dict: i, index: j };
 	}
 }
 

@@ -4,7 +4,9 @@ import type { NoiseProcessor } from "./noise-processor";
 import type { ILogger } from "./types";
 
 export class FrameHandler {
-	private receivedBuffer: Uint8Array = new Uint8Array(0);
+	private chunks: Uint8Array[] = [];
+	private bufferedBytes = 0;
+
 	private hasSentPrologue = false;
 	private handleDataMutex = new Mutex();
 
@@ -18,24 +20,137 @@ export class FrameHandler {
 		private readonly noisePrologue: Uint8Array = new Uint8Array(0),
 	) {}
 
-	async handleReceivedData(newData: Uint8Array): Promise<void> {
-		await this.handleDataMutex.runExclusive(async () => {
-			this.receivedBuffer = concatBytes(this.receivedBuffer, newData);
-
-			while (this.receivedBuffer.length >= 3) {
-				const view = new DataView(
-					this.receivedBuffer.buffer,
-					this.receivedBuffer.byteOffset,
-					this.receivedBuffer.byteLength,
+	/**
+	 * Helper method to peek at the first 'count' bytes across chunks
+	 * without consuming them. Returns null if not enough bytes are available.
+	 */
+	private peekBytes(count: number): Uint8Array | null {
+		if (this.bufferedBytes < count) {
+			return null;
+		}
+		const result = new Uint8Array(count);
+		let bytesCopied = 0;
+		let chunkIndex = 0;
+		while (bytesCopied < count && chunkIndex < this.chunks.length) {
+			const chunk = this.chunks[chunkIndex];
+			if (!chunk) {
+				this.logger.error(
+					{ chunkIndex, chunksLength: this.chunks.length },
+					"Internal error: chunk is undefined in peekBytes.",
 				);
-				const frameLength = (view.getUint8(0) << 16) | view.getUint16(1, false);
+				return null;
+			}
+			const bytesToCopy = Math.min(count - bytesCopied, chunk.length);
+			result.set(chunk.subarray(0, bytesToCopy), bytesCopied);
+			bytesCopied += bytesToCopy;
+			chunkIndex++;
+		}
+		if (bytesCopied !== count) {
+			this.logger.error(
+				{
+					bufferedBytes: this.bufferedBytes,
+					requested: count,
+					copied: bytesCopied,
+				},
+				"Internal error: Mismatch peeking bytes, buffer state likely corrupt.",
+			);
+			return null;
+		}
+		return result;
+	}
 
-				if (this.receivedBuffer.length < 3 + frameLength) {
+	private consumeBytes(count: number): Uint8Array | null {
+		if (this.bufferedBytes < count) {
+			this.logger.error(
+				{ bufferedBytes: this.bufferedBytes, requested: count },
+				"Internal error: Attempted to consume more bytes than available.",
+			);
+			return null;
+		}
+
+		const result = new Uint8Array(count);
+		let bytesCopied = 0;
+		let bytesConsumedFromTotal = 0;
+
+		while (bytesCopied < count && this.chunks.length > 0) {
+			const chunk = this.chunks[0];
+			if (!chunk) {
+				this.logger.error(
+					{ chunksLength: this.chunks.length },
+					"Internal error: chunk is undefined in consumeBytes.",
+				);
+				return null;
+			}
+			const bytesToCopy = Math.min(count - bytesCopied, chunk.length);
+
+			result.set(chunk.subarray(0, bytesToCopy), bytesCopied);
+			bytesCopied += bytesToCopy;
+			bytesConsumedFromTotal += bytesToCopy;
+
+			if (bytesToCopy === chunk.length) {
+				this.chunks.shift();
+			} else {
+				this.chunks[0] = chunk.subarray(bytesToCopy);
+			}
+		}
+		this.bufferedBytes -= bytesConsumedFromTotal;
+
+		if (bytesCopied !== count) {
+			this.logger.error(
+				{
+					requested: count,
+					copied: bytesCopied,
+					finalBuffered: this.bufferedBytes,
+				},
+				"Internal error: Mismatch consuming bytes, buffer state likely corrupt.",
+			);
+			return null;
+		}
+
+		return result;
+	}
+
+	async handleReceivedData(newData: Uint8Array): Promise<void> {
+		if (!newData || newData.length === 0) {
+			return;
+		}
+
+		await this.handleDataMutex.runExclusive(async () => {
+			this.chunks.push(newData);
+			this.bufferedBytes += newData.length;
+
+			while (true) {
+				if (this.bufferedBytes < 3) {
 					break;
 				}
 
-				const encryptedFrame = this.receivedBuffer.subarray(3, 3 + frameLength);
-				const remaining = this.receivedBuffer.subarray(3 + frameLength);
+				const lengthPrefixBytes = this.peekBytes(3);
+				if (!lengthPrefixBytes) {
+					break;
+				}
+
+				const view = new DataView(
+					lengthPrefixBytes.buffer,
+					lengthPrefixBytes.byteOffset,
+					lengthPrefixBytes.byteLength,
+				);
+				const frameLength = (view.getUint8(0) << 16) | view.getUint16(1, false);
+				const totalFrameLength = 3 + frameLength;
+
+				if (this.bufferedBytes < totalFrameLength) {
+					break;
+				}
+
+				const frameData = this.consumeBytes(totalFrameLength);
+				if (!frameData) {
+					this.logger.error(
+						{},
+						"Critical error consuming frame data, stopping processing.",
+					);
+					break;
+				}
+
+				const encryptedFrame = frameData.subarray(3);
 
 				let decryptedPayload: Uint8Array;
 				try {
@@ -46,8 +161,7 @@ export class FrameHandler {
 						decryptedPayload = encryptedFrame;
 					}
 				} catch (err) {
-					this.logger.error({}, "Frame decryption failed");
-					this.receivedBuffer = remaining;
+					this.logger.error({ err }, "Frame decryption failed");
 					continue;
 				}
 
@@ -56,8 +170,6 @@ export class FrameHandler {
 				} catch (err) {
 					this.logger.error({ err }, "Error in frame callback");
 				}
-
-				this.receivedBuffer = remaining;
 			}
 		});
 	}
@@ -86,8 +198,9 @@ export class FrameHandler {
 				);
 				view.setUint8(2, PREFIX_VERSION_MAJOR);
 				view.setUint8(3, PREFIX_VERSION_MINOR);
-				view.setUint8(4, this.routingInfo.length >> 16);
+				view.setUint8(4, (this.routingInfo.length >> 16) & 0xff);
 				view.setUint16(5, this.routingInfo.length & 0xffff, false);
+
 				headerBytes = concatBytes(prefix, this.routingInfo, this.noisePrologue);
 			} else {
 				headerBytes = this.noisePrologue;
@@ -98,14 +211,15 @@ export class FrameHandler {
 		const frameLength = encryptedPayload.length;
 		const lengthPrefix = new Uint8Array(3);
 		const view = new DataView(lengthPrefix.buffer);
-		view.setUint8(0, frameLength >> 16);
+		view.setUint8(0, (frameLength >> 16) & 0xff);
 		view.setUint16(1, frameLength & 0xffff, false);
 
 		return concatBytes(headerBytes, lengthPrefix, encryptedPayload);
 	}
 
 	resetFramingState() {
-		this.receivedBuffer = new Uint8Array(0);
+		this.chunks = [];
+		this.bufferedBytes = 0;
 		this.hasSentPrologue = false;
 	}
 }

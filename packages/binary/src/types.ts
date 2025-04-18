@@ -1,4 +1,4 @@
-import type { SINGLE_BYTE_TOKENS_TYPE } from "../constants";
+import type { SINGLE_BYTE_TOKENS_TYPE } from "./constants";
 
 type NonStandardTag =
 	| "ib"

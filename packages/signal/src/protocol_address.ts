@@ -2,18 +2,14 @@ export class ProtocolAddress {
 	id: string;
 	deviceId: number;
 
-	static from(encodedAddress: string): ProtocolAddress {
-		if (!encodedAddress.match(/.*\.\d+/)) {
-			throw new Error("Invalid address encoding");
-		}
-		const [id, deviceIdString] = encodedAddress.split(".");
-
-		if (!id || !deviceIdString) {
-			throw new Error("Invalid address encoding");
-		}
-
-		const deviceId = Number.parseInt(deviceIdString);
-
+	static from(encoded: string) {
+		const idx = encoded.lastIndexOf(".");
+		if (idx < 1 || idx === encoded.length - 1)
+			throw new Error("Invalid encoded address format");
+		const id = encoded.slice(0, idx);
+		const deviceId = Number(encoded.slice(idx + 1));
+		if (!Number.isInteger(deviceId))
+			throw new Error("Invalid device ID format");
 		return new ProtocolAddress(id, deviceId);
 	}
 

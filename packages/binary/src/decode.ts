@@ -4,7 +4,7 @@ import {
 	SINGLE_BYTE_TOKENS,
 	type SINGLE_BYTE_TOKENS_TYPE,
 	TAGS,
-} from "../constants";
+} from "./constants";
 import { jidEncode } from "./jid-utils";
 import { BinaryReader } from "./reader";
 import type { BinaryNode } from "./types";
