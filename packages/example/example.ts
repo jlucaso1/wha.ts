@@ -54,8 +54,39 @@ async function runExample() {
 		console.log("[CREDS UPDATE]", "Credentials were updated.");
 	});
 
-	client.addListener("message.received", (message) => {
-		console.info(message, "[Example] received message");
+	client.addListener("message.received", async (messageData) => {
+		console.info(messageData, "[Example] received message");
+
+		const messageContent = messageData.message;
+		const senderAddress = messageData.sender;
+
+		const actualMessage =
+			messageContent.deviceSentMessage?.message || messageContent;
+		const conversationText =
+			actualMessage.conversation || actualMessage.extendedTextMessage?.text;
+
+		if (conversationText === "test") {
+			const userJid = `${senderAddress.id}@s.whatsapp.net`;
+
+			console.log(`Replying to ${userJid} (device ${senderAddress.deviceId})`);
+
+			await new Promise((resolve) => setTimeout(resolve, 500));
+
+			try {
+				await client.sendTextMessage(
+					userJid,
+					"test-reply",
+					senderAddress.deviceId,
+				);
+				console.log("[Example] Sent reply successfully.");
+			} catch (error) {
+				console.error("[Example] Failed to send reply:", error);
+			}
+		}
+	});
+
+	client.addListener("node.received", (node) => {
+		console.log("[NODE RECEIVED]", node);
 	});
 
 	try {

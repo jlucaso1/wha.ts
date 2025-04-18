@@ -123,6 +123,7 @@ export class SessionCipher {
 			result.set(msgBuf, 1);
 			result.set(mac.slice(0, 8), msgBuf.byteLength + 1);
 			await this.storeRecord(record);
+			console.log("[encrypt]", session);
 			let type: number;
 			let body: Uint8Array;
 			if (session.pendingPreKey) {
@@ -215,7 +216,12 @@ export class SessionCipher {
 			if (record.isClosed(result.session)) {
 				console.warn("Decrypted message with closed session.");
 			}
+			console.debug(
+				{ sessionState: result.session },
+				"[decryptWhisperMessage] State before saving",
+			);
 			await this.storeRecord(record);
+			console.debug("[decryptWhisperMessage] State saved successfully");
 			return result.plaintext;
 		});
 	}
@@ -250,7 +256,12 @@ export class SessionCipher {
 				preKeyProto.message,
 				session,
 			);
+			console.debug(
+				{ sessionState: session },
+				"[decryptPreKeyWhisperMessage] State before saving",
+			);
 			await this.storeRecord(record);
+			console.debug("[decryptPreKeyWhisperMessage] State saved successfully");
 			if (preKeyId !== undefined && this.storage.removePreKey) {
 				await this.storage.removePreKey(preKeyId);
 			}
@@ -276,6 +287,10 @@ export class SessionCipher {
 		const messageProto = messageBuffer.slice(1, -8);
 		const message = fromBinary(SignalMessageSchema, messageProto);
 		this.maybeStepRatchet(session, message.ratchetKey, message.previousCounter);
+		console.trace(
+			{ sessionStateAfterRatchet: session },
+			"[doDecryptWhisperMessage] Session state after maybeStepRatchet",
+		);
 		const chain = session.getChain(message.ratchetKey);
 		if (!chain || chain.chainType === ChainType.SENDING) {
 			throw new Error("Tried to decrypt on a sending chain");

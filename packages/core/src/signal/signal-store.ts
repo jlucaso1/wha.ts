@@ -51,7 +51,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		};
 	}
 
-	async removePreKey(keyId: number | string): Promise<void> {
+	async removePreKey(keyId: number): Promise<void> {
 		const idStr = keyId.toString();
 		await this.authState.keys.set({ "pre-key": { [idStr]: null } });
 	}
@@ -84,27 +84,16 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		identifier: string,
 		sessionRecordInstance: SessionRecord,
 	): Promise<void> {
-		let sessionDataToStore: Uint8Array;
-
-		try {
-			const plainObject = sessionRecordInstance.serialize();
-			const jsonString = serializer(plainObject);
-			sessionDataToStore = utf8ToBytes(jsonString);
-		} catch (e) {
-			this.logger.error(
-				{ err: e, jid: identifier },
-				`Failed to serialize session object for ${identifier}`,
-			);
-			throw new Error("Failed to serialize session object");
-		}
-
+		const plainObject = sessionRecordInstance.serialize();
+		const jsonString = serializer(plainObject);
+		const sessionDataToStore = utf8ToBytes(jsonString);
 		await this.authState.keys.set({
 			session: { [identifier]: sessionDataToStore },
 		});
 	}
 
 	async storeSignedPreKey(
-		keyId: number | string,
+		keyId: number,
 		keyRecord: SignedKeyPair,
 	): Promise<void> {
 		const keyIdStr = keyId.toString();

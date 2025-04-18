@@ -6,8 +6,7 @@ import { MessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal/src";
 import { unpadRandomMax16 } from "@wha.ts/utils/src/bytes-utils";
 import { TypedEventTarget } from "../generics/typed-event-target";
-import { SignalProtocolStoreAdapter } from "../signal/signal-store";
-import type { IAuthStateProvider } from "../state/interface";
+import type { SignalProtocolStoreAdapter } from "../signal/signal-store";
 import type { ILogger } from "../transport/types";
 
 interface MessageProcessorEventMap {
@@ -26,13 +25,11 @@ interface MessageProcessorEventMap {
 export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap> {
 	private logger: ILogger;
 	private signalStore: SignalProtocolStoreAdapter;
-	private authStateProvider: IAuthStateProvider;
 
-	constructor(logger: ILogger, authStateProvider: IAuthStateProvider) {
+	constructor(logger: ILogger, signalStore: SignalProtocolStoreAdapter) {
 		super();
 		this.logger = logger;
-		this.authStateProvider = authStateProvider;
-		this.signalStore = new SignalProtocolStoreAdapter(this.authStateProvider);
+		this.signalStore = signalStore;
 	}
 
 	async processIncomingNode(node: BinaryNode): Promise<void> {

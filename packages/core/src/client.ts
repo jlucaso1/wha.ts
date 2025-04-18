@@ -1,3 +1,12 @@
+import { create, toBinary } from "@bufbuild/protobuf";
+import { S_WHATSAPP_NET, jidDecode } from "@wha.ts/binary/src/jid-utils";
+import type { BinaryNode } from "@wha.ts/binary/src/types";
+import {
+	MessageSchema,
+	Message_ExtendedTextMessageSchema,
+} from "@wha.ts/proto";
+import { ProtocolAddress, SessionCipher } from "@wha.ts/signal/src";
+import { padRandomMax16 } from "@wha.ts/utils/src/bytes-utils";
 import type { ClientEventMap } from "./client-events";
 import { Authenticator } from "./core/authenticator";
 import type {
@@ -12,10 +21,12 @@ import {
 	TypedEventTarget,
 } from "./generics/typed-event-target";
 import { MessageProcessor } from "./messaging/message-processor";
+import { SignalProtocolStoreAdapter } from "./signal/signal-store";
 import type {
 	AuthenticationCreds,
 	IAuthStateProvider,
 } from "./state/interface";
+import { generateMdTagPrefix } from "./state/utils";
 import type { ILogger, WebSocketConfig } from "./transport/types";
 
 interface ClientConfig {
@@ -30,6 +41,7 @@ declare interface WhaTSClient {
 	ws: ConnectionManager["ws"];
 	auth: IAuthStateProvider;
 	logger: ILogger;
+	signalStore: SignalProtocolStoreAdapter;
 
 	connect(): Promise<void>;
 	logout(reason?: string): Promise<void>;
@@ -43,8 +55,10 @@ declare interface WhaTSClient {
 class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	private config: Required<Omit<ClientConfig, "logger">> & { logger: ILogger };
 	private messageProcessor: MessageProcessor;
-	private conn: ConnectionManager;
+	private connectionManager: ConnectionManager;
 	private authenticator: Authenticator;
+	private epoch = 0;
+	public signalStore: SignalProtocolStoreAdapter;
 
 	constructor(config: ClientConfig) {
 		super();
@@ -70,9 +84,11 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		this.auth = this.config.auth;
 		this.logger = this.config.logger;
 
-		this.messageProcessor = new MessageProcessor(this.logger, this.auth);
+		this.signalStore = new SignalProtocolStoreAdapter(this.auth);
 
-		this.conn = new ConnectionManager(
+		this.messageProcessor = new MessageProcessor(this.logger, this.signalStore);
+
+		this.connectionManager = new ConnectionManager(
 			this.config.wsOptions as WebSocketConfig,
 			this.logger,
 			this.auth.creds,
@@ -80,12 +96,12 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		);
 
 		const connectionActions: IConnectionActions = {
-			sendNode: (node) => this.conn.sendNode(node),
-			closeConnection: (error) => this.conn.close(error),
+			sendNode: (node) => this.connectionManager.sendNode(node),
+			closeConnection: (error) => this.connectionManager.close(error),
 		};
 
 		this.authenticator = new Authenticator(
-			this.conn,
+			this.connectionManager,
 			this.auth,
 			this.logger,
 			connectionActions,
@@ -96,7 +112,7 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			(event: TypedCustomEvent<ConnectionUpdatePayload>) => {
 				this.dispatchTypedEvent("connection.update", event.detail);
 				if (event.detail.isNewLogin) {
-					this.conn.reconnect();
+					this.connectionManager.reconnect();
 				}
 			},
 		);
@@ -131,6 +147,13 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 				this.dispatchTypedEvent("message.decryption_error", event.detail);
 			},
 		);
+
+		this.connectionManager.addEventListener(
+			"node.received",
+			(event: TypedCustomEvent<ClientEventMap["node.received"]>) => {
+				this.dispatchTypedEvent("node.received", event.detail);
+			},
+		);
 	}
 
 	addListener<K extends keyof ClientEventMap>(
@@ -144,7 +167,7 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 
 	async connect(): Promise<void> {
 		try {
-			await this.conn.connect();
+			await this.connectionManager.connect();
 		} catch (error) {
 			this.logger.error({ err: error }, "Connection failed");
 			throw error;
@@ -152,7 +175,118 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	}
 
 	async logout(reason = "User initiated logout"): Promise<void> {
-		await this.conn.close(new Error(reason));
+		await this.connectionManager.close(new Error(reason));
+	}
+
+	/**
+	 * Sends a text message to a given JID.
+	 * Handles encryption and session management automatically.
+	 *
+	 * @param jid The recipient's user JID (e.g., "1234567890@s.whatsapp.net").
+	 * @param text The text content of the message.
+	 * @param specificDeviceId Optional specific device ID to target. Defaults to 0 (primary device).
+	 * @returns The unique message ID generated for this message.
+	 * @throws Throws an error if the JID is invalid, encryption fails, or sending fails.
+	 */
+	async sendTextMessage(
+		jid: string,
+		text: string,
+		specificDeviceId?: number,
+	): Promise<string> {
+		// 1. Validate JID and create ProtocolAddress
+		const decodedJid = jidDecode(jid);
+		this.logger.debug(
+			{ decodedJid, originalJid: jid, specificDeviceId },
+			"Decoding JID for sending message",
+		);
+		if (!decodedJid || !decodedJid.user) {
+			throw new Error(`Invalid JID for text message: ${jid}`);
+		}
+		// Use the provided specificDeviceId if available, otherwise default to 0.
+		// We ignore decodedJid.device here as it's not standard JID format.
+		const targetDeviceId = specificDeviceId ?? 0;
+		const recipientAddress = new ProtocolAddress(
+			decodedJid.user,
+			targetDeviceId,
+		);
+
+		// 2. Create Protobuf Message (remains the same)
+		const protoMsg = create(MessageSchema, {
+			extendedTextMessage: create(Message_ExtendedTextMessageSchema, {
+				text: text,
+			}),
+		});
+		const protoBytes = toBinary(MessageSchema, protoMsg);
+
+		// 3. Pad the message (remains the same)
+		const paddedProtoBytes = padRandomMax16(protoBytes);
+
+		// 4. Instantiate SessionCipher (uses the correct recipientAddress with targetDeviceId)
+		const cipher = new SessionCipher(this.signalStore, recipientAddress);
+		this.logger.debug(
+			{ recipient: recipientAddress.toString() },
+			"Instantiated SessionCipher",
+		);
+
+		// 5. Encrypt the message (remains the same logic, but uses correct cipher instance)
+		let encryptedResult: {
+			type: number;
+			body: Uint8Array;
+			registrationId: number;
+		};
+		try {
+			encryptedResult = await cipher.encrypt(paddedProtoBytes);
+			this.logger.debug(
+				{ type: encryptedResult.type },
+				"Encrypted message using SessionCipher",
+			);
+		} catch (err) {
+			this.logger.error(
+				{ err, jid: recipientAddress.toString() },
+				"Failed to encrypt message",
+			);
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			throw new Error(`Encryption failed for ${jid}: ${errorMessage}`);
+		}
+
+		// 6. Construct BinaryNode
+		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
+		const encType = encryptedResult.type === 3 ? "pkmsg" : "msg";
+
+		const messageNode: BinaryNode = {
+			tag: "message",
+			attrs: {
+				// Use the base JID (user@server) for the 'to' attribute
+				to: `${decodedJid.user}@${decodedJid.server}`,
+				id: msgId,
+				// participant is needed for group messages, not 1:1
+			},
+			content: [
+				{
+					tag: "enc",
+					attrs: {
+						v: "2",
+						type: encType,
+					},
+					content: encryptedResult.body,
+				},
+			],
+		};
+
+		// 7. Send the node (remains the same)
+
+		try {
+			await this.connectionManager.sendNode(messageNode);
+
+			return msgId;
+		} catch (err) {
+			this.logger.error(
+				{ err, msgId, to: jid, deviceId: targetDeviceId },
+				"Failed to send message node via ConnectionManager",
+			);
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			throw new Error(`Sending message node failed: ${errorMessage}`);
+		}
 	}
 }
 

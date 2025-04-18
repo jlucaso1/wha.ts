@@ -33,3 +33,11 @@ export const unpadRandomMax16 = (e: Uint8Array) => {
 
 	return new Uint8Array(t.buffer, t.byteOffset, t.length - r);
 };
+
+export const padRandomMax16 = (data: Uint8Array): Uint8Array => {
+	const paddingBytes = 16 - (data.length % 16);
+	const padded = new Uint8Array(data.length + paddingBytes);
+	padded.set(data);
+	padded.fill(paddingBytes, data.length);
+	return padded;
+};

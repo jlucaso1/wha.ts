@@ -25,7 +25,7 @@ export type FullJid = JidWithDevice & {
 };
 
 export const jidEncode = (
-	user?: string | number | null,
+	user?: string | null,
 	server?: JidServer,
 	device?: number,
 ): string => {
