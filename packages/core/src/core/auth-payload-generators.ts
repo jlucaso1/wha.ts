@@ -18,10 +18,9 @@ import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
 import { sha256 } from "@wha.ts/utils/src/crypto";
 import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
 import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+import type { KeyPair, SignedKeyPair } from "@wha.ts/utils/src/types";
 import { DEFAULT_BROWSER, WA_VERSION } from "../defaults";
 import type { AuthenticationCreds } from "../state/interface";
-import type { SignedKeyPair } from "../state/interface";
 
 const getPlatformType = (platform: string): DeviceProps_PlatformType => {
 	const platformUpper = platform.toUpperCase();

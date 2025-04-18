@@ -1,21 +1,9 @@
 import type { ADVSignedDeviceIdentity } from "@wha.ts/proto";
-import type { KeyPair } from "@wha.ts/utils/src/types";
-
-export type SignedKeyPair = {
-	keyPair: KeyPair;
-	signature: Uint8Array;
-	keyId: number;
-};
-
-type ProtocolAddress = {
-	name: string;
-	deviceId: number;
-};
-
-type SignalIdentity = {
-	identifier: ProtocolAddress;
-	identifierKey: Uint8Array;
-};
+import type {
+	KeyPair,
+	SignalIdentity,
+	SignedKeyPair,
+} from "@wha.ts/utils/src/types";
 
 export type AuthenticationCreds = {
 	noiseKey: KeyPair;

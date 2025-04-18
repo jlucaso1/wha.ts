@@ -7,8 +7,8 @@ import {
 } from "@wha.ts/utils/src/bytes-utils";
 import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
 import { deserializer, serializer } from "@wha.ts/utils/src/serializer";
-import type { KeyPair } from "@wha.ts/utils/src/types";
-import type { IAuthStateProvider, SignedKeyPair } from "../state/interface";
+import type { KeyPair, SignedKeyPair } from "@wha.ts/utils/src/types";
+import type { IAuthStateProvider } from "../state/interface";
 
 export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 	private logger = console;
