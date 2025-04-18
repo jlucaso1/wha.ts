@@ -58,6 +58,8 @@
       "devDependencies": {
         "@bufbuild/buf": "^1.52.1",
         "@bufbuild/protoc-gen-es": "^2.2.5",
+        "acorn": "^8.14.1",
+        "acorn-walk": "^8.3.4",
       },
     },
     "packages/signal": {
@@ -264,6 +266,10 @@
     "@wha.ts/test": ["@wha.ts/test@workspace:packages/test"],
 
     "@wha.ts/utils": ["@wha.ts/utils@workspace:packages/utils"],
+
+    "acorn": ["acorn@8.14.1", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-OvQ/2pUDKmgfCg++xsTX1wGxfTaszcHVcTctW4UJB4hibJx2HXxxO5UmVgyjMa+ZDsiaf5wWLXYpRWMmBI0QHg=="],
+
+    "acorn-walk": ["acorn-walk@8.3.4", "", { "dependencies": { "acorn": "^8.11.0" } }, "sha512-ueEepnujpqee2o5aIYnvHU6C0A42MNdsIDeqy5BydrkuC5R1ZuUFnm27EeFJGoEHJQgn3uleRvmTXaJgfXbt4g=="],
 
     "ansi-escapes": ["ansi-escapes@7.0.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-GdYO7a61mR0fOlAsvC9/rIHf7L96sBc6dEWzeOu+KAea5bZyQRPIpojrVoI4AXGJS/ycu/fBTdLrUkA4ODrvjw=="],
 
