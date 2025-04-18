@@ -54,6 +54,10 @@ async function runExample() {
 		console.log("[CREDS UPDATE]", "Credentials were updated.");
 	});
 
+	client.addListener("message.received", (message) => {
+		console.info(message, "[Example] received message");
+	});
+
 	try {
 		await client.connect();
 		console.log(

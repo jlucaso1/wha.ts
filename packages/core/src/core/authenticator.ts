@@ -120,13 +120,15 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				await this.authStateProvider.saveCreds();
 				this.logger.info("Initial pre-keys uploaded and state updated");
 			}
-		} catch (error: any) {
+		} catch (error) {
 			this.logger.error({ err: error }, "Registration (pre-key upload) failed");
-			this.dispatchTypedEvent("connection.update", {
-				connection: "close",
-				error,
-			});
-			await this.connectionActions.closeConnection(error as Error);
+			if (error instanceof Error) {
+				this.dispatchTypedEvent("connection.update", {
+					connection: "close",
+					error,
+				});
+				await this.connectionActions.closeConnection(error as Error);
+			}
 		}
 	};
 

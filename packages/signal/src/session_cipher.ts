@@ -1,10 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import { PreKeySignalMessageSchema, SignalMessageSchema } from "@wha.ts/proto";
-import {
-	assertBytes,
-	concatBytes,
-	utf8ToBytes,
-} from "@wha.ts/utils/src/bytes-utils";
+import { concatBytes, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
 import {
 	aesDecrypt,
 	aesEncrypt,
@@ -18,23 +14,17 @@ import { ChainType } from "./chain_type";
 import { ProtocolAddress } from "./protocol_address";
 import { SessionBuilder } from "./session_builder";
 import { type SessionEntry, SessionRecord } from "./session_record";
+import type { SignalSessionStorage } from "./types";
 
 const VERSION = 3;
 
 export class SessionCipher {
 	private addr: ProtocolAddress;
-	private storage: {
-		loadSession(addr: string): Promise<SessionRecord | undefined | null>;
-		storeSession(addr: string, record: SessionRecord): Promise<void>;
-		getOurIdentity(): Promise<{ publicKey: Uint8Array }>;
-		getOurRegistrationId(): Promise<number>;
-		isTrustedIdentity(id: string, key: Uint8Array): Promise<boolean>;
-		removePreKey?(id: number): Promise<void>;
-	};
+	private storage: SignalSessionStorage;
 	private mutex: Mutex;
 
 	// Fix: Use correct type for storage parameter
-	constructor(storage: any, protocolAddress: ProtocolAddress) {
+	constructor(storage: SignalSessionStorage, protocolAddress: ProtocolAddress) {
 		if (!(protocolAddress instanceof ProtocolAddress)) {
 			throw new TypeError("protocolAddress must be a ProtocolAddress");
 		}
@@ -74,7 +64,6 @@ export class SessionCipher {
 	public async encrypt(
 		data: Uint8Array,
 	): Promise<{ type: number; body: Uint8Array; registrationId: number }> {
-		assertBytes(data);
 		const ourIdentityKey = await this.storage.getOurIdentity();
 
 		return await this.mutex.runExclusive(async () => {
@@ -88,7 +77,11 @@ export class SessionCipher {
 			}
 			const remoteIdentityKey = session.indexInfo.remoteIdentityKey;
 			if (
-				!(await this.storage.isTrustedIdentity(this.addr.id, remoteIdentityKey))
+				!(await this.storage.isTrustedIdentity(
+					this.addr.id,
+					remoteIdentityKey,
+					ChainType.SENDING,
+				))
 			) {
 				throw new Error("Untrusted identity key");
 			}
@@ -203,7 +196,6 @@ export class SessionCipher {
 	}
 
 	public async decryptWhisperMessage(data: Uint8Array): Promise<Uint8Array> {
-		assertBytes(data);
 		return await this.mutex.runExclusive(async () => {
 			const record = await this.getRecord();
 			if (!record) {
@@ -212,7 +204,11 @@ export class SessionCipher {
 			const result = await this.decryptWithSessions(data, record.getSessions());
 			const remoteIdentityKey = result.session.indexInfo.remoteIdentityKey;
 			if (
-				!(await this.storage.isTrustedIdentity(this.addr.id, remoteIdentityKey))
+				!(await this.storage.isTrustedIdentity(
+					this.addr.id,
+					remoteIdentityKey,
+					ChainType.RECEIVING,
+				))
 			) {
 				throw new Error("Untrusted identity key");
 			}
@@ -227,7 +223,6 @@ export class SessionCipher {
 	public async decryptPreKeyWhisperMessage(
 		data: Uint8Array,
 	): Promise<Uint8Array> {
-		assertBytes(data);
 		const firstByte = data[0];
 		if (typeof firstByte !== "number") {
 			throw new Error("Invalid PreKeyWhisperMessage: missing version byte");
@@ -267,7 +262,6 @@ export class SessionCipher {
 		messageBuffer: Uint8Array,
 		session: SessionEntry,
 	): Promise<Uint8Array> {
-		assertBytes(messageBuffer);
 		if (!session) {
 			throw new TypeError("session required");
 		}

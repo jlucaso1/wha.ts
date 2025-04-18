@@ -6,13 +6,14 @@ import { BaseKeyType } from "./base_key_type";
 import { ChainType } from "./chain_type";
 import type { ProtocolAddress } from "./protocol_address";
 import { type SessionEntry, SessionRecord } from "./session_record";
+import type { SignalSessionStorage } from "./types";
 
 export class SessionBuilder {
 	private readonly addr: string;
-	private readonly storage: any;
+	private readonly storage: SignalSessionStorage;
 	private readonly mutex: Mutex;
 
-	constructor(storage: any, protocolAddress: ProtocolAddress) {
+	constructor(storage: SignalSessionStorage, protocolAddress: ProtocolAddress) {
 		this.addr = protocolAddress.toString();
 		this.storage = storage;
 		this.mutex = new Mutex();

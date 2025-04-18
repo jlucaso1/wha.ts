@@ -33,10 +33,3 @@ export const unpadRandomMax16 = (e: Uint8Array) => {
 
 	return new Uint8Array(t.buffer, t.byteOffset, t.length - r);
 };
-
-export function assertBytes(value: any): Uint8Array {
-	if (!(value instanceof Uint8Array)) {
-		throw TypeError(`Expected Uint8Array instead of: ${typeof value}`);
-	}
-	return value;
-}

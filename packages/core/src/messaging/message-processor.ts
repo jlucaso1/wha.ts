@@ -106,34 +106,33 @@ export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap>
 
 			const message = fromBinary(MessageSchema, plaintext);
 
-			this.logger.info(
-				{
-					type,
-					from: senderAddress.toString(),
-					size: plaintext.length,
-				},
-				"[MessageProcessor] Successfully decrypted message",
-			);
-
 			this.dispatchTypedEvent("message.decrypted", {
 				message,
 				sender: senderAddress,
 				rawNode: node,
 			});
-		} catch (error: any) {
-			const isKeyError = /Key used already or never filled/i.test(
-				error.message,
-			);
+		} catch (error) {
+			if (error instanceof Error) {
+				const isKeyError = /Key used already or never filled/i.test(
+					error.message,
+				);
 
-			if (isKeyError) {
-				this.dispatchTypedEvent("message.decryption_error", {
-					error: new Error(`Discarded: ${error.message}`),
-					rawNode: node,
-					sender: senderAddress,
-				});
+				if (isKeyError) {
+					this.dispatchTypedEvent("message.decryption_error", {
+						error: new Error(`Discarded: ${error.message}`),
+						rawNode: node,
+						sender: senderAddress,
+					});
+				} else {
+					this.dispatchTypedEvent("message.decryption_error", {
+						error,
+						rawNode: node,
+						sender: senderAddress,
+					});
+				}
 			} else {
 				this.dispatchTypedEvent("message.decryption_error", {
-					error,
+					error: new Error(`Unknown error: ${String(error)}`),
 					rawNode: node,
 					sender: senderAddress,
 				});

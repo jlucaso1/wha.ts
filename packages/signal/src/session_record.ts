@@ -1,8 +1,4 @@
-import {
-	assertBytes,
-	base64ToBytes,
-	bytesToBase64,
-} from "@wha.ts/utils/src/bytes-utils";
+import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
 import type { KeyPair } from "@wha.ts/utils/src/types";
 import { BaseKeyType } from "./base_key_type";
 import { ChainType } from "./chain_type";
@@ -113,7 +109,6 @@ export class SessionEntry {
 	}
 
 	addChain(ephemeralPublicKey: Uint8Array, value: Chain): void {
-		assertBytes(ephemeralPublicKey);
 		const id = bytesToBase64(ephemeralPublicKey);
 		if (Object.prototype.hasOwnProperty.call(this._chains, id)) {
 			throw new Error("Overwrite attempt on chain");
@@ -122,12 +117,10 @@ export class SessionEntry {
 	}
 
 	getChain(ephemeralPublicKey: Uint8Array): Chain | undefined {
-		assertBytes(ephemeralPublicKey);
 		return this._chains[bytesToBase64(ephemeralPublicKey)];
 	}
 
 	deleteChain(ephemeralPublicKey: Uint8Array): void {
-		assertBytes(ephemeralPublicKey);
 		const id = bytesToBase64(ephemeralPublicKey);
 		if (!Object.prototype.hasOwnProperty.call(this._chains, id)) {
 			console.warn(`Chain not found for deletion: ${id}`);
@@ -337,7 +330,6 @@ export class SessionRecord {
 	}
 
 	getSession(baseKey: Uint8Array): SessionEntry | undefined {
-		assertBytes(baseKey);
 		const keyBase64 = bytesToBase64(baseKey);
 		const session = this.sessions[keyBase64];
 		if (session && session.indexInfo.baseKeyType === BaseKeyType.OURS) {
