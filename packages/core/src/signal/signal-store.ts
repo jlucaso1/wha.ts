@@ -6,7 +6,7 @@ import {
 	utf8ToBytes,
 } from "@wha.ts/utils/src/bytes-utils";
 import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
-import { BufferJSON } from "@wha.ts/utils/src/serializer";
+import { deserializer, serializer } from "@wha.ts/utils/src/serializer";
 import type { KeyPair } from "@wha.ts/utils/src/types";
 import type { IAuthStateProvider, SignedKeyPair } from "../state/interface";
 
@@ -63,7 +63,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		if (sessionData instanceof Uint8Array) {
 			try {
 				const jsonString = bytesToUtf8(sessionData);
-				const plainObject = JSON.parse(jsonString, BufferJSON.reviver);
+				const plainObject = deserializer(jsonString);
 
 				const recordInstance = SessionRecord.deserialize(plainObject);
 
@@ -88,7 +88,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 
 		try {
 			const plainObject = sessionRecordInstance.serialize();
-			const jsonString = JSON.stringify(plainObject, BufferJSON.replacer);
+			const jsonString = serializer(plainObject);
 			sessionDataToStore = utf8ToBytes(jsonString);
 		} catch (e) {
 			this.logger.error(

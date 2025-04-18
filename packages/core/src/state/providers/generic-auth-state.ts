@@ -1,4 +1,4 @@
-import { BufferJSON } from "@wha.ts/utils/src/serializer";
+import { deserializer, serializer } from "@wha.ts/utils/src/serializer";
 import { type Storage, createStorage } from "unstorage";
 import type {
 	AuthenticationCreds,
@@ -46,9 +46,8 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
-						const parsedValue = JSON.parse(
+						const parsedValue = deserializer(
 							JSON.stringify(rawValue),
-							BufferJSON.reviver,
 						) as SignalDataTypeMap[T];
 						finalResults[id] = parsedValue;
 					} catch (error) {
@@ -89,7 +88,7 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 					itemsToSet.push({ key: key, value: null });
 				} else {
 					try {
-						const serializedValue = JSON.stringify(value, BufferJSON.replacer);
+						const serializedValue = serializer(value);
 						itemsToSet.push({ key: key, value: serializedValue });
 					} catch (error) {
 						console.error(
@@ -137,11 +136,11 @@ export class GenericAuthState implements IAuthStateProvider {
 		try {
 			const credsValue = await storage.getItem(CREDS_KEY);
 			if (credsValue !== null && typeof credsValue === "string") {
-				creds = JSON.parse(credsValue, BufferJSON.reviver);
+				creds = deserializer(credsValue);
 				loadedCreds = true;
 			} else if (credsValue !== null) {
 				try {
-					creds = JSON.parse(JSON.stringify(credsValue), BufferJSON.reviver);
+					creds = deserializer(JSON.stringify(credsValue));
 					loadedCreds = true;
 				} catch {
 					console.warn(
@@ -177,7 +176,7 @@ export class GenericAuthState implements IAuthStateProvider {
 
 	async saveCreds(): Promise<void> {
 		try {
-			const serializedCreds = JSON.stringify(this.creds, BufferJSON.replacer);
+			const serializedCreds = serializer(this.creds);
 			await this.storage.setItem(CREDS_KEY, serializedCreds);
 		} catch (error) {
 			console.error("[GenericAuthState] Error saving credentials:", error);
