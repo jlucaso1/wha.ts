@@ -219,16 +219,16 @@ function initializeResponderNoiseState(
 	prologue: Uint8Array,
 	serverStaticPair: KeyPair,
 ): MockNoiseState {
-	let handshakeHash = sha256(utf8ToBytes(NOISE_MODE));
-	console.log(`[MockServer] Initial handshakeHash: ${bytesToHex(handshakeHash)}`);
-	console.log(`[MockServer] Initial salt: ${bytesToHex(handshakeHash)}`);
-	console.log(`[MockServer] Initial cipherKey: ${bytesToHex(handshakeHash)}`);
-	handshakeHash = sha256(concatBytes(handshakeHash, prologue));
-	console.log(`[MockServer] After mixing prologue: ${bytesToHex(handshakeHash)}`);
-	console.log(`[MockServer] Salt after prologue: ${bytesToHex(handshakeHash)}`);
-	console.log(`[MockServer] CipherKey after prologue: ${bytesToHex(handshakeHash)}`);
-	const salt = handshakeHash;
-	const cipherKey = handshakeHash;
+	const initialHash = sha256(utf8ToBytes(NOISE_MODE));
+	console.log(`[MockServer] Initial hash (HASH(MODE)): ${bytesToHex(initialHash)}`);
+	const salt = initialHash; // Use HASH(MODE) as initial salt
+	const cipherKey = initialHash; // Use HASH(MODE) as initial key
+
+	// Handshake hash starts with HASH(MODE) and mixes prologue
+	const handshakeHash = sha256(concatBytes(initialHash, prologue));
+	console.log(`[MockServer] Hash after prologue: ${bytesToHex(handshakeHash)}`);
+	// DO NOT mix server static key into the hash here. Responder doesn't mix its static key initially.
+	// DO NOT update salt/cipherKey here based on the post-prologue hash.
 
 	return {
 		handshakeHash,
@@ -537,6 +537,9 @@ export function handleNoiseHandshakeMessage(
 				clientEphemeralForDH, // Use the stored client ephemeral key
 			);
 			console.log(`[MockServer] DH(e, re): server eph priv=${bytesToHex(serverEphemeralPair.privateKey)}, client eph pub=${bytesToHex(clientEphemeralForDH)}, result=${bytesToHex(dh_ee)}`);
+			// Log the inputs right before the call
+			console.log(`[MockServer] PRE-MIXKEYS(dh_ee): inputKeyMaterial=${bytesToHex(dh_ee)}`);
+			console.log(`[MockServer] PRE-MIXKEYS(dh_ee): state.salt=${bytesToHex(mockState.salt)}`);
 			// Mix Keys based on dh_ee -> k1
 			mockState = mixKeys(mockState, dh_ee); // Nonce resets to 0
 
