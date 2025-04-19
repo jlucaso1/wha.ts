@@ -117,7 +117,7 @@ export class NoiseProcessor {
 
 	async encryptMessage(plaintext: Uint8Array) {
 		const nonce = this.generateIV(this.state.writeCounter);
-		const ciphertext = await aesEncryptGCM(
+		const ciphertext = aesEncryptGCM(
 			plaintext,
 			this.state.encryptionKey,
 			nonce,
@@ -136,7 +136,7 @@ export class NoiseProcessor {
 			? this.state.readCounter
 			: this.state.writeCounter;
 		const nonce = this.generateIV(counter);
-		const plaintext = await aesDecryptGCM(
+		const plaintext = aesDecryptGCM(
 			ciphertext,
 			this.state.decryptionKey,
 			nonce,

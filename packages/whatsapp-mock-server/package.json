@@ -1,0 +1,12 @@
+{
+	"name": "@wha.ts/whatsapp-mock-server",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun run --watch src/index.ts"
+	},
+	"dependencies": {
+		"@wha.ts/binary": "workspace:*"
+	}
+}

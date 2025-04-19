@@ -247,6 +247,10 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private handleDecryptedFrame = async (
 		decryptedPayload: Uint8Array,
 	): Promise<void> => {
+		try {
+			const node = decodeBinaryNode(decryptedPayload);
+			this.logger.debug(node);
+		} catch (error) {}
 		if (this.state !== "open" && this.state !== "handshaking") {
 			this.logger.warn(
 				{ state: this.state },

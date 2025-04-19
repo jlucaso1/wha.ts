@@ -10,7 +10,10 @@ type NonStandardTag =
 	| "list"
 	| "device-identity"
 	| "pair-device-sign"
-	| "dirty";
+	| "dirty"
+	| "pair-device"
+	| "pair-success"
+	| "ref";
 
 type BinaryNodeTag = SINGLE_BYTE_TOKENS_TYPE | NonStandardTag;
 

@@ -4,6 +4,12 @@ import { hmac as nobleHmac } from "@noble/hashes/hmac";
 import { sha256 as nobleSha256 } from "@noble/hashes/sha2";
 import { concatBytes, equalBytes } from "./bytes-utils";
 
+export function generateNonceIV(counter: number) {
+	const iv = new ArrayBuffer(12);
+	new DataView(iv).setUint32(8, counter);
+	return new Uint8Array(iv);
+}
+
 export function aesEncryptGCM(
 	plaintext: Uint8Array,
 	key: Uint8Array,

@@ -76,6 +76,7 @@
         "@wha.ts/proto": "workspace:*",
         "@wha.ts/signal": "workspace:*",
         "@wha.ts/utils": "workspace:*",
+        "@wha.ts/whatsapp-mock-server": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.9",
@@ -89,6 +90,13 @@
         "async-mutex": "^0.5.0",
         "curve25519-js": "^0.0.4",
         "devalue": "^5.1.1",
+      },
+    },
+    "packages/whatsapp-mock-server": {
+      "name": "@wha.ts/whatsapp-mock-server",
+      "version": "0.1.0",
+      "dependencies": {
+        "@wha.ts/binary": "workspace:*",
       },
     },
   },
@@ -264,6 +272,8 @@
     "@wha.ts/test": ["@wha.ts/test@workspace:packages/test"],
 
     "@wha.ts/utils": ["@wha.ts/utils@workspace:packages/utils"],
+
+    "@wha.ts/whatsapp-mock-server": ["@wha.ts/whatsapp-mock-server@workspace:packages/whatsapp-mock-server"],
 
     "ansi-escapes": ["ansi-escapes@7.0.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-GdYO7a61mR0fOlAsvC9/rIHf7L96sBc6dEWzeOu+KAea5bZyQRPIpojrVoI4AXGJS/ycu/fBTdLrUkA4ODrvjw=="],
 
