@@ -1,4 +1,5 @@
 import { decodeBinaryNode } from "@wha.ts/binary/src/decode";
+import { encodeBinaryNode } from "@wha.ts/binary/src/encode";
 import type { BinaryNode } from "@wha.ts/binary/src/types";
 import { NOISE_WA_HEADER } from "@wha.ts/core/src/defaults";
 import {
@@ -8,7 +9,11 @@ import {
 } from "@wha.ts/utils/src/bytes-utils";
 import type { Server, ServerWebSocket } from "bun";
 import { addLengthPrefix, frameBinaryNode, parseFrames } from "./frame-handler";
-import { handleNoiseHandshakeMessage } from "./noise-simulator";
+import {
+	handleNoiseHandshakeMessage,
+	encryptTransportMessage,
+	decryptTransportMessage,
+} from "./noise-simulator";
 import type {
 	MockServerConfig,
 	MockWebSocketData,
@@ -225,9 +230,9 @@ export class MockWhatsAppServer {
 				// If handshake became complete, process next scenario step
 				if (ws.data.state === "handshake_complete") {
 					this.config.logger.debug(
-						"[handleCompleteFrame] Handshake complete, processing next scenario step.",
+						"[handleCompleteFrame] Handshake complete. Waiting for first client transport message before advancing scenario.",
 					);
-					this.processNextScenarioStep(ws);
+					// Do NOT call processNextScenarioStep here. Wait for client message.
 				} else {
 					this.config.logger.debug(
 						"[handleCompleteFrame] Handshake still in progress after processing message.",
@@ -235,44 +240,50 @@ export class MockWhatsAppServer {
 				}
 			}
 		} else if (state === "authenticated") {
+			const noiseState = ws.data.noiseState;
+			if (!noiseState) {
+				this.config.logger.error(
+					`[${sessionId}] Received message in authenticated state but noiseState is missing!`,
+				);
+				ws.close(1011, "Internal server error: noise state missing");
+				return;
+			}
 			try {
-				const receivedNode = decodeBinaryNode(frameData); // Assumes frameData is DECOMPRESSED node bytes
+				this.config.logger.debug(
+					`[${sessionId}] Decrypting transport message (frame length: ${frameData.length}).`,
+				);
+				const { newState, plaintext } = decryptTransportMessage(
+					noiseState,
+					frameData,
+				);
+				ws.data.noiseState = newState; // Update state with new nonce
+				this.config.logger.debug(
+					`[${sessionId}] Transport message decrypted (plaintext length: ${plaintext.length}).`,
+				);
+				const receivedNode = decodeBinaryNode(plaintext);
 				this.config.logger.info(
-					`[${sessionId}] Received Node:`,
+					`[${sessionId}] Received Node (Decrypted):`,
 					receivedNode.tag,
 					receivedNode.attrs,
 				);
 				this.processScenarioStepWithNode(ws, receivedNode);
 			} catch (error) {
 				this.config.logger.error(
-					`[${sessionId}] Error decoding binary node:`,
+					`[${sessionId}] Error decrypting/decoding node in authenticated state:`,
 					error,
 				);
-				ws.close(1008, "Failed to decode node");
+				ws.close(1008, "Failed to decrypt/decode node");
 			}
 		} else if (state === "handshake_complete") {
-			// This state might be transient, waiting for the scenario to send <success>
-			// Or the client might send the next node immediately
-			try {
-				const receivedNode = decodeBinaryNode(frameData);
-				this.config.logger.info(
-					`[${sessionId}] Received Node (post-handshake):`,
-					receivedNode.tag,
-					receivedNode.attrs,
-				);
-				// Technically should be authenticated now
-				ws.data.state = "authenticated";
-				this.config.logger.debug(
-					"[handleCompleteFrame] Transitioned state to authenticated.",
-				);
-				this.processScenarioStepWithNode(ws, receivedNode);
-			} catch (error) {
-				this.config.logger.error(
-					`[${sessionId}] Error decoding binary node (post-handshake):`,
-					error,
-				);
-				ws.close(1008, "Failed to decode node");
-			}
+			// Transition to authenticated before processing further frames
+			ws.data.state = "authenticated";
+			this.config.logger.debug(
+				"[handleCompleteFrame] Transitioned state to authenticated.",
+			);
+			// Re-process this frame in authenticated state (will decrypt if needed)
+			this.handleCompleteFrame(ws, frameData);
+		// (do not process as plaintext here)
+			return;
 		} else {
 			this.config.logger.warn(
 				`[${sessionId}] Received message in unexpected state: ${state}`,
@@ -419,14 +430,49 @@ export class MockWhatsAppServer {
 						node.tag,
 						node.attrs,
 					);
-					const frame = frameBinaryNode(node);
-					const sent = ws.sendBinary(frame); // Use sendBinary for raw bytes
+					// --- ENCODE ---
+					const encodedNode = encodeBinaryNode(node);
+					let bytesToSend = encodedNode; // Default to plaintext
+
+					// --- ENCRYPT (if authenticated) ---
+					if (ws.data.state === "authenticated") {
+						const noiseState = ws.data.noiseState;
+						if (!noiseState) {
+							this.config.logger.error(
+								`[${sessionId}] Cannot encrypt outgoing node: noiseState is missing!`,
+							);
+							ws.close(1011, "Internal server error: noise state missing for send");
+							return; // Don't send if state is broken
+						}
+						this.config.logger.debug(
+							`[${sessionId}] Encrypting transport message (encoded length: ${encodedNode.length}).`,
+						);
+						const { newState, ciphertext } = encryptTransportMessage(
+							noiseState,
+							encodedNode,
+						);
+						ws.data.noiseState = newState; // Update state with new nonce
+						bytesToSend = ciphertext;
+						this.config.logger.debug(
+							`[${sessionId}] Transport message encrypted (ciphertext length: ${bytesToSend.length}).`,
+						);
+					} else {
+						this.config.logger.debug(
+							`[${sessionId}] Sending plaintext (state is ${ws.data.state}).`,
+						);
+					}
+
+					// --- FRAME ---
+					const frame = addLengthPrefix(bytesToSend);
+					this.config.logger.debug(
+						`[${sessionId}] Sending frame (length: ${frame.length}).`,
+					);
+					const sent = ws.sendBinary(frame);
 					if (sent <= 0) {
 						this.config.logger.warn(
-							`[${sessionId}] Failed to send node (backpressure or closed):`,
+							`[${sessionId}] Failed to send frame (backpressure or closed):`,
 							node.tag,
 						);
-						// Optionally close on failure?
 					}
 				} catch (error) {
 					this.config.logger.error(

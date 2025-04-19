@@ -220,17 +220,13 @@ function initializeResponderNoiseState(
 	serverStaticPair: KeyPair,
 ): MockNoiseState {
 	let handshakeHash = sha256(utf8ToBytes(NOISE_MODE));
-	console.log(
-		`[initializeResponderNoiseState] After protocol name: ${bytesToHex(
-			handshakeHash,
-		)}`,
-	);
+	console.log(`[MockServer] Initial handshakeHash: ${bytesToHex(handshakeHash)}`);
+	console.log(`[MockServer] Initial salt: ${bytesToHex(handshakeHash)}`);
+	console.log(`[MockServer] Initial cipherKey: ${bytesToHex(handshakeHash)}`);
 	handshakeHash = sha256(concatBytes(handshakeHash, prologue));
-	console.log(
-		`[initializeResponderNoiseState] After prologue: ${bytesToHex(
-			handshakeHash,
-		)}`,
-	);
+	console.log(`[MockServer] After mixing prologue: ${bytesToHex(handshakeHash)}`);
+	console.log(`[MockServer] Salt after prologue: ${bytesToHex(handshakeHash)}`);
+	console.log(`[MockServer] CipherKey after prologue: ${bytesToHex(handshakeHash)}`);
 	const salt = handshakeHash;
 	const cipherKey = handshakeHash;
 
@@ -261,9 +257,11 @@ function mixKeys(
 	state: MockNoiseState,
 	inputKeyMaterial: Uint8Array,
 ): MockNoiseState {
+	console.log(`[MockServer] mixKeys: inputKeyMaterial=${bytesToHex(inputKeyMaterial)}, salt(before)=${bytesToHex(state.salt)}`);
 	const hkdfResult = kdf(inputKeyMaterial, state.salt, 64); // 2 * HASHLEN (32)
 	const newSalt = hkdfResult.subarray(0, 32);
 	const newCipherKey = hkdfResult.subarray(32);
+	console.log(`[MockServer] mixKeys: salt(after)=${bytesToHex(newSalt)}, cipherKey=${bytesToHex(newCipherKey)}`);
 
 	return {
 		...state,
@@ -296,20 +294,14 @@ function mockEncryptAndMix(
 		throw new Error("Cannot encrypt: Cipher key not initialized");
 	}
 	const iv = generateIV(state.encryptNonce);
-	logger.debug(
-		`[mockEncryptAndMix] Encrypting ${plaintext.length} bytes. Nonce: ${
-			state.encryptNonce
-		}, IV: ${bytesToHex(iv)}, Key: ${bytesToHex(
-			state.cipherKeyEncrypt.slice(0, 4),
-		)}..., AAD(Hash): ${bytesToHex(state.handshakeHash.slice(0, 4))}...`,
-	);
-	// Use the current handshakeHash as AAD
+	console.log(`[MockServer] encryptMessage: plaintextLen=${plaintext.length}, key=${bytesToHex(state.cipherKeyEncrypt)}, nonce=${bytesToHex(iv)}, aad=${bytesToHex(state.handshakeHash)}`);
 	const ciphertext = aesEncryptGCM(
 		plaintext,
 		state.cipherKeyEncrypt, // Use encryption key
 		iv,
 		state.handshakeHash, // AAD is current hash *before* mixing ciphertext
 	);
+	console.log(`[MockServer] encryptMessage: ciphertextLen=${ciphertext.length}, ciphertext=${bytesToHex(ciphertext)}`);
 
 	// Increment nonce AFTER successful encryption
 	const nextNonce = state.encryptNonce + 1n;
@@ -319,11 +311,7 @@ function mockEncryptAndMix(
 
 	// Mix the *ciphertext* into the hash AFTER encryption
 	const newHandshakeHash = sha256(concatBytes(state.handshakeHash, ciphertext));
-	logger.debug(
-		`[mockEncryptAndMix] Hash after mixing ciphertext: ${bytesToHex(
-			newHandshakeHash.slice(0, 8),
-		)}...`,
-	);
+	console.log(`[MockServer] mixIntoHandshakeHash: before=${bytesToHex(state.handshakeHash)}, data=${bytesToHex(ciphertext)}, after=${bytesToHex(newHandshakeHash)}`);
 
 	// Return new state with incremented nonce and updated hash
 	return {
@@ -345,15 +333,8 @@ function mockDecryptAndMix(
 		throw new Error("Cannot decrypt: Cipher key not initialized");
 	}
 	const iv = generateIV(state.decryptNonce);
-	logger.debug(
-		`[mockDecryptAndMix] Decrypting ${ciphertext.length} bytes. Nonce: ${
-			state.decryptNonce
-		}, IV: ${bytesToHex(iv)}, Key: ${bytesToHex(
-			state.cipherKeyDecrypt.slice(0, 4),
-		)}..., AAD(Hash): ${bytesToHex(state.handshakeHash.slice(0, 4))}...`,
-	);
+	console.log(`[MockServer] decryptMessage: ciphertextLen=${ciphertext.length}, key=${bytesToHex(state.cipherKeyDecrypt)}, nonce=${bytesToHex(iv)}, aad=${bytesToHex(state.handshakeHash)}`);
 
-	// Use the current handshakeHash as AAD
 	let plaintext: Uint8Array;
 	try {
 		plaintext = aesDecryptGCM(
@@ -362,9 +343,10 @@ function mockDecryptAndMix(
 			iv,
 			state.handshakeHash, // AAD is current hash *before* mixing ciphertext
 		);
+		console.log(`[MockServer] decryptMessage: plaintextLen=${plaintext.length}, plaintext=${bytesToHex(plaintext)}`);
 	} catch (e) {
-		logger.error(
-			`[mockDecryptAndMix] AES-GCM Decryption failed: ${
+		console.error(
+			`[MockServer] decryptMessage: AES-GCM Decryption failed: ${
 				e instanceof Error ? e.message : String(e)
 			}`,
 		);
@@ -379,11 +361,7 @@ function mockDecryptAndMix(
 
 	// Mix the *ciphertext* into the hash AFTER decryption
 	const newHandshakeHash = sha256(concatBytes(state.handshakeHash, ciphertext));
-	logger.debug(
-		`[mockDecryptAndMix] Hash after mixing ciphertext: ${bytesToHex(
-			newHandshakeHash.slice(0, 8),
-		)}...`,
-	);
+	console.log(`[MockServer] mixIntoHandshakeHash: before=${bytesToHex(state.handshakeHash)}, data=${bytesToHex(ciphertext)}, after=${bytesToHex(newHandshakeHash)}`);
 
 	// Return new state with incremented nonce and updated hash
 	return {
@@ -391,6 +369,88 @@ function mockDecryptAndMix(
 			...state,
 			decryptNonce: nextNonce,
 			handshakeHash: newHandshakeHash,
+		},
+		plaintext,
+	};
+}
+
+// --- Transport Phase Crypto ---
+
+export function encryptTransportMessage(
+	state: MockNoiseState,
+	plaintext: Uint8Array,
+): { newState: MockNoiseState; ciphertext: Uint8Array } {
+	if (!state.cipherKeyEncrypt || state.cipherKeyEncrypt.length === 0) {
+		throw new Error("Cannot encrypt transport: Cipher key not initialized");
+	}
+	const iv = generateIV(state.encryptNonce);
+	logger.debug(
+		`[encryptTransportMessage] Encrypting ${
+			plaintext.length
+		} bytes. Nonce: ${state.encryptNonce}, IV: ${bytesToHex(
+			iv,
+		)}, Key: ${bytesToHex(state.cipherKeyEncrypt.slice(0, 4))}...`,
+	);
+
+	// AAD is empty/null for transport phase
+	const ciphertext = aesEncryptGCM(plaintext, state.cipherKeyEncrypt, iv);
+
+	// Increment nonce AFTER successful encryption
+	const nextNonce = state.encryptNonce + 1n;
+	if (nextNonce >= 2n ** 64n) {
+		throw new Error("Nonce overflow during transport encryption");
+	}
+
+	// Return new state with incremented nonce
+	return {
+		newState: {
+			...state,
+			encryptNonce: nextNonce,
+		},
+		ciphertext,
+	};
+}
+
+export function decryptTransportMessage(
+	state: MockNoiseState,
+	ciphertext: Uint8Array,
+): { newState: MockNoiseState; plaintext: Uint8Array } {
+	if (!state.cipherKeyDecrypt || state.cipherKeyDecrypt.length === 0) {
+		throw new Error("Cannot decrypt transport: Cipher key not initialized");
+	}
+	const iv = generateIV(state.decryptNonce);
+	logger.debug(
+		`[decryptTransportMessage] Decrypting ${
+			ciphertext.length
+		} bytes. Nonce: ${state.decryptNonce}, IV: ${bytesToHex(
+			iv,
+		)}, Key: ${bytesToHex(state.cipherKeyDecrypt.slice(0, 4))}...`,
+	);
+
+	let plaintext: Uint8Array;
+	try {
+		// AAD is empty/null for transport phase
+		plaintext = aesDecryptGCM(ciphertext, state.cipherKeyDecrypt, iv);
+	} catch (e) {
+		logger.error(
+			`[decryptTransportMessage] AES-GCM Decryption failed: ${
+				e instanceof Error ? e.message : String(e)
+			}`,
+		);
+		throw e; // Re-throw after logging
+	}
+
+	// Increment nonce AFTER successful decryption
+	const nextNonce = state.decryptNonce + 1n;
+	if (nextNonce >= 2n ** 64n) {
+		throw new Error("Nonce overflow during transport decryption");
+	}
+
+	// Return new state with incremented nonce
+	return {
+		newState: {
+			...state,
+			decryptNonce: nextNonce,
 		},
 		plaintext,
 	};
@@ -464,25 +524,21 @@ export function handleNoiseHandshakeMessage(
 
 			// 4. Mix server's ephemeral public key into hash: H = HASH(h || e)
 			//    Client expects this mix before decrypting serverHello.static
+			const beforeMix = mockState.handshakeHash;
 			mockState.handshakeHash = sha256(
 				concatBytes(mockState.handshakeHash, serverEphemeralPair.publicKey),
 			);
-			logger.debug(
-				`[${
-					data.sessionId
-				}] Mixed server ephemeral (e) into hash. Hash: ${bytesToHex(
-					mockState.handshakeHash.slice(0, 8),
-				)}...`,
-			);
+			console.log(`[MockServer] After mixing server ephemeral: handshakeHash=${bytesToHex(mockState.handshakeHash)}`);
+			console.log(`[MockServer] mixIntoHandshakeHash: before=${bytesToHex(beforeMix)}, data=${bytesToHex(serverEphemeralPair.publicKey)}, after=${bytesToHex(mockState.handshakeHash)}`);
 
 			// 5. Perform DH: DH(e, re) -> DH(server_ephemeral, client_ephemeral)
 			const dh_ee = Curve.sharedKey(
 				serverEphemeralPair.privateKey,
 				clientEphemeralForDH, // Use the stored client ephemeral key
 			);
+			console.log(`[MockServer] DH(e, re): server eph priv=${bytesToHex(serverEphemeralPair.privateKey)}, client eph pub=${bytesToHex(clientEphemeralForDH)}, result=${bytesToHex(dh_ee)}`);
 			// Mix Keys based on dh_ee -> k1
 			mockState = mixKeys(mockState, dh_ee); // Nonce resets to 0
-			logger.debug(`[${data.sessionId}] Mixed keys from DH(e, re).`);
 
 			// 6. Encrypt server's static public key (s)
 			// Uses key 'k1', nonce 0, and AAD = current hash (H(MODE||prologue||e))
@@ -499,6 +555,7 @@ export function handleNoiseHandshakeMessage(
 			// and increments nonce to 1
 			mockState = encryptStaticResult.state;
 			const encryptedServerStatic = encryptStaticResult.ciphertext;
+			console.log(`[handshake] After encrypting server static: handshakeHash=${bytesToHex(mockState.handshakeHash)}, nonce=${mockState.encryptNonce}`);
 			logger.debug(
 				`[${data.sessionId}] Encrypted server static key (s). Hash updated.`,
 			);
@@ -513,9 +570,9 @@ export function handleNoiseHandshakeMessage(
 				mockState.responderStaticPair.privateKey, // Use stored static private key
 				clientEphemeralForDH, // Use the stored client ephemeral key
 			);
+			console.log(`[MockServer] DH(s, re): server static priv=${bytesToHex(mockState.responderStaticPair.privateKey)}, client eph pub=${bytesToHex(clientEphemeralForDH)}, result=${bytesToHex(dh_es)}`);
 			// Mix Keys based on dh_es -> k2
 			mockState = mixKeys(mockState, dh_es); // Nonce resets to 0
-			logger.debug(`[${data.sessionId}] Mixed keys from DH(s, re).`);
 
 			// 8. Encrypt payload
 			// Uses key 'k2', nonce 0, and AAD = current hash (H(MODE||prologue||e||c1))
@@ -590,9 +647,7 @@ export function handleNoiseHandshakeMessage(
 			mockState = decryptStaticResult.state; // Updates hash and increments nonce to 1
 			const clientStaticPublic = decryptStaticResult.plaintext;
 			mockState.initiatorStaticPublicKey = clientStaticPublic; // Store for later use
-			logger.debug(
-				`[${data.sessionId}] Decrypted client static public key (s). Hash updated.`,
-			);
+			console.log(`[MockServer] After decrypting client static: handshakeHash=${bytesToHex(mockState.handshakeHash)}, nonce=${mockState.decryptNonce}`);
 
 			// 2. Perform DH: DH(e, s) -> DH(server_ephemeral, client_static)
 			if (!mockState.responderEphemeralPair) {
@@ -606,9 +661,9 @@ export function handleNoiseHandshakeMessage(
 				mockState.responderEphemeralPair.privateKey,
 				clientStaticPublic,
 			);
+			console.log(`[MockServer] DH(e, s): server eph priv=${bytesToHex(mockState.responderEphemeralPair.privateKey)}, client static pub=${bytesToHex(clientStaticPublic)}, result=${bytesToHex(dh_se)}`);
 			// Mix Keys based on dh_se -> k3
 			mockState = mixKeys(mockState, dh_se); // Nonce resets to 0
-			logger.debug(`[${data.sessionId}] Mixed keys from DH(e, s).`);
 
 			// 3. Decrypt client payload
 			// AAD = current hash (H(...||c1||c2||c3_static)); Nonce = 0 (reset by mixKeys(dh_se))

@@ -53,10 +53,15 @@ export class NoiseProcessor {
 		const encryptionKey = handshakeHash;
 		const decryptionKey = handshakeHash;
 
+		console.log(`[Client] Initial handshakeHash: ${require("@wha.ts/utils/src/bytes-utils").bytesToHex(handshakeHash)}`);
+
 		handshakeHash = sha256(concatBytes(handshakeHash, noisePrologue));
+		console.log(`[Client] After mixing prologue: ${require("@wha.ts/utils/src/bytes-utils").bytesToHex(handshakeHash)}`);
+
 		handshakeHash = sha256(
 			concatBytes(handshakeHash, localStaticKeyPair.publicKey),
 		);
+		console.log(`[Client] After mixing local static pubkey: ${require("@wha.ts/utils/src/bytes-utils").bytesToHex(handshakeHash)}`);
 
 		this.state = {
 			handshakeHash,
@@ -91,14 +96,18 @@ export class NoiseProcessor {
 
 	private mixIntoHandshakeHash(data: Uint8Array) {
 		if (!this.state.isHandshakeFinished) {
+			const before = this.state.handshakeHash;
+			const after = sha256(concatBytes(this.state.handshakeHash, data));
+			console.log(`[Client] mixIntoHandshakeHash: before=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(before)}, data=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(data)}, after=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(after)}`);
 			this.state = {
 				...this.state,
-				handshakeHash: sha256(concatBytes(this.state.handshakeHash, data)),
+				handshakeHash: after,
 			};
 		}
 	}
 
 	private mixKeys(inputKeyMaterial: Uint8Array) {
+		console.log(`[Client] mixKeys: inputKeyMaterial=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(inputKeyMaterial)}, salt(before)=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.salt)}`);
 		const key = hkdf(inputKeyMaterial, 64, {
 			salt: this.state.salt,
 			info: "",
@@ -113,16 +122,19 @@ export class NoiseProcessor {
 			readCounter: 0,
 			writeCounter: 0,
 		};
+		console.log(`[Client] mixKeys: salt(after)=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(newSalt)}, cipherKey=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(keyUpdate)}`);
 	}
 
 	async encryptMessage(plaintext: Uint8Array) {
 		const nonce = this.generateIV(this.state.writeCounter);
+		console.log(`[Client] encryptMessage: plaintextLen=${plaintext.length}, key=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.encryptionKey)}, nonce=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(nonce)}, aad=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.handshakeHash)}`);
 		const ciphertext = aesEncryptGCM(
 			plaintext,
 			this.state.encryptionKey,
 			nonce,
 			this.state.handshakeHash,
 		);
+		console.log(`[Client] encryptMessage: ciphertextLen=${ciphertext.length}, ciphertext=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(ciphertext)}`);
 		this.state = {
 			...this.state,
 			writeCounter: this.state.writeCounter + 1,
@@ -136,12 +148,14 @@ export class NoiseProcessor {
 			? this.state.readCounter
 			: this.state.writeCounter;
 		const nonce = this.generateIV(counter);
+		console.log(`[Client] decryptMessage: ciphertextLen=${ciphertext.length}, key=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.decryptionKey)}, nonce=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(nonce)}, aad=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.handshakeHash)}`);
 		const plaintext = aesDecryptGCM(
 			ciphertext,
 			this.state.decryptionKey,
 			nonce,
 			this.state.handshakeHash,
 		);
+		console.log(`[Client] decryptMessage: plaintextLen=${plaintext.length}, plaintext=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(plaintext)}`);
 		this.state = {
 			...this.state,
 			readCounter: this.state.isHandshakeFinished
@@ -190,14 +204,22 @@ export class NoiseProcessor {
 			throw new Error("Invalid serverHello message received");
 		}
 		this.mixIntoHandshakeHash(serverHello.ephemeral);
-		this.mixKeys(
-			Curve.sharedKey(localEphemeralKeyPair.privateKey, serverHello.ephemeral),
-		);
+		console.log(`[Client] After mixing server ephemeral: handshakeHash=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.handshakeHash)}`);
+
+		const dh_ee = Curve.sharedKey(localEphemeralKeyPair.privateKey, serverHello.ephemeral);
+		console.log(`[Client] DH(e, re): local eph priv=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(localEphemeralKeyPair.privateKey)}, server eph pub=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(serverHello.ephemeral)}, result=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(dh_ee)}`);
+		this.mixKeys(dh_ee);
+
 		const decryptedServerStatic = await this.decryptMessage(serverHello.static);
-		this.mixKeys(
-			Curve.sharedKey(localEphemeralKeyPair.privateKey, decryptedServerStatic),
-		);
+		console.log(`[Client] After decrypting server static: handshakeHash=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.handshakeHash)}, nonce=${this.state.readCounter}`);
+
+		const dh_es = Curve.sharedKey(localEphemeralKeyPair.privateKey, decryptedServerStatic);
+		console.log(`[Client] DH(e, rs): local eph priv=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(localEphemeralKeyPair.privateKey)}, server static pub=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(decryptedServerStatic)}, result=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(dh_es)}`);
+		this.mixKeys(dh_es);
+
 		const decryptedPayload = await this.decryptMessage(serverHello.payload);
+		console.log(`[Client] After decrypting payload: handshakeHash=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(this.state.handshakeHash)}, nonce=${this.state.readCounter}`);
+
 		const certChain = fromBinary(CertChainSchema, decryptedPayload);
 		const intermediateCertDetailsBytes = certChain.intermediate?.details;
 		if (!intermediateCertDetailsBytes) {
@@ -225,9 +247,11 @@ export class NoiseProcessor {
 		const encryptedLocalStaticPublic = await this.encryptMessage(
 			localStaticKeyPair.publicKey,
 		);
-		this.mixKeys(
-			Curve.sharedKey(localStaticKeyPair.privateKey, serverHello.ephemeral),
-		);
+
+		const dh_se = Curve.sharedKey(localStaticKeyPair.privateKey, serverHello.ephemeral);
+		console.log(`[Client] DH(s, re): local static priv=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(localStaticKeyPair.privateKey)}, server eph pub=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(serverHello.ephemeral)}, result=${require("@wha.ts/utils/src/bytes-utils").bytesToHex(dh_se)}`);
+		this.mixKeys(dh_se);
+
 		return encryptedLocalStaticPublic;
 	}
 
