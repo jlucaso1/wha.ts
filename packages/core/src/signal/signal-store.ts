@@ -10,6 +10,8 @@ import { deserializer, serializer } from "@wha.ts/utils/src/serializer";
 import type { KeyPair, SignedKeyPair } from "@wha.ts/utils/src/types";
 import type { IAuthStateProvider } from "../state/interface";
 
+import { ProtocolAddress } from "@wha.ts/signal/src/protocol_address";
+
 export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 	private logger = console;
 	constructor(private authState: IAuthStateProvider) {}
@@ -140,5 +142,35 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		}
 
 		return undefined;
+	}
+	/**
+	 * Retrieves all session records for all devices of a given user.
+	 * Returns an array of { address: ProtocolAddress, record: SessionRecord }
+	 */
+	async getAllSessionRecordsForUser(
+		userId: string,
+	): Promise<{ address: ProtocolAddress; record: SessionRecord }[]> {
+		const sessions = await this.authState.keys.getAllSessionsForUser(userId);
+		const results: { address: ProtocolAddress; record: SessionRecord }[] = [];
+		for (const [addressStr, sessionData] of Object.entries(sessions)) {
+			if (!sessionData) continue;
+			try {
+				const jsonString =
+					typeof sessionData === "string"
+						? sessionData
+						: bytesToUtf8(sessionData);
+				const plainObject = deserializer(jsonString);
+				const record = SessionRecord.deserialize(plainObject);
+				const protoAddrStr = addressStr.replace(/_([0-9]+)$/, ".$1");
+				const address = ProtocolAddress.from(protoAddrStr);
+				results.push({ address, record });
+			} catch (err) {
+				this.logger.error(
+					{ err, address: addressStr },
+					"Failed to deserialize session record for device",
+				);
+			}
+		}
+		return results;
 	}
 }

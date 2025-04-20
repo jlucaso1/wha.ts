@@ -1,4 +1,4 @@
-import { cbc, ctr, gcm } from "@noble/ciphers/aes";
+import { cbc, gcm } from "@noble/ciphers/aes";
 import { hkdf as nobleHkdf } from "@noble/hashes/hkdf";
 import { hmac as nobleHmac } from "@noble/hashes/hmac";
 import { sha256 as nobleSha256 } from "@noble/hashes/sha2";

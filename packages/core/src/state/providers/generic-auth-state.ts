@@ -115,6 +115,56 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 			throw error;
 		}
 	}
+	/**
+	 * Retrieves all session data for all devices of a given user.
+	 * Returns a mapping from ProtocolAddress string (user@server_deviceId) to session data (Uint8Array).
+	 */
+	async getAllSessionsForUser(
+		userId: string,
+	): Promise<{ [address: string]: SignalDataTypeMap["session"] | undefined }> {
+		const prefix = `${SIGNAL_KEY_PREFIX}session:${userId}_`;
+		let keys: string[] = [];
+		try {
+			keys = await this.storage.getKeys(prefix);
+		} catch (err) {
+			console.error(
+				`[GenericSignalKeyStore] Error getting session keys for user ${userId}:`,
+				err,
+			);
+			return {};
+		}
+		if (!keys.length) return {};
+
+		let items: { key: string; value: string | null }[] = [];
+		try {
+			items = await this.storage.getItems(keys);
+		} catch (err) {
+			console.error(
+				`[GenericSignalKeyStore] Error getting session items for user ${userId}:`,
+				err,
+			);
+			return {};
+		}
+
+		const result: {
+			[address: string]: SignalDataTypeMap["session"] | undefined;
+		} = {};
+		for (const { key, value } of items) {
+			if (value !== null && value !== undefined) {
+				try {
+					const prefixStr = `${SIGNAL_KEY_PREFIX}session:`;
+					const address = key.slice(prefixStr.length);
+					result[address] = deserializer(value) as SignalDataTypeMap["session"];
+				} catch (err) {
+					console.error(
+						`[GenericSignalKeyStore] Error deserializing session for key ${key}:`,
+						err,
+					);
+				}
+			}
+		}
+		return result;
+	}
 }
 
 export class GenericAuthState implements IAuthStateProvider {

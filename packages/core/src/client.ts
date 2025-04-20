@@ -1,11 +1,11 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import { S_WHATSAPP_NET, jidDecode } from "@wha.ts/binary/src/jid-utils";
+import { jidDecode } from "@wha.ts/binary/src/jid-utils";
 import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	MessageSchema,
 	Message_ExtendedTextMessageSchema,
 } from "@wha.ts/proto";
-import { ProtocolAddress, SessionCipher } from "@wha.ts/signal/src";
+import { SessionCipher } from "@wha.ts/signal/src";
 import { padRandomMax16 } from "@wha.ts/utils/src/bytes-utils";
 import type { ClientEventMap } from "./client-events";
 import { Authenticator } from "./core/authenticator";
@@ -22,10 +22,7 @@ import {
 } from "./generics/typed-event-target";
 import { MessageProcessor } from "./messaging/message-processor";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";
-import type {
-	AuthenticationCreds,
-	IAuthStateProvider,
-} from "./state/interface";
+import type { IAuthStateProvider } from "./state/interface";
 import { generateMdTagPrefix } from "./state/utils";
 import type { ILogger, WebSocketConfig } from "./transport/types";
 
@@ -35,6 +32,7 @@ interface ClientConfig {
 	wsOptions?: Partial<WebSocketConfig>;
 	version?: number[];
 	browser?: readonly [string, string, string];
+	connectionManager?: ConnectionManager;
 }
 
 declare interface WhaTSClient {
@@ -53,9 +51,9 @@ declare interface WhaTSClient {
 }
 // biome-ignore lint/suspicious/noUnsafeDeclarationMerging: solve later
 class WhaTSClient extends TypedEventTarget<ClientEventMap> {
-	private config: Required<Omit<ClientConfig, "logger">> & { logger: ILogger };
+	private config: Omit<ClientConfig, "logger"> & { logger: ILogger };
 	private messageProcessor: MessageProcessor;
-	private connectionManager: ConnectionManager;
+	protected connectionManager: ConnectionManager;
 	private authenticator: Authenticator;
 	private epoch = 0;
 	public signalStore: SignalProtocolStoreAdapter;
@@ -88,12 +86,14 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 
 		this.messageProcessor = new MessageProcessor(this.logger, this.signalStore);
 
-		this.connectionManager = new ConnectionManager(
-			this.config.wsOptions as WebSocketConfig,
-			this.logger,
-			this.auth.creds,
-			this.messageProcessor,
-		);
+		this.connectionManager =
+			config.connectionManager ??
+			new ConnectionManager(
+				this.config.wsOptions as WebSocketConfig,
+				this.logger,
+				this.auth.creds,
+				this.messageProcessor,
+			);
 
 		const connectionActions: IConnectionActions = {
 			sendNode: (node) => this.connectionManager.sendNode(node),
@@ -156,6 +156,15 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		);
 	}
 
+	// Public method for test sanity check
+	public isConnectionManagerReady(): boolean {
+		return (
+			!!this.connectionManager &&
+			typeof this.connectionManager.connect === "function" &&
+			typeof this.connectionManager.close === "function"
+		);
+	}
+
 	addListener<K extends keyof ClientEventMap>(
 		event: K,
 		listener: (data: ClientEventMap[K]) => void,
@@ -188,104 +197,89 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	 * @returns The unique message ID generated for this message.
 	 * @throws Throws an error if the JID is invalid, encryption fails, or sending fails.
 	 */
-	async sendTextMessage(
-		jid: string,
-		text: string,
-		specificDeviceId?: number,
-	): Promise<string> {
-		// 1. Validate JID and create ProtocolAddress
+	async sendTextMessage(jid: string, text: string): Promise<string> {
+		// 1. Validate JID and extract base user ID
 		const decodedJid = jidDecode(jid);
 		this.logger.debug(
-			{ decodedJid, originalJid: jid, specificDeviceId },
+			{ decodedJid, originalJid: jid },
 			"Decoding JID for sending message",
 		);
 		if (!decodedJid || !decodedJid.user) {
 			throw new Error(`Invalid JID for text message: ${jid}`);
 		}
-		// Use the provided specificDeviceId if available, otherwise default to 0.
-		// We ignore decodedJid.device here as it's not standard JID format.
-		const targetDeviceId = specificDeviceId ?? 0;
-		const recipientAddress = new ProtocolAddress(
-			decodedJid.user,
-			targetDeviceId,
-		);
+		const userId = `${decodedJid.user}@${decodedJid.server}`;
 
-		// 2. Create Protobuf Message (remains the same)
+		// 2. Get all session records for the recipient
+		const sessionRecords =
+			await this.signalStore.getAllSessionRecordsForUser(userId);
+		if (!sessionRecords.length) {
+			this.logger.error({ userId }, "No active sessions found for recipient");
+			throw new Error(`No active sessions found for recipient ${userId}`);
+		}
+
+		// 3. Prepare message proto and pad it (once)
 		const protoMsg = create(MessageSchema, {
 			extendedTextMessage: create(Message_ExtendedTextMessageSchema, {
 				text: text,
 			}),
 		});
 		const protoBytes = toBinary(MessageSchema, protoMsg);
-
-		// 3. Pad the message (remains the same)
 		const paddedProtoBytes = padRandomMax16(protoBytes);
 
-		// 4. Instantiate SessionCipher (uses the correct recipientAddress with targetDeviceId)
-		const cipher = new SessionCipher(this.signalStore, recipientAddress);
-		this.logger.debug(
-			{ recipient: recipientAddress.toString() },
-			"Instantiated SessionCipher",
-		);
+		// 4. Generate message ID (same for all devices)
+		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
 
-		// 5. Encrypt the message (remains the same logic, but uses correct cipher instance)
-		let encryptedResult: {
-			type: number;
-			body: Uint8Array;
-			registrationId: number;
-		};
-		try {
-			encryptedResult = await cipher.encrypt(paddedProtoBytes);
-			this.logger.debug(
-				{ type: encryptedResult.type },
-				"Encrypted message using SessionCipher",
-			);
-		} catch (err) {
-			this.logger.error(
-				{ err, jid: recipientAddress.toString() },
-				"Failed to encrypt message",
-			);
-			const errorMessage = err instanceof Error ? err.message : String(err);
-			throw new Error(`Encryption failed for ${jid}: ${errorMessage}`);
+		// 5. Encrypt and send for each device/session
+		const nodesToSend: BinaryNode[] = [];
+		for (const { address, record } of sessionRecords) {
+			try {
+				const cipher = new SessionCipher(this.signalStore, address);
+				const encryptedResult = await cipher.encrypt(paddedProtoBytes);
+				const encType = encryptedResult.type === 3 ? "pkmsg" : "msg";
+				const messageNode: BinaryNode = {
+					tag: "message",
+					attrs: {
+						to: userId,
+						id: msgId,
+					},
+					content: [
+						{
+							tag: "enc",
+							attrs: {
+								v: "2",
+								type: encType,
+							},
+							content: encryptedResult.body,
+						},
+					],
+				};
+				nodesToSend.push(messageNode);
+			} catch (error) {
+				this.logger.error(
+					{ err: error, target: address.toString() },
+					"Encryption failed for device, skipping",
+				);
+			}
 		}
 
-		// 6. Construct BinaryNode
-		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
-		const encType = encryptedResult.type === 3 ? "pkmsg" : "msg";
+		this.logger.info(
+			{ count: nodesToSend.length, userId },
+			"Sending message nodes for device fanout",
+		);
 
-		const messageNode: BinaryNode = {
-			tag: "message",
-			attrs: {
-				// Use the base JID (user@server) for the 'to' attribute
-				to: `${decodedJid.user}@${decodedJid.server}`,
-				id: msgId,
-				// participant is needed for group messages, not 1:1
-			},
-			content: [
-				{
-					tag: "enc",
-					attrs: {
-						v: "2",
-						type: encType,
-					},
-					content: encryptedResult.body,
-				},
-			],
-		};
-
-		// 7. Send the node (remains the same)
-
+		// 6. Send all nodes
 		try {
-			await this.connectionManager.sendNode(messageNode);
-
+			for (const node of nodesToSend) {
+				await this.connectionManager.sendNode(node);
+			}
 			return msgId;
 		} catch (err) {
 			this.logger.error(
-				{ err, msgId, to: jid, deviceId: targetDeviceId },
-				"Failed to send message node via ConnectionManager",
+				{ err, msgId, to: jid },
+				"Failed to send one or more message nodes via ConnectionManager",
 			);
 			const errorMessage = err instanceof Error ? err.message : String(err);
-			throw new Error(`Sending message node failed: ${errorMessage}`);
+			throw new Error(`Sending message node(s) failed: ${errorMessage}`);
 		}
 	}
 }

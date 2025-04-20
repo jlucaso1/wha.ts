@@ -73,11 +73,7 @@ async function runExample() {
 			await new Promise((resolve) => setTimeout(resolve, 500));
 
 			try {
-				await client.sendTextMessage(
-					userJid,
-					"test-reply",
-					senderAddress.deviceId,
-				);
+				await client.sendTextMessage(userJid, "test-reply");
 				console.log("[Example] Sent reply successfully.");
 			} catch (error) {
 				console.error("[Example] Failed to send reply:", error);

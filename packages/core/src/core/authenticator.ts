@@ -34,7 +34,6 @@ import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "../generics/typed-event-target";
-import { SignalProtocolStoreAdapter } from "../signal/signal-store";
 import { generatePreKeys } from "../state/utils";
 import {
 	formatPreKeyForXMPP,

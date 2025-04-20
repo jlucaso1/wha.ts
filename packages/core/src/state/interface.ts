@@ -55,6 +55,14 @@ export interface ISignalProtocolStore {
 	): Promise<{ [id: string]: SignalDataTypeMap[T] | undefined }>;
 
 	set(data: SignalDataSet): Promise<void>;
+
+	/**
+	 * Retrieves all session data for all devices of a given user.
+	 * The returned object maps ProtocolAddress strings (user@server_deviceId) to session data.
+	 */
+	getAllSessionsForUser(
+		userId: string,
+	): Promise<{ [address: string]: SignalDataTypeMap["session"] | undefined }>;
 }
 
 /** Interface for the overall authentication state provider */
