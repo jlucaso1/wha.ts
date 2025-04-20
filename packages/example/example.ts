@@ -85,10 +85,6 @@ async function runExample() {
 		}
 	});
 
-	client.addListener("node.received", (node) => {
-		console.log("[NODE RECEIVED]", node);
-	});
-
 	try {
 		await client.connect();
 		console.log(

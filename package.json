@@ -7,6 +7,8 @@
 		"build": "bun run --filter '*' build",
 		"build:core": "bun run --filter \"@wha.ts/core\" build",
 		"build:extension": "bun run --filter \"@wha.ts/extension\" build",
+		"example": "bun packages/example/example.ts",
+		"example:web": "bun packages/example/index.html",
 		"test": "bun test",
 		"lint": "biome check . --write",
 		"format": "biome format --write .",
