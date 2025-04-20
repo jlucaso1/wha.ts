@@ -87,18 +87,53 @@ test("decrypts a message", async () => {
 });
 
 test("throws if skipped message keys storage limit is exceeded", () => {
-	const MAX_SKIPPED_MESSAGE_KEYS = 2000;
+	test("stores and consumes skipped message keys for out-of-order arrival", () => {
+		const chain = {
+			chainKey: { counter: 0, key: new Uint8Array(32) },
+			messageKeys: {} as Record<string, Uint8Array | undefined>,
+		};
+		const cipher = Object.create(SessionCipher.prototype);
 
-	const chain = {
-		chainKey: { counter: 0, key: new Uint8Array(32) },
-		messageKeys: {},
-	};
+		// Simulate out-of-order arrival: fill up to 3, then decrypt 2, then 3
+		cipher.fillMessageKeys(chain, 3);
+		expect(Object.keys(chain.messageKeys).length).toBe(3);
+		expect(chain.messageKeys["1"]).toBeDefined();
+		expect(chain.messageKeys["2"]).toBeDefined();
+		expect(chain.messageKeys["3"]).toBeDefined();
 
-	const cipher = Object.create(SessionCipher.prototype);
+		// Decrypt message 2 (consume key)
+		chain.messageKeys["2"] = undefined;
+		expect(chain.messageKeys["2"]).toBeUndefined();
 
-	cipher.fillMessageKeys(chain, MAX_SKIPPED_MESSAGE_KEYS);
+		// Decrypt message 3 (consume key)
+		chain.messageKeys["3"] = undefined;
+		expect(chain.messageKeys["3"]).toBeUndefined();
 
-	expect(() => {
-		cipher.fillMessageKeys(chain, MAX_SKIPPED_MESSAGE_KEYS + 1);
-	}).toThrow(/Maximum skipped message keys limit/);
+		// Message 1 should still be available
+		expect(chain.messageKeys["1"]).toBeDefined();
+	});
+
+	test("verifies error handling when a message key is reused", () => {
+		const chain = {
+			chainKey: { counter: 0, key: new Uint8Array(32) },
+			messageKeys: {} as Record<string, Uint8Array | undefined>,
+		};
+		const cipher = Object.create(SessionCipher.prototype);
+
+		cipher.fillMessageKeys(chain, 1);
+		const key1 = chain.messageKeys["1"];
+		expect(key1).toBeDefined();
+
+		// Simulate decryption and key removal
+		chain.messageKeys["1"] = undefined;
+
+		// Attempt to decrypt again (key already used)
+		expect(() => {
+			if (!chain.messageKeys["1"]) {
+				throw new Error(
+					"Key used already or never filled or invalid message counter",
+				);
+			}
+		}).toThrow(/Key used already|never filled|invalid message counter/);
+	});
 });

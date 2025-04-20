@@ -231,7 +231,7 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 
 		// 5. Encrypt and send for each device/session
 		const nodesToSend: BinaryNode[] = [];
-		for (const { address, record } of sessionRecords) {
+		for (const { address } of sessionRecords) {
 			try {
 				const cipher = new SessionCipher(this.signalStore, address);
 				const encryptedResult = await cipher.encrypt(paddedProtoBytes);

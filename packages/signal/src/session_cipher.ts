@@ -298,16 +298,12 @@ export class SessionCipher {
 			throw new Error("Tried to decrypt on a sending chain");
 		}
 		this.fillMessageKeys(chain, message.counter);
-		if (
-			!Object.prototype.hasOwnProperty.call(chain.messageKeys, message.counter)
-		) {
-			throw new Error("Key used already or never filled");
-		}
 		const messageKey = chain.messageKeys[message.counter];
 		if (!messageKey) {
-			throw new Error("Message key is undefined");
+			throw new Error(
+				"Key used already or never filled or invalid message counter",
+			);
 		}
-		delete chain.messageKeys[message.counter];
 		const keys = hkdfSignalDeriveSecrets(
 			messageKey,
 			new Uint8Array(32),
@@ -325,6 +321,7 @@ export class SessionCipher {
 			message.ciphertext,
 			keys[2].slice(0, 16),
 		);
+		delete chain.messageKeys[message.counter];
 		session.pendingPreKey = undefined;
 		return plaintext;
 	}
@@ -336,33 +333,22 @@ export class SessionCipher {
 		},
 		counter: number,
 	): void {
-		if (chain.chainKey.counter >= counter) {
-			return;
-		}
-		if (counter - chain.chainKey.counter > 2000) {
-			throw new Error("Over 2000 messages into the future!");
+		if (counter - chain.chainKey.counter > MAX_SKIPPED_MESSAGE_KEYS) {
+			throw new Error("Too many messages skipped");
 		}
 		if (chain.chainKey.key == null) {
-			throw new Error("Chain closed");
+			throw new Error("Chain closed, cannot derive keys");
 		}
-
-		// Enforce maximum skipped message keys storage
-		const currentSize = Object.keys(chain.messageKeys).length;
-		const keysToAdd = counter - chain.chainKey.counter;
-		if (currentSize + keysToAdd > MAX_SKIPPED_MESSAGE_KEYS) {
-			throw new Error(
-				`Maximum skipped message keys limit (${MAX_SKIPPED_MESSAGE_KEYS}) exceeded. Cannot store key for counter ${counter}. Current size: ${currentSize}, would add: ${keysToAdd}.`,
-			);
+		for (let i = chain.chainKey.counter + 1; i <= counter; i++) {
+			if (Object.keys(chain.messageKeys).length >= MAX_SKIPPED_MESSAGE_KEYS) {
+				throw new Error("Skipped message keys storage limit reached");
+			}
+			const messageKey = hmacSign(chain.chainKey.key, new Uint8Array([1]));
+			const nextChainKey = hmacSign(chain.chainKey.key, new Uint8Array([2]));
+			chain.messageKeys[i] = messageKey;
+			chain.chainKey.key = nextChainKey;
+			chain.chainKey.counter = i;
 		}
-
-		const key = chain.chainKey.key;
-		chain.messageKeys[chain.chainKey.counter + 1] = hmacSign(
-			key,
-			new Uint8Array([1]),
-		);
-		chain.chainKey.key = hmacSign(key, new Uint8Array([2]));
-		chain.chainKey.counter += 1;
-		this.fillMessageKeys(chain, counter);
 	}
 
 	private maybeStepRatchet(
