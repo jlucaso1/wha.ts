@@ -26,7 +26,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		return this.socket?.readyState === CLOSING;
 	}
 
-	once(eventName: string, listener: (...args: any[]) => void) {
+	once(eventName: string, listener: (...args: unknown[]) => void) {
 		const handler = (event: Event | CustomEvent) => {
 			if (event instanceof CustomEvent) {
 				listener(event.detail);
@@ -54,8 +54,8 @@ export class NativeWebSocketClient extends IWebSocketClient {
 								rej(err);
 							};
 						} else {
-							this.once("open", res);
-							this.once("error", rej);
+							this.once("open", () => res());
+							this.once("error", (err) => rej(err));
 							this.once("close", () =>
 								rej(new Error("WebSocket closed during connection attempt")),
 							);
@@ -118,7 +118,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		}
 
 		return new Promise((resolve) => {
-			this.once("close", resolve);
+			this.once("close", () => resolve());
 			this.socket?.close(code, reason);
 		});
 	}
