@@ -1,3 +1,4 @@
+import { isBytes } from "@wha.ts/utils/src/bytes-utils";
 import { deserializer, serializer } from "@wha.ts/utils/src/serializer";
 import { type Storage, createStorage } from "unstorage";
 import type {
@@ -122,22 +123,42 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 	async getAllSessionsForUser(
 		userId: string,
 	): Promise<{ [address: string]: SignalDataTypeMap["session"] | undefined }> {
-		const prefix = `${SIGNAL_KEY_PREFIX}session:${userId}_`;
-		let keys: string[] = [];
+		const userNumber = userId.split("@")[0];
+		if (!userNumber) return {};
+
+		const allSessionKeysPrefix = `${SIGNAL_KEY_PREFIX}session:`;
+		let allSessionKeys: string[] = [];
 		try {
-			keys = await this.storage.getKeys(prefix);
+			allSessionKeys = await this.storage.getKeys(allSessionKeysPrefix);
 		} catch (err) {
 			console.error(
-				`[GenericSignalKeyStore] Error getting session keys for user ${userId}:`,
+				"[GenericSignalKeyStore] Error getting all session keys:",
 				err,
 			);
 			return {};
 		}
-		if (!keys.length) return {};
 
-		let items: { key: string; value: string | null }[] = [];
+		const userSessionKeys = allSessionKeys.filter((key) => {
+			const keyBody = key.slice(allSessionKeysPrefix.length);
+			const keyUserPart = keyBody.split(".")[0];
+			return keyUserPart === userNumber;
+		});
+
+		if (!userSessionKeys.length) return {};
+
+		let items: { key: string; value: Uint8Array }[] = [];
 		try {
-			items = await this.storage.getItems(keys);
+			const batchResults = await this.storage.getItems(userSessionKeys);
+
+			const resultMap = new Map<string, Uint8Array>();
+			for (const item of batchResults) {
+				resultMap.set(item.key, deserializer(JSON.stringify(item.value)));
+			}
+
+			items = Array.from(resultMap.entries()).map(([key, value]) => ({
+				key,
+				value,
+			}));
 		} catch (err) {
 			console.error(
 				`[GenericSignalKeyStore] Error getting session items for user ${userId}:`,
@@ -150,17 +171,33 @@ class GenericSignalKeyStore implements ISignalProtocolStore {
 			[address: string]: SignalDataTypeMap["session"] | undefined;
 		} = {};
 		for (const { key, value } of items) {
-			if (value !== null && value !== undefined) {
+			if (value !== null && value !== undefined && isBytes(value)) {
 				try {
-					const prefixStr = `${SIGNAL_KEY_PREFIX}session:`;
-					const address = key.slice(prefixStr.length);
-					result[address] = deserializer(value) as SignalDataTypeMap["session"];
+					const address = key.slice(allSessionKeysPrefix.length);
+
+					if (value instanceof Uint8Array) {
+						result[address] = value;
+					} else if (Array.isArray(value)) {
+						result[address] = new Uint8Array(value);
+					} else {
+						console.error(
+							`[GenericSignalKeyStore] Deserialized value for key ${key} is not a Uint8Array or convertible array:`,
+							typeof value,
+						);
+					}
 				} catch (err) {
+					const errorMessage = err instanceof Error ? err.message : String(err);
 					console.error(
-						`[GenericSignalKeyStore] Error deserializing session for key ${key}:`,
+						`[GenericSignalKeyStore] Error deserializing session for key ${key}: ${errorMessage}`,
 						err,
 					);
 				}
+			} else if (value !== null && value !== undefined) {
+				console.warn(
+					`[GenericSignalKeyStore] Unexpected value type for key ${key}:`,
+					typeof value,
+					value,
+				);
 			}
 		}
 		return result;
@@ -212,7 +249,6 @@ export class GenericAuthState implements IAuthStateProvider {
 		const keyStore = new GenericSignalKeyStore(storage);
 		const authState = new GenericAuthState(creds, keyStore, storage);
 
-		// Generate and store initial pre-keys ONLY if creds were newly initialized
 		if (!loadedCreds) {
 			const INITIAL_PREKEY_COUNT = 30;
 			const preKeys = generatePreKeys(creds.nextPreKeyId, INITIAL_PREKEY_COUNT);

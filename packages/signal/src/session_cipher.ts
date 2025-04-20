@@ -125,7 +125,6 @@ export class SessionCipher {
 			result.set(msgBuf, 1);
 			result.set(mac.slice(0, 8), msgBuf.byteLength + 1);
 			await this.storeRecord(record);
-			console.log("[encrypt]", session);
 			let type: number;
 			let body: Uint8Array;
 			if (session.pendingPreKey) {
