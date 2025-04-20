@@ -22,6 +22,7 @@ type JidWithDevice = {
 export type FullJid = JidWithDevice & {
 	server: JidServer;
 	domainType?: number;
+	integrator?: number;
 };
 
 export const jidEncode = (

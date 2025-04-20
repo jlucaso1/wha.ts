@@ -37,8 +37,37 @@ const encodeBinaryNodeInner = (
 		writer.writeBytes(bytes);
 	};
 
-	const writeJid = ({ domainType, device, user, server }: FullJid) => {
-		if (typeof device !== "undefined") {
+	const writeJid = ({
+		domainType,
+		device,
+		user,
+		server,
+		integrator,
+	}: FullJid) => {
+		if (
+			server === "interop" &&
+			typeof device === "number" &&
+			typeof integrator === "number"
+		) {
+			writer.writeByte(TAGS.INTEROP_JID);
+			if (user?.length) {
+				writeString(user);
+			} else {
+				writer.writeByte(TAGS.LIST_EMPTY);
+			}
+			writer.writeInt(device, 2);
+			writer.writeInt(integrator, 2);
+			writeString(server);
+		} else if (server === "msgr" && typeof device === "number") {
+			writer.writeByte(TAGS.FB_JID);
+			if (user?.length) {
+				writeString(user);
+			} else {
+				writer.writeByte(TAGS.LIST_EMPTY);
+			}
+			writer.writeInt(device, 2);
+			writeString(server);
+		} else if (typeof device !== "undefined") {
 			writer.writeByte(TAGS.AD_JID);
 			writer.writeByte(domainType || 0);
 			writer.writeByte(device || 0);

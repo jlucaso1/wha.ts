@@ -1,4 +1,4 @@
-import { deflateSync } from "fflate";
+import { inflateSync } from "fflate";
 import {
 	DOUBLE_BYTE_TOKENS,
 	SINGLE_BYTE_TOKENS,
@@ -14,7 +14,7 @@ const decompressingIfRequired = (originalBuffer: Uint8Array) => {
 
 	const buffer = originalBuffer.slice(1);
 	if (prefix && (prefix & 2) !== 0) {
-		const decompressedData = deflateSync(buffer);
+		const decompressedData = inflateSync(buffer);
 		return decompressedData;
 	}
 	return buffer;
@@ -127,6 +127,19 @@ const decodeDecompressedBinaryNode = (reader: BinaryReader): BinaryNode => {
 			case TAGS.HEX_8:
 			case TAGS.NIBBLE_8:
 				return readPacked8(tag);
+			case TAGS.INTEROP_JID: {
+				const user = readString(reader.readByte());
+				const device = reader.readInt(2);
+				const integrator = reader.readInt(2);
+				const server = readString(reader.readByte());
+				return `${user}:${device}:${integrator}@${server}`;
+			}
+			case TAGS.FB_JID: {
+				const user = readString(reader.readByte());
+				const device = reader.readInt(2);
+				const server = readString(reader.readByte());
+				return `${user}:${device}@${server}`;
+			}
 			default:
 				throw new Error(`invalid string with tag: ${tag}`);
 		}
