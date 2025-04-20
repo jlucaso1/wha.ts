@@ -4,9 +4,14 @@ import {
 	CertChain_NoiseCertificate_DetailsSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
-import { NOISE_MODE, WA_CERT_DETAILS } from "../defaults";
+import { NOISE_MODE, WHATSAPP_ROOT_CA_PUBLIC_KEY } from "../defaults";
 
-import { concatBytes, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import {
+	bytesToHex,
+	concatBytes,
+	equalBytes,
+	utf8ToBytes,
+} from "@wha.ts/utils/src/bytes-utils";
 import {
 	aesDecryptGCM,
 	aesEncryptGCM,
@@ -199,29 +204,90 @@ export class NoiseProcessor {
 		);
 		const decryptedPayload = await this.decryptMessage(serverHello.payload);
 		const certChain = fromBinary(CertChainSchema, decryptedPayload);
-		const intermediateCertDetailsBytes = certChain.intermediate?.details;
-		if (!intermediateCertDetailsBytes) {
+
+		const leafCert = certChain.leaf;
+		const intermediateCert = certChain.intermediate;
+
+		if (!leafCert?.details || !leafCert.signature) {
 			throw new Error(
-				"Invalid certificate: Missing intermediate certificate details",
+				"Invalid certificate: Missing leaf certificate details or signature",
 			);
 		}
-		const decodedCertDetails = fromBinary(
+		if (!intermediateCert?.details || !intermediateCert.signature) {
+			throw new Error(
+				"Invalid certificate: Missing intermediate certificate details or signature",
+			);
+		}
+
+		const leafCertDetailsBytes = leafCert.details;
+		const intermediateCertDetailsBytes = intermediateCert.details;
+
+		const leafCertDetails = fromBinary(
+			CertChain_NoiseCertificate_DetailsSchema,
+			leafCertDetailsBytes,
+		);
+		const intermediateCertDetails = fromBinary(
 			CertChain_NoiseCertificate_DetailsSchema,
 			intermediateCertDetailsBytes,
 		);
-		const issuerSerial = decodedCertDetails.issuerSerial;
-		if (issuerSerial === null || issuerSerial !== WA_CERT_DETAILS.SERIAL) {
-			this.state.logger.error(
-				{
-					expected: WA_CERT_DETAILS.SERIAL,
-					received: issuerSerial,
-				},
-				"Certificate serial mismatch",
-			);
+
+		if (!leafCertDetails.key) {
 			throw new Error(
-				`Server certificate validation failed. Expected serial ${WA_CERT_DETAILS.SERIAL}, received ${issuerSerial}`,
+				"Invalid certificate: Missing public key in leaf certificate details",
 			);
 		}
+		if (!intermediateCertDetails.key) {
+			throw new Error(
+				"Invalid certificate: Missing public key in intermediate certificate details",
+			);
+		}
+
+		const leafCertPubKey = leafCertDetails.key;
+		const intermediateCertPubKey = intermediateCertDetails.key;
+
+		// 1. Verify intermediate certificate signature with Root CA key
+		const isIntermediateCertValid = Curve.verify(
+			WHATSAPP_ROOT_CA_PUBLIC_KEY,
+			intermediateCertDetailsBytes,
+			intermediateCert.signature,
+		);
+		if (!isIntermediateCertValid) {
+			this.state.logger.error(
+				{},
+				"Intermediate certificate validation failed!",
+			);
+			throw new Error(
+				"Server certificate validation failed: Invalid intermediate certificate signature",
+			);
+		}
+
+		// 2. Verify leaf certificate signature with intermediate cert key
+		const isLeafCertValid = Curve.verify(
+			intermediateCertPubKey,
+			leafCertDetailsBytes,
+			leafCert.signature,
+		);
+		if (!isLeafCertValid) {
+			this.state.logger.error({}, "Leaf certificate validation failed!");
+			throw new Error(
+				"Server certificate validation failed: Invalid leaf certificate signature",
+			);
+		}
+
+		// 3. Match decrypted server static key with leaf cert key
+		if (!equalBytes(decryptedServerStatic, leafCertPubKey)) {
+			this.state.logger.error(
+				{
+					decryptedKeyHex: bytesToHex(decryptedServerStatic),
+					leafCertKeyHex: bytesToHex(leafCertPubKey),
+				},
+				"Server static key mismatch!",
+			);
+			throw new Error(
+				"Server certificate validation failed: Decrypted server static key does not match leaf certificate public key",
+			);
+		}
+
 		const encryptedLocalStaticPublic = await this.encryptMessage(
 			localStaticKeyPair.publicKey,
 		);
