@@ -24,7 +24,9 @@
 				"noExplicitAny": "warn"
 			},
 			"correctness": {
-				"noUnusedImports": "warn"
+				"noUnusedImports": "warn",
+				"noUnusedPrivateClassMembers": "warn",
+				"noUnusedVariables": "warn"
 			}
 		}
 	},
