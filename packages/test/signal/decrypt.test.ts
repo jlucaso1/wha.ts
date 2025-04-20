@@ -85,3 +85,20 @@ test("decrypts a message", async () => {
 		"Bom dia",
 	);
 });
+
+test("throws if skipped message keys storage limit is exceeded", () => {
+	const MAX_SKIPPED_MESSAGE_KEYS = 2000;
+
+	const chain = {
+		chainKey: { counter: 0, key: new Uint8Array(32) },
+		messageKeys: {},
+	};
+
+	const cipher = Object.create(SessionCipher.prototype);
+
+	cipher.fillMessageKeys(chain, MAX_SKIPPED_MESSAGE_KEYS);
+
+	expect(() => {
+		cipher.fillMessageKeys(chain, MAX_SKIPPED_MESSAGE_KEYS + 1);
+	}).toThrow(/Maximum skipped message keys limit/);
+});

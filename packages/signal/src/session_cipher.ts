@@ -18,6 +18,8 @@ import type { SignalSessionStorage } from "./types";
 
 const VERSION = 3;
 
+const MAX_SKIPPED_MESSAGE_KEYS = 2000;
+
 export class SessionCipher {
 	private addr: ProtocolAddress;
 	private storage: SignalSessionStorage;
@@ -343,6 +345,16 @@ export class SessionCipher {
 		if (chain.chainKey.key == null) {
 			throw new Error("Chain closed");
 		}
+
+		// Enforce maximum skipped message keys storage
+		const currentSize = Object.keys(chain.messageKeys).length;
+		const keysToAdd = counter - chain.chainKey.counter;
+		if (currentSize + keysToAdd > MAX_SKIPPED_MESSAGE_KEYS) {
+			throw new Error(
+				`Maximum skipped message keys limit (${MAX_SKIPPED_MESSAGE_KEYS}) exceeded. Cannot store key for counter ${counter}. Current size: ${currentSize}, would add: ${keysToAdd}.`,
+			);
+		}
+
 		const key = chain.chainKey.key;
 		chain.messageKeys[chain.chainKey.counter + 1] = hmacSign(
 			key,
