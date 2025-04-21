@@ -1,5 +1,10 @@
 import { expect, mock, spyOn, test } from "bun:test";
 import { createWAClient } from "@wha.ts/core/src/client";
+import type { ConnectionManager } from "@wha.ts/core/src/core/connection";
+import type {
+	AuthenticationCreds,
+	ISignalProtocolStore,
+} from "@wha.ts/core/src/state/interface";
 import { ProtocolAddress } from "@wha.ts/signal/src/protocol_address";
 import { SessionCipher } from "@wha.ts/signal/src/session_cipher";
 
@@ -8,11 +13,11 @@ test("sendTextMessage fans out to all recipient devices", async () => {
 		getAllSessionRecordsForUser: mock().mockResolvedValue([
 			{
 				address: new ProtocolAddress("12345", 0),
-				record: {} as any,
+				record: {},
 			},
 			{
 				address: new ProtocolAddress("12345", 1),
-				record: {} as any,
+				record: {},
 			},
 		]),
 	};
@@ -38,8 +43,8 @@ test("sendTextMessage fans out to all recipient devices", async () => {
 
 	const client = createWAClient({
 		auth: {
-			creds: {} as any,
-			keys: {} as any,
+			creds: {} as AuthenticationCreds,
+			keys: {} as ISignalProtocolStore,
 			saveCreds: async () => {},
 		},
 		logger: console,
@@ -48,10 +53,10 @@ test("sendTextMessage fans out to all recipient devices", async () => {
 			addEventListener: () => {},
 			connect: mock().mockResolvedValue(undefined),
 			close: mock().mockResolvedValue(undefined),
-		} as any,
+		} as unknown as ConnectionManager,
 	});
 	Object.assign(client, {
-		signalStore: mockSignalStore as any,
+		signalStore: mockSignalStore,
 	});
 
 	const msgId = await client.sendTextMessage("12345@s.whatsapp.net", "hello");
@@ -64,7 +69,7 @@ test("sendTextMessage fans out to all recipient devices", async () => {
 	expect(encryptMock).toHaveBeenCalledTimes(2);
 	expect(sendNodeMock).toHaveBeenCalledTimes(2);
 
-	const sentNodes = sendNodeMock.mock.calls.map((call: any) => call[0]);
+	const sentNodes = sendNodeMock.mock.calls.map((call) => call[0]);
 	expect(sentNodes[0].attrs.to).toBe("12345@s.whatsapp.net");
 	expect(sentNodes[1].attrs.to).toBe("12345@s.whatsapp.net");
 	expect(sentNodes[0].attrs.id).toBe(msgId);
