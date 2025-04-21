@@ -301,7 +301,7 @@ export class SessionRecord {
 		return obj;
 	}
 
-	serialize(outputFormat: "binary" | "object" = "binary"): Uint8Array | object {
+	serialize(): Uint8Array {
 		const protoRecord = create(ProtoSessionRecordSchema);
 		protoRecord.version = this.version;
 
@@ -318,9 +318,6 @@ export class SessionRecord {
 			}
 		}
 
-		if (outputFormat === "object") {
-			return protoRecord;
-		}
 		return toBinary(ProtoSessionRecordSchema, protoRecord);
 	}
 
