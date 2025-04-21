@@ -1,5 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
+	type CertChain,
 	CertChainSchema,
 	CertChain_NoiseCertificate_DetailsSchema,
 	HandshakeMessageSchema,
@@ -205,6 +206,21 @@ export class NoiseProcessor {
 		const decryptedPayload = await this.decryptMessage(serverHello.payload);
 		const certChain = fromBinary(CertChainSchema, decryptedPayload);
 
+		this.verifyCertificateChain(certChain, decryptedServerStatic);
+
+		const encryptedLocalStaticPublic = await this.encryptMessage(
+			localStaticKeyPair.publicKey,
+		);
+		this.mixKeys(
+			Curve.sharedKey(localStaticKeyPair.privateKey, serverHello.ephemeral),
+		);
+		return encryptedLocalStaticPublic;
+	}
+
+	private verifyCertificateChain(
+		certChain: CertChain,
+		decryptedServerStatic: Uint8Array,
+	): void {
 		const leafCert = certChain.leaf;
 		const intermediateCert = certChain.intermediate;
 
@@ -287,14 +303,6 @@ export class NoiseProcessor {
 				"Server certificate validation failed: Decrypted server static key does not match leaf certificate public key",
 			);
 		}
-
-		const encryptedLocalStaticPublic = await this.encryptMessage(
-			localStaticKeyPair.publicKey,
-		);
-		this.mixKeys(
-			Curve.sharedKey(localStaticKeyPair.privateKey, serverHello.ephemeral),
-		);
-		return encryptedLocalStaticPublic;
 	}
 
 	private generateIV(counter: number) {

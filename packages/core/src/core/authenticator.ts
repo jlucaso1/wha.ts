@@ -9,6 +9,7 @@ import type { BinaryNode } from "@wha.ts/binary/src/types";
 import {
 	ADVDeviceIdentitySchema,
 	type ADVSignedDeviceIdentity,
+	type ADVSignedDeviceIdentityHMAC,
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
@@ -21,7 +22,6 @@ import type { ConnectionManager } from "./connection";
 
 import {
 	bytesToBase64,
-	bytesToHex,
 	bytesToUtf8,
 	concatBytes,
 	equalBytes,
@@ -290,7 +290,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				"Missing device-identity content or device jid in pair-success node",
 			);
 		}
-
 		if (!(deviceIdentityNode.content instanceof Uint8Array)) {
 			throw new Error("Invalid device-identity content");
 		}
@@ -299,48 +298,13 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			ADVSignedDeviceIdentityHMACSchema,
 			deviceIdentityNode.content,
 		);
-
-		if (!hmacIdentity.details || !hmacIdentity.hmac) {
-			throw new Error("Invalid ADVSignedDeviceIdentityHMAC structure");
-		}
-
-		const advSign = hmacSign(creds.advSecretKey, hmacIdentity.details);
-
-		if (!equalBytes(hmacIdentity.hmac, advSign)) {
-			console.error("HMAC Details:", bytesToHex(hmacIdentity.details));
-			console.error("ADV Key:", creds.advSecretKey);
-			console.error("Received HMAC:", bytesToHex(hmacIdentity.hmac));
-			console.error("Calculated HMAC:", bytesToHex(advSign));
-			throw new Error("Invalid ADV account signature HMAC");
-		}
+		this.verifyDeviceIdentityHMAC(creds, hmacIdentity);
 
 		const account = fromBinary(
 			ADVSignedDeviceIdentitySchema,
 			hmacIdentity.details,
 		);
-		if (
-			!account.details ||
-			!account.accountSignatureKey ||
-			!account.accountSignature
-		) {
-			throw new Error("Invalid ADVSignedDeviceIdentity structure");
-		}
-
-		const accountMsg = concatBytes(
-			new Uint8Array([6, 0]),
-			account.details,
-			creds.signedIdentityKey.publicKey,
-		);
-
-		if (
-			!Curve.verify(
-				account.accountSignatureKey,
-				accountMsg,
-				account.accountSignature,
-			)
-		) {
-			throw new Error("Invalid account signature");
-		}
+		this.verifyAccountSignature(account, creds);
 
 		const deviceMsg = concatBytes(
 			new Uint8Array([6, 1]),
@@ -376,22 +340,55 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			pairingCode: undefined,
 		};
 
-		const encodeReplyAccount = (acc: typeof updatedAccount): Uint8Array => {
-			const replyAcc = create(ADVSignedDeviceIdentitySchema, acc);
-			return toBinary(ADVSignedDeviceIdentitySchema, replyAcc);
-		};
-		const accountEnc = encodeReplyAccount(updatedAccount);
+		const reply = this.buildPairingReplyNode(msgId, updatedAccount);
 
-		if (!updatedAccount.details) {
-			throw new Error("Missing device identity details");
+		return { creds: authUpdate, reply };
+	}
+
+	private verifyDeviceIdentityHMAC(
+		creds: AuthenticationCreds,
+		hmacIdentity: ADVSignedDeviceIdentityHMAC,
+	): void {
+		const advSign = hmacSign(creds.advSecretKey, hmacIdentity.details);
+		if (!equalBytes(hmacIdentity.hmac, advSign)) {
+			throw new Error("Invalid ADV account signature HMAC");
 		}
+	}
+
+	private verifyAccountSignature(
+		account: ADVSignedDeviceIdentity,
+		creds: AuthenticationCreds,
+	): void {
+		const accountMsg = concatBytes(
+			new Uint8Array([6, 0]),
+			account.details,
+			creds.signedIdentityKey.publicKey,
+		);
+		if (
+			!Curve.verify(
+				account.accountSignatureKey,
+				accountMsg,
+				account.accountSignature,
+			)
+		) {
+			throw new Error("Invalid account signature");
+		}
+	}
+
+	private buildPairingReplyNode(
+		msgId: string,
+		updatedAccount: ADVSignedDeviceIdentity,
+	): BinaryNode {
+		const accountEnc = (() => {
+			const replyAcc = create(ADVSignedDeviceIdentitySchema, updatedAccount);
+			return toBinary(ADVSignedDeviceIdentitySchema, replyAcc);
+		})();
 
 		const deviceIdentity = fromBinary(
 			ADVDeviceIdentitySchema,
 			updatedAccount.details,
 		);
-
-		const reply: BinaryNode = {
+		return {
 			tag: "iq",
 			attrs: {
 				to: S_WHATSAPP_NET,
@@ -412,8 +409,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				},
 			],
 		};
-
-		return { creds: authUpdate, reply };
 	}
 
 	private async handlePairSuccessIQ(node: BinaryNode): Promise<void> {
