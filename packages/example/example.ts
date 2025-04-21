@@ -54,6 +54,13 @@ async function runExample() {
 		console.log("[CREDS UPDATE]", "Credentials were updated.");
 	});
 
+	client.addListener("node.received", ({ node }) => {
+		console.log("[NODE RECEIVED]", {
+			tag: node.tag,
+			attrs: node.attrs,
+		});
+	});
+
 	client.addListener("message.received", async (messageData) => {
 		console.info(messageData, "[Example] received message");
 
