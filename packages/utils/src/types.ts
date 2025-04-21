@@ -6,7 +6,7 @@ export type SignedKeyPair = {
 	keyId: number;
 };
 
-export type ProtocolAddress = {
+type ProtocolAddress = {
 	name: string;
 	deviceId: number;
 };

@@ -18,5 +18,3 @@ export const DEFAULT_SOCKET_CONFIG = {
 	defaultQueryTimeoutMs: 60_000,
 	origin: DEFAULT_ORIGIN,
 };
-
-export const WA_CERT_DETAILS = { SERIAL: 0 };
