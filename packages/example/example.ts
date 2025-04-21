@@ -62,8 +62,6 @@ async function runExample() {
 	});
 
 	client.addListener("message.received", async (messageData) => {
-		console.info(messageData, "[Example] received message");
-
 		const messageContent = messageData.message;
 		const senderAddress = messageData.sender;
 
