@@ -40,28 +40,17 @@ export class NativeWebSocketClient extends IWebSocketClient {
 	connect(): Promise<void> {
 		if (this.socket && this.socket.readyState !== CLOSED) {
 			this.config.logger.warn({}, "WebSocket already connecting or open");
-			return this.isConnecting
-				? new Promise((res, rej) => {
-						if (this.connectionPromise) {
-							const originalResolve = this.connectionPromise.resolve;
-							const originalReject = this.connectionPromise.reject;
-							this.connectionPromise.resolve = () => {
-								originalResolve();
-								res();
-							};
-							this.connectionPromise.reject = (err) => {
-								originalReject(err);
-								rej(err);
-							};
-						} else {
-							this.once("open", () => res());
-							this.once("error", (err) => rej(err));
-							this.once("close", () =>
-								rej(new Error("WebSocket closed during connection attempt")),
-							);
-						}
-					})
-				: Promise.resolve();
+			if (this.isConnecting && this.connectionPromise) {
+				// Always return the same promise if already connecting
+				return new Promise((res, rej) => {
+					this.once("open", () => res());
+					this.once("error", (err) => rej(err));
+					this.once("close", () =>
+						rej(new Error("WebSocket closed during connection attempt")),
+					);
+				});
+			}
+			return Promise.resolve();
 		}
 
 		return new Promise<void>((resolve, reject) => {

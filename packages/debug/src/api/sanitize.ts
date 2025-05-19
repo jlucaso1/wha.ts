@@ -9,7 +9,7 @@ export function sanitizeObjectForJSON(obj: any): any {
 	if (obj instanceof Uint8Array) {
 		return bytesToBase64(obj);
 	}
-	if (obj === null || typeof obj !== "object") {
+	if (typeof obj !== "object" || obj === null) {
 		return obj;
 	}
 	if (Array.isArray(obj)) {
