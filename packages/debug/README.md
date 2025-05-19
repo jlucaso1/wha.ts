@@ -269,3 +269,39 @@ The API server (default: `http://localhost:7999`) provides data in JSON format, 
 *   **Ask for State Before & After**: If an operation is failing, get the state of relevant components immediately before and after attempting the operation.
 *   **Binary Data**: Remember that binary data in API responses (like `NetworkEvent.data` if it was `Uint8Array`) will be Base64 encoded. The LLM may need to note this or request a hex representation if available through REPL.
 *   **State Hypotheses**: Clearly state what you are looking for and why, so the operator can confirm if the data matches your expectations.
+---
+
+## Inspecting Signal Protocol State
+
+The debug API and hooks provide deep inspection of Signal protocol state, including session records and identity keys.
+
+### MCP Endpoints
+
+- `GET /state/signal/sessions`:  
+  Returns a list of component IDs for active Signal sessions (e.g., `["signal:session:12345@s.whatsapp.net.0", ...]`).  
+  Use these IDs with the `/state/{componentId}` or `/statehist/{componentId}` endpoints.
+
+- `GET /state/signal/identity`:  
+  Returns the client's own Signal identity information (registration ID, identity key, prekeys).
+
+- `GET /state/{componentId}` and `GET /statehist/{componentId}`:  
+  Use with component IDs like `signal:session:PROTOCOL_ADDRESS_STRING` or `signal:identity` to inspect current or historical Signal state.
+
+### Output Format
+
+- All `Uint8Array` values (such as keys, signatures, etc.) within state objects are represented as Base64 strings in the JSON output.
+- Full `SessionRecord` objects can be large, especially with many message keys.
+
+### Example LLM Interactions
+
+- To check all Signal sessions being tracked:  
+  `GET /state/signal/sessions`
+- To get current Signal session state for `12345@s.whatsapp.net.0`:  
+  `GET /state/signal:session:12345@s.whatsapp.net.0`
+- To check our own Signal identity:  
+  `GET /state/signal/identity`
+- Look for fields like `rootKey`, `ephemeralKeyPair`, `chainKey.counter`, `messageKeys` in the session state to understand the ratchet and message encryption/decryption status.
+
+### Security Note
+
+Private keys and sensitive cryptographic material are exposed via this debug interface for deep debugging. Use only in controlled environments.

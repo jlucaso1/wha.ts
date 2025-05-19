@@ -4,6 +4,7 @@ import { z } from "zod";
 import { bytesToBase64 } from "../../../utils/src/bytes-utils";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
+import { sanitizeObjectForJSON } from "./sanitize";
 
 // Helper to make network event data JSON serializable
 const sanitizeNetworkEventForJSON = (event: NetworkEvent): NetworkEvent => {
@@ -153,14 +154,22 @@ export function registerMcpHandlers(
 					],
 				};
 			}
-			const state = controller.getComponentState(componentId);
+			const snapshot = controller.getComponentState(componentId);
+			let textContent: string;
+			if (snapshot) {
+				const sanitizedSnapshot = {
+					...snapshot,
+					state: sanitizeObjectForJSON(snapshot.state),
+				};
+				textContent = JSON.stringify(sanitizedSnapshot);
+			} else {
+				textContent = JSON.stringify({ error: "Component state not found" });
+			}
 			return {
 				contents: [
 					{
 						uri: uri.href,
-						text: state
-							? JSON.stringify(state)
-							: JSON.stringify({ error: "Component state not found" }),
+						text: textContent,
 						mimeType: "application/json",
 					},
 				],
@@ -194,16 +203,23 @@ export function registerMcpHandlers(
 			const countParam = uri.searchParams.get("count");
 			const count = countParam ? Number.parseInt(countParam, 10) : undefined;
 			const history = controller.getComponentStateHistory(componentId, count);
+			let textContent: string;
+			if (history.length > 0) {
+				const sanitizedHistory = history.map((s) => ({
+					...s,
+					state: sanitizeObjectForJSON(s.state),
+				}));
+				textContent = JSON.stringify(sanitizedHistory);
+			} else {
+				textContent = JSON.stringify({
+					error: "Component state history not found",
+				});
+			}
 			return {
 				contents: [
 					{
 						uri: uri.href,
-						text:
-							history.length > 0
-								? JSON.stringify(history)
-								: JSON.stringify({
-										error: "Component state history not found",
-									}),
+						text: textContent,
 						mimeType: "application/json",
 					},
 				],
@@ -247,6 +263,69 @@ export function registerMcpHandlers(
 					{
 						type: "text",
 						text: `Cleared ${args.componentId ? `${args.type} for ${args.componentId}` : args.type} logs/state.`,
+					},
+				],
+			};
+		},
+	);
+
+	// --- Signal protocol state resources ---
+
+	// List all signal session component IDs
+	mcpServer.resource(
+		"signal-sessions-list",
+		`${MCP_PREFIX}/state/signal/sessions`,
+		{
+			description:
+				"Lists all protocol addresses with tracked Signal session state. The address can be used with /state/signal:session:{address} to get details.",
+		},
+		async (uri: URL) => {
+			const allComponents = controller.listMonitoredComponents();
+			const signalSessionComponentIds = allComponents.filter((id) =>
+				id.startsWith("signal:session:"),
+			);
+			return {
+				contents: [
+					{
+						uri: uri.href,
+						text: JSON.stringify(signalSessionComponentIds),
+						mimeType: "application/json",
+					},
+				],
+			};
+		},
+	);
+
+	// Get the client's own Signal identity state
+	mcpServer.resource(
+		"signal-identity-state",
+		`${MCP_PREFIX}/state/signal/identity`,
+		{
+			description:
+				"Get the client's own Signal identity keys and registration ID.",
+		},
+		async (uri: URL) => {
+			const componentId = "signal:identity";
+			const snapshot = controller.getComponentState(componentId);
+			let textContent: string;
+
+			if (snapshot) {
+				const sanitizedSnapshot = {
+					...snapshot,
+					state: sanitizeObjectForJSON(snapshot.state),
+				};
+				textContent = JSON.stringify(sanitizedSnapshot);
+			} else {
+				textContent = JSON.stringify({
+					error: `State for '${componentId}' not found`,
+				});
+			}
+			return {
+				contents: [
+					{
+						uri: uri.href,
+						text: textContent,
+						mimeType: "application/json",
 					},
 				],
 			};

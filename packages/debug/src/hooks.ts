@@ -378,6 +378,83 @@ export function attachHooks(
 			(core.connectionManager as any).state,
 		);
 	}
+	// --- Signal Protocol Store Adapter Hooks ---
+	if (core.client && (core.client as any).signalStore) {
+		const signalStoreKey = "signalStore";
+		const signalStoreInstance = (core.client as any).signalStore;
+
+		// Hook storeSession
+		storeOriginalMethod(signalStoreKey, signalStoreInstance, "storeSession");
+		signalStoreInstance.storeSession = async (
+			identifier: string,
+			record: any,
+		) => {
+			const origStoreSession = originalMethods[signalStoreKey]?.storeSession;
+			if (!origStoreSession) {
+				throw new Error("Original signalStore.storeSession is undefined");
+			}
+			try {
+				await origStoreSession.call(signalStoreInstance, identifier, record);
+			} finally {
+				controller.recordComponentState(`signal:session:${identifier}`, record);
+			}
+		};
+
+		// Hook loadSession (optional, for observing what's loaded)
+		storeOriginalMethod(signalStoreKey, signalStoreInstance, "loadSession");
+		signalStoreInstance.loadSession = async (identifier: string) => {
+			const origLoadSession = originalMethods[signalStoreKey]?.loadSession;
+			if (!origLoadSession) {
+				throw new Error("Original signalStore.loadSession is undefined");
+			}
+			const record = await origLoadSession.call(
+				signalStoreInstance,
+				identifier,
+			);
+			if (record) {
+				controller.recordClientEvent(
+					"signalStore.session.loaded",
+					{ identifier, hasSession: !!record },
+					"SignalStore",
+				);
+			}
+			return record;
+		};
+
+		// Record identity state at hook time
+		if (typeof signalStoreInstance.getOurIdentity === "function") {
+			signalStoreInstance
+				.getOurIdentity()
+				.then((idKey: any) => {
+					controller.recordComponentState("signal:identity", {
+						registrationId:
+							signalStoreInstance.authState?.creds?.registrationId,
+						identityKey: idKey,
+					});
+				})
+				.catch((e: Error) =>
+					controller.recordError("SignalStore.getOurIdentity", e),
+				);
+		}
+		if (signalStoreInstance.authState?.creds) {
+			controller.recordComponentState("signal:identity", {
+				registrationId: signalStoreInstance.authState.creds.registrationId,
+				signedIdentityKey:
+					signalStoreInstance.authState.creds.signedIdentityKey,
+				signedPreKey: signalStoreInstance.authState.creds.signedPreKey,
+				nextPreKeyId: signalStoreInstance.authState.creds.nextPreKeyId,
+			});
+		}
+
+		controller.recordComponentState("signalStoreAdapter", {
+			hooked: true,
+			credsUsername: core.client.auth?.creds?.me?.id,
+		});
+	} else if (core.client) {
+		console.warn(
+			"[DebugHooks] core.client.signalStore not found. Signal state hooks will be disabled.",
+		);
+	}
 }
 
 export function detachHooks(core: WhaTsCoreModules): void {
@@ -426,6 +503,19 @@ export function detachHooks(core: WhaTsCoreModules): void {
 
 	for (const key in originalMethods) {
 		delete originalMethods[key];
+	}
+	// --- Signal Protocol Store Adapter Cleanup ---
+	if (core.client && (core.client as any).signalStore) {
+		restoreOriginalMethod(
+			"signalStore",
+			(core.client as any).signalStore,
+			"storeSession",
+		);
+		restoreOriginalMethod(
+			"signalStore",
+			(core.client as any).signalStore,
+			"loadSession",
+		);
 	}
 }
 
