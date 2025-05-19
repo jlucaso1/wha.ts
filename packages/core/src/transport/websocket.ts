@@ -89,7 +89,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 
 		this.dispatchEvent(
 			new CustomEvent("debug:websocket:sending_raw", {
-				detail: { data: new Uint8Array(data) },
+				detail: { data },
 			}),
 		);
 

@@ -143,18 +143,21 @@ const encodeBinaryNodeInner = (
 
 	const isNibble = (str: string) => {
 		if (str.length > TAGS.PACKED_MAX) return false;
-		for (const char of str) {
-			const isInNibbleRange = char >= "0" && char <= "9";
-			if (!isInNibbleRange && char !== "-" && char !== ".") return false;
+		for (let i = 0; i < str.length; i++) {
+			const code = str.charCodeAt(i);
+			const isInNibbleRange = code >= 48 && code <= 57; // '0'-'9'
+			if (!isInNibbleRange && code !== 45 && code !== 46) return false; // '-' and '.'
 		}
 		return true;
 	};
 
 	const isHex = (str: string) => {
 		if (str.length > TAGS.PACKED_MAX) return false;
-		for (const char of str) {
-			const isInNibbleRange = char >= "0" && char <= "9";
-			if (!isInNibbleRange && !(char >= "A" && char <= "F")) return false;
+		for (let i = 0; i < str.length; i++) {
+			const code = str.charCodeAt(i);
+			const isInNibbleRange = code >= 48 && code <= 57; // '0'-'9'
+			const isUpperHex = code >= 65 && code <= 70; // 'A'-'F'
+			if (!isInNibbleRange && !isUpperHex) return false;
 		}
 		return true;
 	};
