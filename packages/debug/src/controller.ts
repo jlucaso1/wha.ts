@@ -62,6 +62,10 @@ export class DebugController {
 		console.log("[DebugController] Hooks detached.");
 	}
 
+	public get waClient() {
+		return this.coreModules?.client;
+	}
+
 	public recordNetworkEvent(eventData: Omit<NetworkEvent, "timestamp">): void {
 		const event: NetworkEvent = {
 			...eventData,

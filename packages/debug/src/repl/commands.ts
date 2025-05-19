@@ -25,15 +25,36 @@ export async function handleREPLCommand(
 		switch (command.toLowerCase()) {
 			case "help":
 				return `Available commands:
-  logs network [count=10] [direction=all|send|receive] [layer=all|websocket_raw|frame_raw|noise_payload|xmpp_node] - Show network logs
-  logs events [count=10] [name=...] [source=...] - Show client events
-  logs errors [count=10] - Show error logs
-  state <componentId> - Show latest state of a component (e.g., authenticator, noiseProcessor)
-  statehist <componentId> [count=5] - Show state history of a component
-  state list - List components with tracked state
-  clear <network|events|errors|state|all> [componentId_for_state] - Clear specified logs/state
-  ping - Test command
-  exit - Exit REPL`;
+		logs network [count=10] [direction=all|send|receive] [layer=all|websocket_raw|frame_raw|noise_payload|xmpp_node] - Show network logs
+		logs events [count=10] [name=...] [source=...] - Show client events
+		logs errors [count=10] - Show error logs
+		state <componentId> - Show latest state of a component (e.g., authenticator, noiseProcessor)
+		statehist <componentId> [count=5] - Show state history of a component
+		state list - List components with tracked state
+		clear <network|events|errors|state|all> [componentId_for_state] - Clear specified logs/state
+		ping - Test command
+		textmessageSelf <msg> - Send a text message to yourself
+		exit - Exit REPL`;
+
+			case "textmessageself": {
+				const messageText = args.join(" ");
+				if (!messageText) {
+					return "Usage: textmessageSelf <your message here>";
+				}
+				const selfJid = controller.waClient?.auth.creds.me?.id;
+				if (!selfJid) {
+					return "Client not fully logged in or 'me.id' not available. Cannot send message to self.";
+				}
+				try {
+					const messageId = await controller.waClient.sendTextMessage(
+						selfJid,
+						messageText,
+					);
+					return `Message sent to yourself (${selfJid}). ID: ${messageId}`;
+				} catch (e) {
+					return `Failed to send message to self: ${e instanceof Error ? e.message : String(e)}`;
+				}
+			}
 
 			case "ping":
 				return "pong";

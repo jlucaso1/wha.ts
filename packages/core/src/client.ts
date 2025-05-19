@@ -197,8 +197,14 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	 * @returns The unique message ID generated for this message.
 	 * @throws Throws an error if the JID is invalid, encryption fails, or sending fails.
 	 */
-	async sendTextMessage(jid: string, text: string): Promise<string> {
-		// 1. Validate JID and extract base user ID
+	/**
+	 * Sends a text message to a given JID and waits for server ACK.
+	 * Returns messageId, and either ack or error.
+	 */
+	async sendTextMessage(
+		jid: string,
+		text: string,
+	): Promise<{ messageId: string; ack?: BinaryNode; error?: string }> {
 		const decodedJid = jidDecode(jid);
 		this.logger.debug(
 			{ decodedJid, originalJid: jid },
@@ -209,7 +215,6 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		}
 		const userId = `${decodedJid.user}@${decodedJid.server}`;
 
-		// 2. Get all session records for the recipient
 		const sessionRecords =
 			await this.signalStore.getAllSessionRecordsForUser(userId);
 		if (!sessionRecords.length) {
@@ -217,7 +222,6 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			throw new Error(`No active sessions found for recipient ${userId}`);
 		}
 
-		// 3. Prepare message proto and pad it (once)
 		const protoMsg = create(MessageSchema, {
 			extendedTextMessage: create(Message_ExtendedTextMessageSchema, {
 				text: text,
@@ -226,21 +230,22 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		const protoBytes = toBinary(MessageSchema, protoMsg);
 		const paddedProtoBytes = padRandomMax16(protoBytes);
 
-		// 4. Generate message ID (same for all devices)
 		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
-
-		// 5. Encrypt and send for each device/session
 		const nodesToSend: BinaryNode[] = [];
+
 		for (const { address } of sessionRecords) {
 			try {
 				const cipher = new SessionCipher(this.signalStore, address);
 				const encryptedResult = await cipher.encrypt(paddedProtoBytes);
 				const encType = encryptedResult.type === 3 ? "pkmsg" : "msg";
+				const { user, server } = jidDecode(jid) || {};
+				const recipientJid = `${user}@${server}`;
 				const messageNode: BinaryNode = {
 					tag: "message",
 					attrs: {
-						to: userId,
+						to: recipientJid,
 						id: msgId,
+						type: "text",
 					},
 					content: [
 						{
@@ -262,25 +267,97 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			}
 		}
 
+		if (nodesToSend.length === 0) {
+			this.logger.error(
+				{ userId },
+				"No message nodes could be prepared for sending (all encryptions failed).",
+			);
+			throw new Error("Failed to prepare message for any recipient device.");
+		}
+
 		this.logger.info(
-			{ count: nodesToSend.length, userId },
+			{ count: nodesToSend.length, userId, msgId },
 			"Sending message nodes for device fanout",
 		);
 
-		// 6. Send all nodes
 		try {
 			for (const node of nodesToSend) {
 				await this.connectionManager.sendNode(node);
 			}
-			return msgId;
-		} catch (err) {
+		} catch (sendError) {
 			this.logger.error(
-				{ err, msgId, to: jid },
+				{ err: sendError, msgId, to: jid },
 				"Failed to send one or more message nodes via ConnectionManager",
 			);
-			const errorMessage = err instanceof Error ? err.message : String(err);
+			const errorMessage =
+				sendError instanceof Error ? sendError.message : String(sendError);
 			throw new Error(`Sending message node(s) failed: ${errorMessage}`);
 		}
+
+		try {
+			const ackNode = await this.waitForMessageAck(msgId);
+			return { messageId: msgId, ack: ackNode };
+		} catch (ackError) {
+			this.logger.warn(
+				{ err: ackError, msgId, to: jid },
+				"Error while waiting for message ack, or ack contained an error.",
+			);
+			return {
+				messageId: msgId,
+				error: ackError instanceof Error ? ackError.message : String(ackError),
+			};
+		}
+	}
+
+	/**
+	 * Waits for an ACK node matching the given messageId, or rejects on error/timeout.
+	 */
+	private waitForMessageAck(messageId: string, timeoutMs = 15000) {
+		return new Promise<BinaryNode>((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				cleanup();
+				reject(
+					new Error(
+						`Timeout waiting for ack for message ${messageId} after ${timeoutMs}ms`,
+					),
+				);
+			}, timeoutMs);
+
+			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
+				const ackNode = event.detail.node;
+				if (ackNode.tag === "ack" && ackNode.attrs.id === messageId) {
+					this.logger.debug(
+						{ ackAttrs: ackNode.attrs, forMsgId: messageId },
+						"Received ack for message",
+					);
+					cleanup();
+					if (ackNode.attrs.error) {
+						const errorText =
+							ackNode.attrs.text || `Server error ${ackNode.attrs.error}`;
+						reject(
+							new Error(
+								`Message delivery failed (ack error ${ackNode.attrs.error}): ${errorText} for ID ${messageId}. Full attrs: ${JSON.stringify(ackNode.attrs)}`,
+							),
+						);
+					} else {
+						resolve(ackNode);
+					}
+				}
+			};
+
+			const cleanup = () => {
+				clearTimeout(timeoutId);
+				this.connectionManager.removeEventListener(
+					"node.received",
+					listener as EventListener,
+				);
+			};
+
+			this.connectionManager.addEventListener(
+				"node.received",
+				listener as EventListener,
+			);
+		});
 	}
 }
 

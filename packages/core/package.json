@@ -25,7 +25,6 @@
 		"@wha.ts/binary": "workspace:*",
 		"@wha.ts/proto": "workspace:*",
 		"@wha.ts/utils": "workspace:*",
-		"@wha.ts/signal": "workspace:*",
-		"unstorage": "^1.15.0"
+		"@wha.ts/signal": "workspace:*"
 	}
 }
