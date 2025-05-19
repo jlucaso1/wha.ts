@@ -1,5 +1,5 @@
 import { createWAClient } from "@wha.ts/core/src/client";
-import { GenericAuthState } from "@wha.ts/core/src/state/providers/generic-auth-state";
+import { GenericAuthState } from "@wha.ts/storage";
 import { createStorage } from "unstorage";
 import fsDriver from "unstorage/drivers/fs-lite";
 import localStorageDriver from "unstorage/drivers/localstorage";
@@ -9,7 +9,7 @@ const IS_BROWSER = typeof window !== "undefined";
 
 const storage = IS_BROWSER
 	? createStorage({ driver: localStorageDriver({ base: "wha.ts" }) })
-	: createStorage({ driver: fsDriver({ base: "./storage" }) });
+	: createStorage({ driver: fsDriver({ base: "./example-storage" }) });
 
 const authState = await GenericAuthState.init(storage);
 async function runExample() {

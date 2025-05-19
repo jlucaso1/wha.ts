@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { fromBinary } from "@bufbuild/protobuf";
 import { jidDecode } from "@wha.ts/binary/src/jid-utils";
 import { SignalProtocolStoreAdapter } from "@wha.ts/core/src/signal/signal-store";
-import { GenericAuthState } from "@wha.ts/core/src/state/providers/generic-auth-state";
 import { MessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal/src";
+import { GenericAuthState } from "@wha.ts/storage";
 import {
 	base64ToBytes,
 	hexToBytes,

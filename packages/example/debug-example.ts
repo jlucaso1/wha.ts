@@ -3,7 +3,7 @@ import { createWAClient } from "@wha.ts/core/src/client";
 import {
 	FileSystemSimpleKeyValueStore,
 	GenericAuthState,
-} from "@wha.ts/core/src/state/providers/generic-auth-state";
+} from "@wha.ts/storage";
 import { renderUnicodeCompact } from "uqr";
 
 import {

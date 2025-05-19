@@ -1,0 +1,21 @@
+{
+	"name": "@wha.ts/storage",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
+	"scripts": {
+		"build": "tsup src/*.ts --format=esm --dts"
+	},
+	"dependencies": {
+		"@wha.ts/core": "workspace:*",
+		"@wha.ts/utils": "workspace:*"
+	},
+	"devDependencies": {
+		"tsup": "^8.4.0",
+		"typescript": "^5"
+	}
+}
