@@ -1,9 +1,9 @@
 import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils";
 
-export const UINT8_ARRAY_TAG = "__IS_UINT8ARRAY__";
-export const BIGINT_TAG = "__IS_BIGINT__";
+const UINT8_ARRAY_TAG = "__IS_UINT8ARRAY__";
+const BIGINT_TAG = "__IS_BIGINT__";
 
-export function replacer(_key: string, value: any): any {
+function replacer(_key: string, value: any): any {
 	if (value instanceof Uint8Array) {
 		return { __tag: UINT8_ARRAY_TAG, data: bytesToBase64(value) };
 	}
@@ -13,7 +13,7 @@ export function replacer(_key: string, value: any): any {
 	return value;
 }
 
-export function reviver(_key: string, value: any): any {
+function reviver(_key: string, value: any): any {
 	if (
 		typeof value === "object" &&
 		value !== null &&

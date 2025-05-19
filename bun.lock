@@ -35,7 +35,9 @@
       "version": "0.1.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.11.4",
+        "@wha.ts/binary": "workspace:*",
         "@wha.ts/storage": "workspace:*",
+        "@wha.ts/utils": "workspace:*",
         "zod": "^3.25.3",
       },
       "devDependencies": {
@@ -48,6 +50,7 @@
       "name": "example",
       "version": "1.0.0",
       "dependencies": {
+        "@wha.ts/binary": "workspace:*",
         "@wha.ts/core": "workspace:*",
         "@wha.ts/debug": "workspace:*",
         "@wha.ts/storage": "workspace:*",
@@ -77,6 +80,7 @@
     },
     "packages/signal": {
       "name": "@wha.ts/signal",
+      "version": "0.1.1",
       "dependencies": {
         "@bufbuild/protobuf": "^2.2.5",
         "@wha.ts/proto": "workspace:*",
@@ -110,6 +114,7 @@
     },
     "packages/utils": {
       "name": "@wha.ts/utils",
+      "version": "0.1.1",
       "dependencies": {
         "@noble/ciphers": "^1.2.1",
         "@noble/hashes": "^1.7.1",

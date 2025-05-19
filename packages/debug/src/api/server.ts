@@ -15,7 +15,7 @@ const MCP_STREAMABLE_PATH = "/mcp";
 const MCP_SSE_INIT_PATH = "/sse";
 const MCP_SSE_MESSAGE_PATH = "/messages";
 
-export interface DebugAPIServerOptions {
+interface DebugAPIServerOptions {
 	port?: number;
 	controller: DebugController;
 }
