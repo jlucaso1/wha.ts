@@ -1,0 +1,24 @@
+{
+	"name": "@wha.ts/debug",
+	"version": "0.1.0",
+	"description": "Debugging and instrumentation tools for wha.ts core.",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc",
+		"lint": "biome check src",
+		"test": "echo \"No tests yet\""
+	},
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.11.4",
+		"zod": "^3.25.3"
+	},
+	"devDependencies": {
+		"@types/express": "^5.0.2",
+		"express": "^5.1.0",
+		"typescript": "^5.0.0"
+	}
+}
