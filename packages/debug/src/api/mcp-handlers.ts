@@ -177,6 +177,85 @@ export function registerMcpHandlers(
 		},
 	);
 
+	// New resource for batch state retrieval
+	mcpServer.resource(
+		"batch-component-state",
+		new ResourceTemplate(`${MCP_PREFIX}/state/batch/{componentIds}`, {
+			list: undefined,
+		}),
+		{
+			description:
+				"Get the latest state of multiple components. Path param: componentIds (plus-separated string of componentIds, e.g., authenticator+noiseProcessor)",
+		},
+		async (uri: URL, variables) => {
+			let componentIdsParam = variables.componentIds;
+			if (Array.isArray(componentIdsParam))
+				componentIdsParam = componentIdsParam[0];
+			if (typeof componentIdsParam !== "string" || !componentIdsParam) {
+				return {
+					contents: [
+						{
+							uri: uri.href,
+							text: JSON.stringify({
+								error:
+									"Missing or invalid 'componentIds' path parameter. Use /state/batch/{id1+id2}",
+							}),
+							mimeType: "application/json",
+						},
+					],
+				};
+			}
+
+			const componentIds = componentIdsParam
+				.split("+")
+				.map((id) => id.trim())
+				.filter((id) => id);
+			if (componentIds.length === 0) {
+				return {
+					contents: [
+						{
+							uri: uri.href,
+							text: JSON.stringify({
+								error:
+									"'componentIds' path parameter cannot be empty or only whitespace after trimming.",
+							}),
+							mimeType: "application/json",
+						},
+					],
+				};
+			}
+
+			const results: Record<string, any> = {};
+
+			for (const componentId of componentIds) {
+				const snapshot = controller.getComponentState(componentId);
+				if (snapshot) {
+					results[componentId] = {
+						timestamp: snapshot.timestamp,
+						componentId: snapshot.componentId,
+						state: sanitizeObjectForJSON(snapshot.state),
+					};
+				} else {
+					results[componentId] = {
+						error: "Component state not found",
+						timestamp: Date.now(),
+						componentId: componentId,
+					};
+				}
+			}
+
+			return {
+				contents: [
+					{
+						uri: uri.href,
+						text: JSON.stringify(results),
+						mimeType: "application/json",
+					},
+				],
+			};
+		},
+	);
+
 	mcpServer.resource(
 		"component-state-history",
 		new ResourceTemplate(`${MCP_PREFIX}/statehist/{componentId}`, {
@@ -262,7 +341,11 @@ export function registerMcpHandlers(
 				content: [
 					{
 						type: "text",
-						text: `Cleared ${args.componentId ? `${args.type} for ${args.componentId}` : args.type} logs/state.`,
+						text: `Cleared ${
+							args.componentId
+								? `${args.type} for ${args.componentId}`
+								: args.type
+						} logs/state.`,
 					},
 				],
 			};

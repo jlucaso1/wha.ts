@@ -243,7 +243,33 @@ export function attachHooks(
 			}
 		};
 
-		core.connectionManager.addEventListener("node.received", (event: any) => {
+		// --- Debug event listeners for connectionManager ---
+		if (!originalMethods[cmKey]) {
+			originalMethods[cmKey] = {};
+		}
+		// Store listeners for later removal
+		if (!(originalMethods[cmKey] as any)._debugEventListeners) {
+			(originalMethods[cmKey] as any)._debugEventListeners = {};
+		}
+		const handshakeCompleteListener = () => {
+			if (core.noiseProcessor) {
+				const noiseState = (core.noiseProcessor as any).getState();
+				controller.recordComponentState("noiseProcessor", noiseState);
+				controller.recordClientEvent(
+					"noise_processor.handshake_finalized",
+					deepClone(noiseState),
+					"NoiseProcessor",
+				);
+			}
+		};
+		(core.connectionManager as any).addEventListener(
+			"handshake.complete",
+			handshakeCompleteListener,
+		);
+		(originalMethods[cmKey] as any)._debugEventListeners["handshake.complete"] =
+			handshakeCompleteListener;
+
+		const nodeReceivedListener = (event: any) => {
 			const node = event.detail?.node as BinaryNode;
 			if (node) {
 				controller.recordNetworkEvent({
@@ -253,16 +279,28 @@ export function attachHooks(
 					length: JSON.stringify(node).length,
 				});
 			}
-		});
+		};
+		(core.connectionManager as any).addEventListener(
+			"node.received",
+			nodeReceivedListener,
+		);
+		(originalMethods[cmKey] as any)._debugEventListeners["node.received"] =
+			nodeReceivedListener;
 
-		core.connectionManager.addEventListener("state.change", (event: any) => {
+		const stateChangeListener = (event: any) => {
 			controller.recordClientEvent(
 				"connection_manager.state.change",
 				event.detail,
 				"ConnectionManager",
 			);
 			controller.recordComponentState("connectionManager", event.detail.state);
-		});
+		};
+		(core.connectionManager as any).addEventListener(
+			"state.change",
+			stateChangeListener,
+		);
+		(originalMethods[cmKey] as any)._debugEventListeners["state.change"] =
+			stateChangeListener;
 	}
 
 	// --- Authenticator ---
@@ -483,6 +521,21 @@ export function detachHooks(core: WhaTsCoreModules): void {
 			core.connectionManager,
 			"sendNode",
 		);
+		// Remove debug event listeners
+		const cmKey = "connectionManager";
+		if (
+			originalMethods[cmKey]?._debugEventListeners &&
+			typeof core.connectionManager.removeEventListener === "function"
+		) {
+			const listeners = (originalMethods[cmKey] as any)._debugEventListeners;
+			for (const eventName in listeners) {
+				core.connectionManager.removeEventListener(
+					eventName,
+					listeners[eventName],
+				);
+			}
+			(originalMethods[cmKey] as any)._debugEventListeners = undefined;
+		}
 	}
 	if (core.client && (core.client as any)._debugListener) {
 		const clientEventsToLog = [

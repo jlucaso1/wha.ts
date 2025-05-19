@@ -219,7 +219,6 @@ export class SessionCipher {
 			}
 
 			await this.storeRecord(record);
-			console.debug("[decryptWhisperMessage] State saved successfully");
 			return result.plaintext;
 		});
 	}
@@ -256,7 +255,6 @@ export class SessionCipher {
 			);
 
 			await this.storeRecord(record);
-			console.debug("[decryptPreKeyWhisperMessage] State saved successfully");
 			if (preKeyId !== undefined && this.storage.removePreKey) {
 				await this.storage.removePreKey(preKeyId);
 			}

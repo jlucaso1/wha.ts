@@ -223,11 +223,9 @@ export function startDebugAPIServer(options: DebugAPIServerOptions) {
 				console.warn(
 					`[MCP SSE] No active SSE session found for ID ${sessionId} or type mismatch.`,
 				);
-				res
-					.status(400)
-					.json({
-						error: "No active SSE session found for this ID or type mismatch",
-					});
+				res.status(400).json({
+					error: "No active SSE session found for this ID or type mismatch",
+				});
 			}
 		},
 	);

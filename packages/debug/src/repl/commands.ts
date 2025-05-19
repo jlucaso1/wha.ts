@@ -1,30 +1,35 @@
-import { bytesToHex, bytesToUtf8 } from "@wha.ts/utils/src/bytes-utils";
+import { bytesToBase64, bytesToUtf8 } from "@wha.ts/utils/src/bytes-utils";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
 
 // biome-ignore lint/suspicious/noExplicitAny: For REPL dynamic commands
 function formatDataForDisplay(data: any): string {
-	if (data instanceof Uint8Array) {
-		if (data.length > 128) {
-			return `Uint8Array(${data.length} bytes, hex: ${bytesToHex(
-				data.slice(0, 32),
-			)}...)`;
-		}
-		// Try to decode as UTF-8 if it looks like text
-		try {
-			const text = bytesToUtf8(data);
-			// Check for non-printable characters (heuristic)
-			if (/^[\x20-\x7E\s]*$/.test(text)) {
-				return `"${text}" (UTF-8) | hex: ${bytesToHex(data)}`;
+	function replacer(_key: string, value: any) {
+		if (value instanceof Uint8Array) {
+			if (value.length > 128) {
+				return `Uint8Array(${value.length} bytes, base64: ${bytesToBase64(
+					value.slice(0, 32),
+				)}...)`;
 			}
-		} catch {
-			/* ignore if not valid UTF-8 */
+			try {
+				const text = bytesToUtf8(value);
+				if (/^[-\s]*$/.test(text) && text.length > 0) {
+					return `"${text}" (UTF-8) | base64: ${bytesToBase64(value)}`;
+				}
+			} catch {
+				// ignore
+			}
+			return `Uint8Array(base64: ${bytesToBase64(value)})`;
 		}
-		return `Uint8Array(hex: ${bytesToHex(data)})`;
+		return value;
 	}
-	if (typeof data === "object") {
+
+	if (data instanceof Uint8Array) {
+		return replacer("", data);
+	}
+	if (typeof data === "object" && data !== null) {
 		try {
-			return JSON.stringify(data, null, 2);
+			return JSON.stringify(data, replacer, 2);
 		} catch {
 			return "[Unserializable Object]";
 		}
@@ -84,9 +89,9 @@ export async function handleREPLCommand(
 					return events
 						.map(
 							(e) =>
-								`${new Date(e.timestamp).toISOString()} [${e.direction.toUpperCase()}] [${
-									e.layer
-								}] ${
+								`${new Date(
+									e.timestamp,
+								).toISOString()} [${e.direction.toUpperCase()}] [${e.layer}] ${
 									e.length !== undefined ? `(${e.length} bytes)` : ""
 								} Data: ${formatDataForDisplay(e.data)}${
 									e.error ? ` Error: ${e.error}` : ""
@@ -122,9 +127,9 @@ export async function handleREPLCommand(
 							(e) =>
 								`${new Date(e.timestamp).toISOString()} [${e.source}] ${
 									e.message
-								}\n  Stack: ${e.stack || "N/A"}\n  Context: ${formatDataForDisplay(
-									e.context,
-								)}`,
+								}\n  Stack: ${
+									e.stack || "N/A"
+								}\n  Context: ${formatDataForDisplay(e.context)}`,
 						)
 						.join("\n---\n");
 				}
@@ -176,7 +181,9 @@ export async function handleREPLCommand(
 				const componentId = args[1];
 				if (!logType) return "Usage: clear <network|events|errors|state|all>";
 				controller.clearLogs(logType, componentId);
-				return `Cleared ${componentId ? `${logType} for ${componentId}` : logType} logs/state.`;
+				return `Cleared ${
+					componentId ? `${logType} for ${componentId}` : logType
+				} logs/state.`;
 			}
 
 			default:
