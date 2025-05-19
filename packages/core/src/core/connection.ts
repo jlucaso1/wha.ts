@@ -1,15 +1,15 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { decodeBinaryNode } from "@wha.ts/binary/src/decode";
-import { encodeBinaryNode } from "@wha.ts/binary/src/encode";
-import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
-import { getBinaryNodeChild } from "@wha.ts/binary/src/node-utils";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import { decodeBinaryNode } from "@wha.ts/binary";
+import { encodeBinaryNode } from "@wha.ts/binary";
+import { S_WHATSAPP_NET } from "@wha.ts/binary";
+import { getBinaryNodeChild } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
-import { bytesToHex, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import { TypedEventTarget } from "../generics/typed-event-target";
 import type { MessageProcessor } from "../messaging/message-processor";

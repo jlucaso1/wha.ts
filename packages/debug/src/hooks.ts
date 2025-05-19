@@ -1,4 +1,4 @@
-import type { decodeBinaryNode } from "@wha.ts/binary/src/decode";
+import type { decodeBinaryNode } from "@wha.ts/binary";
 import type { DebugController } from "./controller";
 
 export interface WhaTsCoreModules {

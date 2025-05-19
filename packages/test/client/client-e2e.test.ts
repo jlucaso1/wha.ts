@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { createWAClient } from "@wha.ts/core/src/client";
-import type { ClientEventMap } from "@wha.ts/core/src/client-events";
+import { createWAClient } from "@wha.ts/core";
+import type { ClientEventMap } from "@wha.ts/core";
 import { GenericAuthState } from "@wha.ts/storage";
 
 const E2E_TEST_TIMEOUT = 10_000;

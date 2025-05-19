@@ -10,11 +10,11 @@ import {
 	ProtoSessionEntrySchema,
 	type ProtoSessionEntry as ProtoSessionEntryType,
 } from "@wha.ts/proto";
-import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
-import { bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
-import { hkdfSignalDeriveSecrets } from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
-import { Mutex } from "@wha.ts/utils/src/mutex-utils";
+import { utf8ToBytes } from "@wha.ts/utils";
+import { bytesToBase64 } from "@wha.ts/utils";
+import { hkdfSignalDeriveSecrets } from "@wha.ts/utils";
+import { Curve } from "@wha.ts/utils";
+import { Mutex } from "@wha.ts/utils";
 import { ChainType } from "./chain_type";
 import type { ProtocolAddress } from "./protocol_address";
 import { SessionRecord } from "./session_record";

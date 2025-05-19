@@ -1,11 +1,8 @@
 import { create, fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
-import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/src/constants";
-import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
-import {
-	getBinaryNodeChild,
-	getBinaryNodeChildren,
-} from "@wha.ts/binary/src/node-utils";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import { S_WHATSAPP_NET } from "@wha.ts/binary";
+import { getBinaryNodeChild, getBinaryNodeChildren } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
+import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
 import {
 	ADVDeviceIdentitySchema,
 	type ADVSignedDeviceIdentity,
@@ -25,11 +22,11 @@ import {
 	bytesToUtf8,
 	concatBytes,
 	equalBytes,
-} from "@wha.ts/utils/src/bytes-utils";
-import { hmacSign } from "@wha.ts/utils/src/crypto";
-import { Curve, KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
-import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+} from "@wha.ts/utils";
+import { hmacSign } from "@wha.ts/utils";
+import { Curve, KEY_BUNDLE_TYPE } from "@wha.ts/utils";
+import type { KeyPair } from "@wha.ts/utils";
+import { encodeBigEndian } from "@wha.ts/utils";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,

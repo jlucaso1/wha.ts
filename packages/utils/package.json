@@ -1,5 +1,23 @@
 {
 	"name": "@wha.ts/utils",
+	"version": "0.1.1",
+	"description": "Utility functions for WhatsApp communication",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"development": "./src/index.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "tsup src/index.ts --format=esm --dts"
+	},
 	"private": true,
 	"dependencies": {
 		"@noble/ciphers": "^1.2.1",

@@ -2,8 +2,8 @@ import type {
 	ISignalProtocolStore,
 	SignalDataSet,
 	SignalDataTypeMap,
-} from "@wha.ts/core/src/state/interface";
-import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
+} from "@wha.ts/core";
+import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils";
 import { SIGNAL_KEY_PREFIX } from "./constants";
 import { deserializeWithRevival, serializeWithRevival } from "./serialization";
 import type { ISimpleKeyValueStore } from "./types";
@@ -74,9 +74,9 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 			}
 		} catch (error) {
 			console.error(
-				`[GenericSignalKeyStore] Error using getItems for type ${type} and keys ${storageKeys.join(
-					", ",
-				)}:`,
+				`[GenericSignalKeyStore] Error using getItems for type ${String(type)} and keys ${storageKeys
+					.map(String)
+					.join(", ")}:`,
 				error,
 			);
 		}
@@ -110,7 +110,7 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 						itemsToSet.push({ key: key, value: serializedValue });
 					} catch (error) {
 						console.error(
-							`[GenericSignalKeyStore] Error serializing value for key ${key} (id: ${id}, type: ${type}):`,
+							`[GenericSignalKeyStore] Error serializing value for key ${String(key)} (id: ${String(id)}, type: ${String(type)}):`,
 							error,
 						);
 					}

@@ -1,10 +1,10 @@
 import { fromBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary/src/jid-utils";
-import { getBinaryNodeChild } from "@wha.ts/binary/src/node-utils";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import { jidDecode } from "@wha.ts/binary";
+import { getBinaryNodeChild } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import { MessageSchema } from "@wha.ts/proto";
-import { ProtocolAddress, SessionCipher } from "@wha.ts/signal/src";
-import { unpadRandomMax16 } from "@wha.ts/utils/src/bytes-utils";
+import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
+import { unpadRandomMax16 } from "@wha.ts/utils";
 import { TypedEventTarget } from "../generics/typed-event-target";
 import type { SignalProtocolStoreAdapter } from "../signal/signal-store";
 import type { ILogger } from "../transport/types";

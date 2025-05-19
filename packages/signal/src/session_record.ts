@@ -1,5 +1,5 @@
-import { bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+import { bytesToBase64 } from "@wha.ts/utils";
+import type { KeyPair } from "@wha.ts/utils";
 import { BaseKeyType } from "./base_key_type";
 import { ChainType } from "./chain_type";
 
@@ -13,7 +13,7 @@ import {
 import type {
 	ProtoSessionEntry as ProtoSessionEntryType,
 	ProtoSessionRecord as ProtoSessionRecordType,
-} from "@wha.ts/proto/gen/signal_session_pb";
+} from "@wha.ts/proto";
 
 const CLOSED_SESSIONS_MAX = 40;
 const SESSION_RECORD_VERSION = "v2-proto";

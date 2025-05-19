@@ -1,4 +1,4 @@
-import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
+import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils";
 
 export const UINT8_ARRAY_TAG = "__IS_UINT8ARRAY__";
 export const BIGINT_TAG = "__IS_BIGINT__";

@@ -2,8 +2,8 @@ import type {
 	AuthenticationCreds,
 	IAuthStateProvider,
 	ISignalProtocolStore,
-} from "@wha.ts/core/src/state/interface";
-import { generatePreKeys, initAuthCreds } from "@wha.ts/core/src/state/utils";
+} from "@wha.ts/core";
+import { generatePreKeys, initAuthCreds } from "@wha.ts/core";
 import { CREDS_KEY, SIGNAL_KEY_PREFIX } from "./constants";
 import { InMemorySimpleKeyValueStore } from "./in-memory";
 import { deserializeWithRevival, serializeWithRevival } from "./serialization";

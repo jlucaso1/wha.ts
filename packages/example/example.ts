@@ -1,4 +1,4 @@
-import { createWAClient } from "@wha.ts/core/src/client";
+import { createWAClient } from "@wha.ts/core";
 import { GenericAuthState } from "@wha.ts/storage";
 import { createStorage } from "unstorage";
 import fsDriver from "unstorage/drivers/fs-lite";

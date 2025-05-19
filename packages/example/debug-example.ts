@@ -1,5 +1,5 @@
-import { decodeBinaryNode } from "@wha.ts/binary/src/decode";
-import { createWAClient } from "@wha.ts/core/src/client";
+import { decodeBinaryNode } from "@wha.ts/binary";
+import { createWAClient } from "@wha.ts/core";
 import {
 	FileSystemSimpleKeyValueStore,
 	GenericAuthState,

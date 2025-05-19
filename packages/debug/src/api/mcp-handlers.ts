@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { parseOptionalInt } from "@wha.ts/utils/src/number-utils";
+import { parseOptionalInt } from "@wha.ts/utils";
 import { z } from "zod";
 import { bytesToBase64 } from "../../../utils/src/bytes-utils";
 import type { DebugController } from "../controller";

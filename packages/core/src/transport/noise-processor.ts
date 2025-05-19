@@ -12,16 +12,11 @@ import {
 	concatBytes,
 	equalBytes,
 	utf8ToBytes,
-} from "@wha.ts/utils/src/bytes-utils";
-import {
-	aesDecryptGCM,
-	aesEncryptGCM,
-	hkdf,
-	sha256,
-} from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
-import { serializer } from "@wha.ts/utils/src/serializer";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+} from "@wha.ts/utils";
+import { aesDecryptGCM, aesEncryptGCM, hkdf, sha256 } from "@wha.ts/utils";
+import { Curve } from "@wha.ts/utils";
+import type { KeyPair } from "@wha.ts/utils";
+import { serializer } from "@wha.ts/utils";
 import type { ILogger } from "./types";
 
 interface NoiseState {

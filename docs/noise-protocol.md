@@ -36,17 +36,17 @@ The `wha.ts` implementation instantiates the Noise framework with the following 
     *   `DHLEN`: 32 bytes.
 
 *   **Cipher Functions (AES256-GCM):**
-    *   `ENCRYPT(k, n, ad, plaintext)`: Uses `aesEncryptGCM` from `@wha.ts/utils/src/crypto.ts` (based on `@noble/ciphers`).
-    *   `DECRYPT(k, n, ad, ciphertext)`: Uses `aesDecryptGCM` from `@wha.ts/utils/src/crypto.ts`.
+    *   `ENCRYPT(k, n, ad, plaintext)`: Uses `aesEncryptGCM` from `@wha.ts/utils.ts` (based on `@noble/ciphers`).
+    *   `DECRYPT(k, n, ad, ciphertext)`: Uses `aesDecryptGCM` from `@wha.ts/utils.ts`.
     *   **Nonce Format:** An 8-byte (64-bit) counter `n` is encoded into a 12-byte IV. The first 8 bytes are zero, and the last 4 bytes contain the big-endian representation of `n` (as seen in `generateIV` within `NoiseProcessor` and `generateNonceIV` in `crypto.ts`).
     *   **AEAD:** AES-256-GCM provides 16 bytes of authentication data (tag).
     *   `REKEY(k)`: Although the function exists in `CipherState`, the provided code doesn't show explicit rekeying during the transport phase. The default HKDF-based rekeying would likely apply if used.
 
 *   **Hash Functions (SHA256):**
-    *   `HASH(data)`: Uses `sha256` from `@wha.ts/utils/src/crypto.ts` (based on `@noble/hashes`).
+    *   `HASH(data)`: Uses `sha256` from `@wha.ts/utils.ts` (based on `@noble/hashes`).
     *   `HASHLEN`: 32 bytes.
     *   `BLOCKLEN`: 64 bytes.
-    *   `HKDF(chaining_key, input_key_material, num_outputs)`: Uses the `hkdf` function from `@wha.ts/utils/src/crypto.ts` (based on `@noble/hashes/hkdf`). The `chaining_key` corresponds to the `salt` parameter, and `input_key_material` is the `buffer` parameter. Info is typically empty (`""`). `num_outputs` is implicitly 2 (for `MixKey`) or handled by slicing the 64-byte output (for `Split`).
+    *   `HKDF(chaining_key, input_key_material, num_outputs)`: Uses the `hkdf` function from `@wha.ts/utils.ts` (based on `@noble/hashes/hkdf`). The `chaining_key` corresponds to the `salt` parameter, and `input_key_material` is the `buffer` parameter. Info is typically empty (`""`). `num_outputs` is implicitly 2 (for `MixKey`) or handled by slicing the 64-byte output (for `Split`).
 
 ## 5. Processing Rules
 

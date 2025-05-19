@@ -1,4 +1,4 @@
-import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import { utf8ToBytes } from "@wha.ts/utils";
 import { TAGS, TOKEN_MAP } from "./constants";
 import { type FullJid, jidDecode } from "./jid-utils";
 import type { BinaryNode } from "./types";

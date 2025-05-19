@@ -1,4 +1,4 @@
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import type { BinaryNode } from "@wha.ts/binary";
 
 /**
  * Minimal interface for actions Authenticator can perform on the connection.

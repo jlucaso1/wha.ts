@@ -1,4 +1,4 @@
-import { parseOptionalInt } from "@wha.ts/utils/src/number-utils";
+import { parseOptionalInt } from "@wha.ts/utils";
 import { sanitizeObjectForJSON } from "../api/sanitize";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";

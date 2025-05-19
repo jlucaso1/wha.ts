@@ -1,5 +1,5 @@
-import { bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
-import { parseOptionalInt } from "@wha.ts/utils/src/number-utils";
+import { bytesToBase64 } from "@wha.ts/utils";
+import { parseOptionalInt } from "@wha.ts/utils";
 import type { Request, Response } from "express";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";

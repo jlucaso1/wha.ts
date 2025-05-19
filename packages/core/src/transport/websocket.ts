@@ -1,4 +1,4 @@
-import { bytesToHex } from "@wha.ts/utils/src/bytes-utils";
+import { bytesToHex } from "@wha.ts/utils";
 import { IWebSocketClient } from "./types";
 
 const CONNECTING = 0;

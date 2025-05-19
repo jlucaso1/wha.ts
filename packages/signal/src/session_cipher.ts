@@ -9,17 +9,17 @@ import {
 	ProtoChainType,
 	type ProtoSessionEntry as ProtoSessionEntryType,
 } from "@wha.ts/proto";
-import { concatBytes, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
-import { bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
+import { concatBytes, utf8ToBytes } from "@wha.ts/utils";
+import { bytesToBase64 } from "@wha.ts/utils";
 import {
 	aesDecrypt,
 	aesEncrypt,
 	hkdfSignalDeriveSecrets,
 	hmacSha256Verify,
 	hmacSign,
-} from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
-import { Mutex } from "@wha.ts/utils/src/mutex-utils";
+} from "@wha.ts/utils";
+import { Curve } from "@wha.ts/utils";
+import { Mutex } from "@wha.ts/utils";
 import { ChainType } from "./chain_type";
 import { ProtocolAddress } from "./protocol_address";
 import { SessionBuilder } from "./session_builder";

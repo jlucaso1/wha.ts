@@ -1,12 +1,12 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary/src/jid-utils";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import { jidDecode } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import {
 	MessageSchema,
 	Message_ExtendedTextMessageSchema,
 } from "@wha.ts/proto";
-import { SessionCipher } from "@wha.ts/signal/src";
-import { padRandomMax16 } from "@wha.ts/utils/src/bytes-utils";
+import { SessionCipher } from "@wha.ts/signal";
+import { padRandomMax16 } from "@wha.ts/utils";
 import type { ClientEventMap } from "./client-events";
 import { Authenticator } from "./core/authenticator";
 import type {

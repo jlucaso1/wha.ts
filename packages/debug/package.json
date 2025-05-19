@@ -2,11 +2,20 @@
 	"name": "@wha.ts/debug",
 	"version": "0.1.0",
 	"description": "Debugging and instrumentation tools for wha.ts core.",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
 	"exports": {
-		".": "./src/index.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"development": "./src/index.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
 	},
 	"scripts": {
-		"build": "tsc",
+		"build": "tsup src/index.ts --format=esm --dts",
 		"lint": "biome check src",
 		"test": "echo \"No tests yet\""
 	},

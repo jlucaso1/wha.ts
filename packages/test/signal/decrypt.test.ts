@@ -1,15 +1,11 @@
 import { expect, test } from "bun:test";
 import { fromBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary/src/jid-utils";
-import { SignalProtocolStoreAdapter } from "@wha.ts/core/src/signal/signal-store";
+import { jidDecode } from "@wha.ts/binary";
+import { SignalProtocolStoreAdapter } from "@wha.ts/core";
 import { MessageSchema } from "@wha.ts/proto";
-import { ProtocolAddress, SessionCipher } from "@wha.ts/signal/src";
+import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
 import { GenericAuthState } from "@wha.ts/storage";
-import {
-	base64ToBytes,
-	hexToBytes,
-	unpadRandomMax16,
-} from "@wha.ts/utils/src/bytes-utils";
+import { base64ToBytes, hexToBytes, unpadRandomMax16 } from "@wha.ts/utils";
 
 const mockedSession = {
 	prekeys: {

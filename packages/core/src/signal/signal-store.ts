@@ -1,11 +1,11 @@
-import { SessionRecord, type SignalSessionStorage } from "@wha.ts/signal/src";
-import type { ChainType } from "@wha.ts/signal/src/chain_type";
-import { concatBytes } from "@wha.ts/utils/src/bytes-utils";
-import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
-import type { KeyPair, SignedKeyPair } from "@wha.ts/utils/src/types";
+import { SessionRecord, type SignalSessionStorage } from "@wha.ts/signal";
+import type { ChainType } from "@wha.ts/signal/chain_type";
+import { concatBytes } from "@wha.ts/utils";
+import { KEY_BUNDLE_TYPE } from "@wha.ts/utils";
+import type { KeyPair, SignedKeyPair } from "@wha.ts/utils";
 import type { IAuthStateProvider } from "../state/interface";
 
-import { ProtocolAddress } from "@wha.ts/signal/src/protocol_address";
+import { ProtocolAddress } from "@wha.ts/signal/protocol_address";
 
 export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 	private logger = console;
