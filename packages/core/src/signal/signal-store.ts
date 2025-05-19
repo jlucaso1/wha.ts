@@ -50,23 +50,29 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		await this.authState.keys.set({ "pre-key": { [idStr]: null } });
 	}
 
+	/**
+	 * Loads a session record from binary Protobuf format only.
+	 */
 	async loadSession(identifier: string): Promise<SessionRecord | undefined> {
 		const result = await this.authState.keys.get("session", [identifier]);
 		const sessionData = result[identifier];
 
-		if (sessionData instanceof Uint8Array) {
-			try {
-				return SessionRecord.deserialize(sessionData);
-			} catch (e) {
-				this.logger.error(
-					{ err: e, jid: identifier },
-					`Failed to deserialize session for ${identifier}`,
-				);
-				return undefined;
-			}
+		if (!(sessionData instanceof Uint8Array)) {
+			this.logger.error(
+				{ jid: identifier },
+				"Session data is not a Uint8Array (expected Protobuf binary)",
+			);
+			return undefined;
 		}
-
-		return undefined;
+		try {
+			return SessionRecord.deserialize(sessionData);
+		} catch (e) {
+			this.logger.error(
+				{ err: e, jid: identifier },
+				`Failed to deserialize session for ${identifier}`,
+			);
+			return undefined;
+		}
 	}
 
 	async storeSession(

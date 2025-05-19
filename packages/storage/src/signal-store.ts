@@ -3,6 +3,7 @@ import type {
 	SignalDataSet,
 	SignalDataTypeMap,
 } from "@wha.ts/core/src/state/interface";
+import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
 import { SIGNAL_KEY_PREFIX } from "./constants";
 import { deserializeWithRevival, serializeWithRevival } from "./serialization";
 import type { ISimpleKeyValueStore } from "./types";
@@ -51,9 +52,15 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
-						const parsedValue = deserializeWithRevival(
-							rawValue,
-						) as SignalDataTypeMap[T];
+						let parsedValue: SignalDataTypeMap[T];
+						if (type === "session") {
+							// Session is stored as base64-encoded Uint8Array
+							parsedValue = base64ToBytes(rawValue) as SignalDataTypeMap[T];
+						} else {
+							parsedValue = deserializeWithRevival(
+								rawValue,
+							) as SignalDataTypeMap[T];
+						}
 						finalResults[id] = parsedValue;
 					} catch (error) {
 						console.error(
@@ -93,7 +100,13 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 					itemsToSet.push({ key: key, value: null });
 				} else {
 					try {
-						const serializedValue = serializeWithRevival(value);
+						let serializedValue: string;
+						if (type === "session" && value instanceof Uint8Array) {
+							// Store session as base64 string
+							serializedValue = bytesToBase64(value);
+						} else {
+							serializedValue = serializeWithRevival(value);
+						}
 						itemsToSet.push({ key: key, value: serializedValue });
 					} catch (error) {
 						console.error(
@@ -182,17 +195,11 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
 						const address = key.slice(allSessionKeysPrefix.length);
-						const deserializedValue =
-							deserializeWithRevival<SignalDataTypeMap["session"]>(rawValue);
+						const deserializedValue = Uint8Array.from(atob(rawValue), (c) =>
+							c.charCodeAt(0),
+						);
 
-						if (deserializedValue instanceof Uint8Array) {
-							result[address] = deserializedValue;
-						} else {
-							console.error(
-								`[GenericSignalKeyStore] Deserialized session for key ${key} is not a Uint8Array:`,
-								typeof deserializedValue,
-							);
-						}
+						result[address] = deserializedValue;
 					} catch (err: unknown) {
 						const errorMessage =
 							err instanceof Error ? err.message : String(err);
