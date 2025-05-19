@@ -20,6 +20,7 @@ import {
 	sha256,
 } from "@wha.ts/utils/src/crypto";
 import { Curve } from "@wha.ts/utils/src/curve";
+import { serializer } from "@wha.ts/utils/src/serializer";
 import type { KeyPair } from "@wha.ts/utils/src/types";
 import type { ILogger } from "./types";
 
@@ -28,8 +29,8 @@ interface NoiseState {
 	salt: Uint8Array;
 	encryptionKey: Uint8Array;
 	decryptionKey: Uint8Array;
-	readCounter: number;
-	writeCounter: number;
+	readCounter: bigint;
+	writeCounter: bigint;
 	isHandshakeFinished: boolean;
 	routingInfo?: Uint8Array;
 	noisePrologue: Uint8Array;
@@ -70,8 +71,8 @@ export class NoiseProcessor extends EventTarget {
 			salt,
 			encryptionKey,
 			decryptionKey,
-			readCounter: 0,
-			writeCounter: 0,
+			readCounter: 0n,
+			writeCounter: 0n,
 			isHandshakeFinished: false,
 			routingInfo,
 			noisePrologue,
@@ -117,8 +118,8 @@ export class NoiseProcessor extends EventTarget {
 			salt: newSalt,
 			encryptionKey: keyUpdate,
 			decryptionKey: keyUpdate,
-			readCounter: 0,
-			writeCounter: 0,
+			readCounter: 0n,
+			writeCounter: 0n,
 		};
 
 		this.dispatchEvent(
@@ -128,9 +129,9 @@ export class NoiseProcessor extends EventTarget {
 		);
 	}
 
-	async encryptMessage(plaintext: Uint8Array) {
+	encryptMessage(plaintext: Uint8Array) {
 		const nonce = this.generateIV(this.state.writeCounter);
-		const ciphertext = await aesEncryptGCM(
+		const ciphertext = aesEncryptGCM(
 			plaintext,
 			this.state.encryptionKey,
 			nonce,
@@ -138,7 +139,7 @@ export class NoiseProcessor extends EventTarget {
 		);
 		this.state = {
 			...this.state,
-			writeCounter: this.state.writeCounter + 1,
+			writeCounter: this.state.writeCounter + 1n,
 		};
 		this.mixIntoHandshakeHash(ciphertext);
 
@@ -153,12 +154,12 @@ export class NoiseProcessor extends EventTarget {
 		return ciphertext;
 	}
 
-	async decryptMessage(ciphertext: Uint8Array) {
+	decryptMessage(ciphertext: Uint8Array) {
 		const counter = this.state.isHandshakeFinished
 			? this.state.readCounter
 			: this.state.writeCounter;
 		const nonce = this.generateIV(counter);
-		const plaintext = await aesDecryptGCM(
+		const plaintext = aesDecryptGCM(
 			ciphertext,
 			this.state.decryptionKey,
 			nonce,
@@ -167,11 +168,11 @@ export class NoiseProcessor extends EventTarget {
 		this.state = {
 			...this.state,
 			readCounter: this.state.isHandshakeFinished
-				? this.state.readCounter + 1
+				? this.state.readCounter + 1n
 				: this.state.readCounter,
 			writeCounter: this.state.isHandshakeFinished
 				? this.state.writeCounter
-				: this.state.writeCounter + 1,
+				: this.state.writeCounter + 1n,
 		};
 		this.mixIntoHandshakeHash(ciphertext);
 		// Emit debug event after decryption
@@ -198,8 +199,8 @@ export class NoiseProcessor extends EventTarget {
 			encryptionKey: finalWriteKey,
 			decryptionKey: finalReadKey,
 			handshakeHash: new Uint8Array(0),
-			readCounter: 0,
-			writeCounter: 0,
+			readCounter: 0n,
+			writeCounter: 0n,
 			isHandshakeFinished: true,
 		};
 
@@ -210,7 +211,7 @@ export class NoiseProcessor extends EventTarget {
 		);
 	}
 
-	async processHandshake(
+	processHandshake(
 		serverHelloBytes: Uint8Array,
 		localStaticKeyPair: KeyPair,
 		localEphemeralKeyPair: KeyPair,
@@ -231,16 +232,16 @@ export class NoiseProcessor extends EventTarget {
 		this.mixKeys(
 			Curve.sharedKey(localEphemeralKeyPair.privateKey, serverHello.ephemeral),
 		);
-		const decryptedServerStatic = await this.decryptMessage(serverHello.static);
+		const decryptedServerStatic = this.decryptMessage(serverHello.static);
 		this.mixKeys(
 			Curve.sharedKey(localEphemeralKeyPair.privateKey, decryptedServerStatic),
 		);
-		const decryptedPayload = await this.decryptMessage(serverHello.payload);
+		const decryptedPayload = this.decryptMessage(serverHello.payload);
 		const certChain = fromBinary(CertChainSchema, decryptedPayload);
 
 		this.verifyCertificateChain(certChain, decryptedServerStatic);
 
-		const encryptedLocalStaticPublic = await this.encryptMessage(
+		const encryptedLocalStaticPublic = this.encryptMessage(
 			localStaticKeyPair.publicKey,
 		);
 		this.mixKeys(
@@ -250,7 +251,9 @@ export class NoiseProcessor extends EventTarget {
 	}
 
 	getDebugStateSnapshot(): Readonly<NoiseState> {
-		return JSON.parse(JSON.stringify(this.state));
+		// Exclude logger from the snapshot to avoid serialization errors
+		const { logger, ...rest } = this.state;
+		return JSON.parse(serializer(rest));
 	}
 
 	private verifyCertificateChain(
@@ -341,9 +344,11 @@ export class NoiseProcessor extends EventTarget {
 		}
 	}
 
-	private generateIV(counter: number) {
+	private generateIV(counter: bigint) {
 		const iv = new ArrayBuffer(12);
-		new DataView(iv).setUint32(8, counter);
+		const view = new DataView(iv);
+		view.setUint32(0, 0, false); // First 4 bytes zero
+		view.setBigUint64(4, counter, false); // Last 8 bytes: big-endian counter
 		return new Uint8Array(iv);
 	}
 }

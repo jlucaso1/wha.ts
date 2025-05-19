@@ -1,7 +1,12 @@
 import { bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
+import { parseOptionalInt } from "@wha.ts/utils/src/number-utils";
 import type { Request, Response } from "express";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
+import {
+	getSanitizedComponentState,
+	getSanitizedComponentStateHistory,
+} from "./api-helpers";
 
 // Helper to make network event data JSON serializable
 const sanitizeNetworkEventForJSON = (event: NetworkEvent): NetworkEvent => {
@@ -15,9 +20,10 @@ const sanitizeNetworkEventForJSON = (event: NetworkEvent): NetworkEvent => {
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
 export function registerDebugRoutes(app: any, controller: DebugController) {
 	app.get("/logs/network", (req: Request, res: Response) => {
-		const count = req.query.count
-			? Number.parseInt(req.query.count as string, 10)
-			: 20;
+		const count = parseOptionalInt(req.query.count as string, {
+			default: 20,
+			min: 1,
+		});
 		const direction = req.query.direction as "send" | "receive" | undefined;
 		const layer = req.query.layer as NetworkEvent["layer"] | undefined;
 		const filters: {
@@ -34,9 +40,10 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 	});
 
 	app.get("/logs/events", (req: Request, res: Response) => {
-		const count = req.query.count
-			? Number.parseInt(req.query.count as string, 10)
-			: 20;
+		const count = parseOptionalInt(req.query.count as string, {
+			default: 20,
+			min: 1,
+		});
 		const eventName = req.query.name as string | undefined;
 		const sourceComponent = req.query.source as string | undefined;
 		const filters: { eventName?: string; sourceComponent?: string } = {};
@@ -48,9 +55,10 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 	});
 
 	app.get("/logs/errors", (req: Request, res: Response) => {
-		const count = req.query.count
-			? Number.parseInt(req.query.count as string, 10)
-			: 10;
+		const count = parseOptionalInt(req.query.count as string, {
+			default: 10,
+			min: 1,
+		});
 		const errors = controller.getErrorLog(count);
 		res.json(errors);
 	});
@@ -64,11 +72,11 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 		if (!componentId) {
 			return res.status(400).json({ error: "Missing componentId" });
 		}
-		const state = controller.getComponentState(componentId);
-		if (state) {
-			return res.json(state);
+		const sanitizedState = getSanitizedComponentState(controller, componentId);
+		if (sanitizedState.error) {
+			return res.status(404).json(sanitizedState);
 		}
-		return res.status(404).json({ error: "Component state not found" });
+		return res.json(sanitizedState);
 	});
 
 	app.get("/statehist/:componentId", (req: Request, res: Response) => {
@@ -76,10 +84,15 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 		if (!componentId) {
 			return res.status(400).json({ error: "Missing componentId" });
 		}
-		const count = req.query.count
-			? Number.parseInt(req.query.count as string, 10)
-			: 5;
-		const history = controller.getComponentStateHistory(componentId, count);
+		const count = parseOptionalInt(req.query.count as string, {
+			default: 5,
+			min: 1,
+		});
+		const history = getSanitizedComponentStateHistory(
+			controller,
+			componentId,
+			count,
+		);
 		if (history.length > 0) {
 			return res.json(history);
 		}

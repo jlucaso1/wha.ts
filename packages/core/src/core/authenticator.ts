@@ -273,21 +273,15 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		};
 	}
 
-	private processPairingSuccessData(
-		stanza: BinaryNode,
+	private extractAndVerifyPairingData(
+		pairSuccessNode: BinaryNode,
 		creds: AuthenticationCreds,
 	): {
-		creds: Partial<AuthenticationCreds>;
-		reply: BinaryNode;
+		account: ADVSignedDeviceIdentity;
+		platformName?: string;
+		deviceJid: string;
+		businessName?: string;
 	} {
-		const msgId = stanza.attrs.id;
-		if (!msgId) {
-			throw new Error("Missing message ID in stanza for pair-success");
-		}
-
-		const pairSuccessNode = getBinaryNodeChild(stanza, "pair-success");
-		if (!pairSuccessNode) throw new Error("Missing 'pair-success' in stanza");
-
 		const deviceIdentityNode = getBinaryNodeChild(
 			pairSuccessNode,
 			"device-identity",
@@ -317,43 +311,52 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		);
 		this.verifyAccountSignature(account, creds);
 
+		return {
+			account,
+			platformName: platformNode?.attrs.name,
+			deviceJid: deviceNode.attrs.jid,
+			businessName: businessNode?.attrs.name,
+		};
+	}
+
+	private createAuthUpdateFromPairingData(
+		verifiedData: {
+			account: ADVSignedDeviceIdentity;
+			platformName?: string;
+			deviceJid: string;
+			businessName?: string;
+		},
+		creds: AuthenticationCreds,
+	): Partial<AuthenticationCreds> {
+		const identity = this._createSignalIdentity(
+			verifiedData.deviceJid,
+			verifiedData.account.accountSignatureKey,
+		);
+
+		return {
+			me: { id: verifiedData.deviceJid, name: verifiedData.businessName },
+			account: toJson(
+				ADVSignedDeviceIdentitySchema,
+				verifiedData.account,
+			) as unknown as ADVSignedDeviceIdentity,
+			signalIdentities: [...(creds.signalIdentities || []), identity],
+			platform: verifiedData.platformName,
+			pairingCode: undefined,
+		};
+	}
+
+	private updateAccountWithDeviceSignature(
+		account: ADVSignedDeviceIdentity,
+		signedIdentityKey: KeyPair,
+	): ADVSignedDeviceIdentity {
 		const deviceMsg = concatBytes(
 			new Uint8Array([6, 1]),
 			account.details,
-			creds.signedIdentityKey.publicKey,
+			signedIdentityKey.publicKey,
 			account.accountSignatureKey,
 		);
-
-		const deviceSignature = Curve.sign(
-			creds.signedIdentityKey.privateKey,
-			deviceMsg,
-		);
-		const updatedAccount = {
-			...account,
-			deviceSignature,
-		};
-
-		const bizName = businessNode?.attrs.name;
-		const jid = deviceNode.attrs.jid;
-		const identity = this._createSignalIdentity(
-			jid,
-			account.accountSignatureKey,
-		);
-
-		const authUpdate: Partial<AuthenticationCreds> = {
-			me: { id: jid, name: bizName },
-			account: toJson(
-				ADVSignedDeviceIdentitySchema,
-				updatedAccount,
-			) as unknown as ADVSignedDeviceIdentity,
-			signalIdentities: [...(creds.signalIdentities || []), identity],
-			platform: platformNode?.attrs.name,
-			pairingCode: undefined,
-		};
-
-		const reply = this.buildPairingReplyNode(msgId, updatedAccount);
-
-		return { creds: authUpdate, reply };
+		const deviceSignature = Curve.sign(signedIdentityKey.privateKey, deviceMsg);
+		return { ...account, deviceSignature };
 	}
 
 	private verifyDeviceIdentityHMAC(
@@ -431,10 +434,29 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.clearQrTimeout();
 
 		try {
-			const { creds: updatedCreds, reply } = this.processPairingSuccessData(
-				node,
+			const msgId = node.attrs.id;
+			if (!msgId) {
+				throw new Error("Missing message ID in stanza for pair-success");
+			}
+			const pairSuccessNode = getBinaryNodeChild(node, "pair-success");
+			if (!pairSuccessNode) throw new Error("Missing 'pair-success' in stanza");
+
+			const verifiedData = this.extractAndVerifyPairingData(
+				pairSuccessNode,
 				this.authStateProvider.creds,
 			);
+
+			const accountWithDeviceSig = this.updateAccountWithDeviceSignature(
+				verifiedData.account,
+				this.authStateProvider.creds.signedIdentityKey,
+			);
+
+			const updatedCreds = this.createAuthUpdateFromPairingData(
+				{ ...verifiedData, account: accountWithDeviceSig },
+				this.authStateProvider.creds,
+			);
+
+			const reply = this.buildPairingReplyNode(msgId, accountWithDeviceSig);
 
 			this.logger.info(
 				{

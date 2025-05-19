@@ -181,7 +181,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			const handshakeMsg = fromBinary(HandshakeMessageSchema, data);
 
 			if (handshakeMsg.serverHello) {
-				const clientFinishStatic = await this.noiseProcessor.processHandshake(
+				const clientFinishStatic = this.noiseProcessor.processHandshake(
 					data,
 					this.creds.noiseKey,
 					this.creds.pairingEphemeralKeyPair,
@@ -196,7 +196,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 				const clientPayloadBytes = toBinary(ClientPayloadSchema, clientPayload);
 
 				const payloadEnc =
-					await this.noiseProcessor.encryptMessage(clientPayloadBytes);
+					this.noiseProcessor.encryptMessage(clientPayloadBytes);
 
 				const clientFinishMsg = create(HandshakeMessageSchema, {
 					clientFinish: {

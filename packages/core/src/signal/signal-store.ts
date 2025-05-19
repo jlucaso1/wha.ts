@@ -1,12 +1,7 @@
 import { SessionRecord, type SignalSessionStorage } from "@wha.ts/signal/src";
 import type { ChainType } from "@wha.ts/signal/src/chain_type";
-import {
-	bytesToUtf8,
-	concatBytes,
-	utf8ToBytes,
-} from "@wha.ts/utils/src/bytes-utils";
+import { concatBytes } from "@wha.ts/utils/src/bytes-utils";
 import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
-import { deserializer, serializer } from "@wha.ts/utils/src/serializer";
 import type { KeyPair, SignedKeyPair } from "@wha.ts/utils/src/types";
 import type { IAuthStateProvider } from "../state/interface";
 
@@ -47,10 +42,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 			console.warn(`[SignalStore] Pre-key ${idStr} not found!`);
 			return undefined;
 		}
-		return {
-			privateKey: preKey.privateKey,
-			publicKey: preKey.publicKey,
-		};
+		return preKey;
 	}
 
 	async removePreKey(keyId: number): Promise<void> {
@@ -64,16 +56,11 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 
 		if (sessionData instanceof Uint8Array) {
 			try {
-				const jsonString = bytesToUtf8(sessionData);
-				const plainObject = deserializer(jsonString);
-
-				const recordInstance = SessionRecord.deserialize(plainObject);
-
-				return recordInstance;
+				return SessionRecord.deserialize(sessionData);
 			} catch (e) {
 				this.logger.error(
 					{ err: e, jid: identifier },
-					`Failed to parse/deserialize session JSON for ${identifier}`,
+					`Failed to deserialize session for ${identifier}`,
 				);
 				return undefined;
 			}
@@ -86,9 +73,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		identifier: string,
 		sessionRecordInstance: SessionRecord,
 	): Promise<void> {
-		const plainObject = sessionRecordInstance.serialize();
-		const jsonString = serializer(plainObject);
-		const sessionDataToStore = utf8ToBytes(jsonString);
+		const sessionDataToStore = sessionRecordInstance.serialize();
 		await this.authState.keys.set({
 			session: { [identifier]: sessionDataToStore },
 		});
@@ -155,12 +140,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		for (const [addressStr, sessionData] of Object.entries(sessions)) {
 			if (!sessionData) continue;
 			try {
-				const jsonString =
-					typeof sessionData === "string"
-						? sessionData
-						: bytesToUtf8(sessionData);
-				const plainObject = deserializer(jsonString);
-				const record = SessionRecord.deserialize(plainObject);
+				const record = SessionRecord.deserialize(sessionData as Uint8Array);
 				const protoAddrStr = addressStr.replace(/_([0-9]+)$/, ".$1");
 				const address = ProtocolAddress.from(protoAddrStr);
 				results.push({ address, record });

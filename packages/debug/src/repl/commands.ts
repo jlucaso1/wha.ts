@@ -1,3 +1,4 @@
+import { parseOptionalInt } from "@wha.ts/utils/src/number-utils";
 import { sanitizeObjectForJSON } from "../api/sanitize";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
@@ -39,8 +40,7 @@ export async function handleREPLCommand(
 
 			case "logs": {
 				const type = args[0]?.toLowerCase();
-				let count = Number.parseInt(args[1] ?? "", 10);
-				if (Number.isNaN(count) || count <= 0) count = 10;
+				const count = parseOptionalInt(args[1], { default: 10, min: 1 }) ?? 10;
 
 				if (type === "network") {
 					const directionArg = args[2]?.toLowerCase();
@@ -133,8 +133,7 @@ export async function handleREPLCommand(
 			case "statehist": {
 				const componentId = args[0];
 				if (!componentId) return "Usage: statehist <componentId> [count=5]";
-				let count = Number.parseInt(args[1] ?? "", 10);
-				if (Number.isNaN(count) || count <= 0) count = 5;
+				const count = parseOptionalInt(args[1], { default: 5, min: 1 }) ?? 5;
 				const history = controller.getComponentStateHistory(componentId, count);
 				if (!history.length)
 					return `No state history found for [${componentId}].`;

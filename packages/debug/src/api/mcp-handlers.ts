@@ -1,9 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { parseOptionalInt } from "@wha.ts/utils/src/number-utils";
 import { z } from "zod";
 import { bytesToBase64 } from "../../../utils/src/bytes-utils";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
+import {
+	getSanitizedComponentState,
+	getSanitizedComponentStateHistory,
+} from "./api-helpers";
 import { sanitizeObjectForJSON } from "./sanitize";
 
 // Helper to make network event data JSON serializable
@@ -32,7 +37,7 @@ export function registerMcpHandlers(
 		},
 		async (uri: URL) => {
 			const countParam = uri.searchParams.get("count");
-			const count = countParam ? Number.parseInt(countParam, 10) : undefined;
+			const count = parseOptionalInt(countParam, { min: 1 });
 			const direction = uri.searchParams.get("direction") as
 				| "send"
 				| "receive"
@@ -72,7 +77,7 @@ export function registerMcpHandlers(
 		},
 		async (uri: URL) => {
 			const countParam = uri.searchParams.get("count");
-			const count = countParam ? Number.parseInt(countParam, 10) : undefined;
+			const count = parseOptionalInt(countParam, { min: 1 });
 			const eventName = uri.searchParams.get("name") || undefined;
 			const sourceComponent = uri.searchParams.get("source") || undefined;
 
@@ -99,7 +104,7 @@ export function registerMcpHandlers(
 		{ description: "Get error logs. Params: count (int)" },
 		async (uri: URL) => {
 			const countParam = uri.searchParams.get("count");
-			const count = countParam ? Number.parseInt(countParam, 10) : undefined;
+			const count = parseOptionalInt(countParam, { min: 1 });
 			const errors = controller.getErrorLog(count);
 			return {
 				contents: [
@@ -154,22 +159,15 @@ export function registerMcpHandlers(
 					],
 				};
 			}
-			const snapshot = controller.getComponentState(componentId);
-			let textContent: string;
-			if (snapshot) {
-				const sanitizedSnapshot = {
-					...snapshot,
-					state: sanitizeObjectForJSON(snapshot.state),
-				};
-				textContent = JSON.stringify(sanitizedSnapshot);
-			} else {
-				textContent = JSON.stringify({ error: "Component state not found" });
-			}
+			const sanitizedState = getSanitizedComponentState(
+				controller,
+				componentId,
+			);
 			return {
 				contents: [
 					{
 						uri: uri.href,
-						text: textContent,
+						text: JSON.stringify(sanitizedState),
 						mimeType: "application/json",
 					},
 				],
@@ -228,20 +226,10 @@ export function registerMcpHandlers(
 			const results: Record<string, any> = {};
 
 			for (const componentId of componentIds) {
-				const snapshot = controller.getComponentState(componentId);
-				if (snapshot) {
-					results[componentId] = {
-						timestamp: snapshot.timestamp,
-						componentId: snapshot.componentId,
-						state: sanitizeObjectForJSON(snapshot.state),
-					};
-				} else {
-					results[componentId] = {
-						error: "Component state not found",
-						timestamp: Date.now(),
-						componentId: componentId,
-					};
-				}
+				results[componentId] = getSanitizedComponentState(
+					controller,
+					componentId,
+				);
 			}
 
 			return {
@@ -280,15 +268,15 @@ export function registerMcpHandlers(
 				};
 			}
 			const countParam = uri.searchParams.get("count");
-			const count = countParam ? Number.parseInt(countParam, 10) : undefined;
-			const history = controller.getComponentStateHistory(componentId, count);
+			const count = parseOptionalInt(countParam, { default: 5, min: 1 });
+			const history = getSanitizedComponentStateHistory(
+				controller,
+				componentId,
+				count,
+			);
 			let textContent: string;
 			if (history.length > 0) {
-				const sanitizedHistory = history.map((s) => ({
-					...s,
-					state: sanitizeObjectForJSON(s.state),
-				}));
-				textContent = JSON.stringify(sanitizedHistory);
+				textContent = JSON.stringify(history);
 			} else {
 				textContent = JSON.stringify({
 					error: "Component state history not found",
