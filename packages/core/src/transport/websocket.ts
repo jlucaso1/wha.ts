@@ -98,6 +98,12 @@ export class NativeWebSocketClient extends IWebSocketClient {
 			return;
 		}
 
+		this.dispatchEvent(
+			new CustomEvent("debug:websocket:sending_raw", {
+				detail: { data: new Uint8Array(data) },
+			}),
+		);
+
 		try {
 			this.socket?.send(data);
 		} catch (error) {
@@ -129,6 +135,12 @@ export class NativeWebSocketClient extends IWebSocketClient {
 
 	private handleMessage = (event: MessageEvent<ArrayBuffer>): void => {
 		const data = new Uint8Array(event.data);
+
+		this.dispatchEvent(
+			new CustomEvent("debug:websocket:received_raw", {
+				detail: { data: new Uint8Array(data) },
+			}),
+		);
 
 		this.dispatchEvent(new CustomEvent("message", { detail: data }));
 	};

@@ -1,5 +1,4 @@
 import type { decodeBinaryNode } from "@wha.ts/binary/src/decode";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
 import type { DebugController } from "./controller";
 
 // These types would ideally come from @wha.ts/core if they are exported,
@@ -68,258 +67,171 @@ export function attachHooks(
 	controller: DebugController,
 	core: WhaTsCoreModules,
 ): void {
-	// --- WebSocket Raw Data ---
+	// --- WebSocketClient debug events ---
 	if (core.wsClient) {
-		const wsKey = "wsClient";
-		storeOriginalMethod(wsKey, core.wsClient, "send");
-		core.wsClient.send = async (data: Uint8Array) => {
-			controller.recordNetworkEvent({
-				direction: "send",
-				layer: "websocket_raw",
-				data: data,
-				length: data.length,
-			});
-			try {
-				// Ensure 'this' context is correct for the original method
-				const origSend = originalMethods[wsKey]?.send;
-				if (!origSend) throw new Error("Original wsClient.send is undefined");
-				return await origSend.call(core.wsClient, data);
-			} catch (e: unknown) {
+		core.wsClient.addEventListener(
+			"debug:websocket:sending_raw",
+			(event: any) => {
 				controller.recordNetworkEvent({
 					direction: "send",
 					layer: "websocket_raw",
-					data: data,
-					length: data.length,
-					error: e instanceof Error ? e.message : String(e),
+					data: event.detail.data,
+					length: event.detail.data.length,
 				});
-				throw e;
-			}
-		};
-
-		// Hook into message receiving. wsClient is an EventTarget.
-		// We need to intercept 'message' events.
-		// This assumes wsClient uses addEventListener like native WebSocket.
-		storeOriginalMethod(wsKey, core.wsClient, "dispatchEvent"); // Or specific message handler
-		const originalDispatchEvent = core.wsClient.dispatchEvent.bind(
-			core.wsClient,
+			},
 		);
-		core.wsClient.dispatchEvent = (event: Event) => {
-			if (event.type === "message" && event instanceof CustomEvent) {
-				const data = event.detail as Uint8Array;
-				if (data instanceof Uint8Array) {
-					controller.recordNetworkEvent({
-						direction: "receive",
-						layer: "websocket_raw",
-						data: data,
-						length: data.length,
-					});
-				}
-			}
-			return originalDispatchEvent(event);
-		};
+		core.wsClient.addEventListener(
+			"debug:websocket:received_raw",
+			(event: any) => {
+				controller.recordNetworkEvent({
+					direction: "receive",
+					layer: "websocket_raw",
+					data: event.detail.data,
+					length: event.detail.data.length,
+				});
+			},
+		);
 	}
 
-	// --- Frame Handler ---
+	// --- FrameHandler debug events ---
 	if (core.frameHandler) {
-		const fhKey = "frameHandler";
-		storeOriginalMethod(fhKey, core.frameHandler, "handleReceivedData");
-		core.frameHandler.handleReceivedData = async (newData: Uint8Array) => {
-			try {
-				const origHandle = originalMethods[fhKey]?.handleReceivedData;
-				if (!origHandle)
-					throw new Error(
-						"Original frameHandler.handleReceivedData is undefined",
-					);
-				return await origHandle.call(core.frameHandler, newData);
-			} catch (e: unknown) {
-				controller.recordError(
-					"FrameHandler.handleReceivedData",
-					e instanceof Error ? e : new Error(String(e)),
-				);
-				throw e;
-			}
-		};
-
-		storeOriginalMethod(fhKey, core.frameHandler, "framePayload");
-		core.frameHandler.framePayload = async (payload: Uint8Array) => {
-			controller.recordNetworkEvent({
-				direction: "send",
-				layer: "noise_payload",
-				data: payload,
-				length: payload.length,
-				metadata: {
-					handshakeFinished: core.noiseProcessor?.isHandshakeFinished,
-				},
-			});
-			try {
-				const origFramePayload = originalMethods[fhKey]?.framePayload;
-				if (!origFramePayload)
-					throw new Error("Original frameHandler.framePayload is undefined");
-				const framed = await origFramePayload.call(core.frameHandler, payload);
+		core.frameHandler.addEventListener(
+			"debug:framehandler:payload_to_frame",
+			(event: any) => {
+				controller.recordNetworkEvent({
+					direction: "send",
+					layer: "noise_payload",
+					data: event.detail.payload,
+					length: event.detail.payload.length,
+					metadata: { handshakeFinished: event.detail.isHandshakeFinished },
+				});
+			},
+		);
+		core.frameHandler.addEventListener(
+			"debug:framehandler:framed_payload_sent",
+			(event: any) => {
 				controller.recordNetworkEvent({
 					direction: "send",
 					layer: "frame_raw",
-					data: framed,
-					length: framed.length,
+					data: event.detail.framed,
+					length: event.detail.framed.length,
 				});
-				return framed;
-			} catch (e: unknown) {
-				controller.recordError(
-					"FrameHandler.framePayload",
-					e instanceof Error ? e : new Error(String(e)),
-				);
-				throw e;
-			}
-		};
+			},
+		);
+		core.frameHandler.addEventListener(
+			"debug:framehandler:received_raw_frame",
+			(event: any) => {
+				controller.recordNetworkEvent({
+					direction: "receive",
+					layer: "frame_raw",
+					data: event.detail.encryptedFrame,
+					length: event.detail.encryptedFrame.length,
+				});
+			},
+		);
 	}
 
-	// --- Noise Processor ---
+	// --- NoiseProcessor debug events ---
 	if (core.noiseProcessor) {
-		const npKey = "noiseProcessor";
-		storeOriginalMethod(npKey, core.noiseProcessor, "decryptMessage");
-		core.noiseProcessor.decryptMessage = async (ciphertext: Uint8Array) => {
-			try {
-				const origDecrypt = originalMethods[npKey]?.decryptMessage;
-				if (!origDecrypt)
-					throw new Error(
-						"Original noiseProcessor.decryptMessage is undefined",
-					);
-				const plaintext = await origDecrypt.call(
-					core.noiseProcessor,
-					ciphertext,
-				);
+		core.noiseProcessor.addEventListener(
+			"debug:noiseprocessor:payload_encrypted",
+			(event: any) => {
+				controller.recordNetworkEvent({
+					direction: "send",
+					layer: "noise_payload",
+					data: event.detail.ciphertext,
+					length: event.detail.ciphertext.length,
+					metadata: { plaintextLength: event.detail.plaintext.length },
+				});
+			},
+		);
+		core.noiseProcessor.addEventListener(
+			"debug:noiseprocessor:payload_decrypted",
+			(event: any) => {
 				controller.recordNetworkEvent({
 					direction: "receive",
 					layer: "noise_payload",
-					data: plaintext,
-					length: plaintext.length,
+					data: event.detail.plaintext,
+					length: event.detail.plaintext.length,
+					metadata: { ciphertextLength: event.detail.ciphertext.length },
 				});
-				return plaintext;
-			} catch (e: unknown) {
-				controller.recordNetworkEvent({
-					direction: "receive",
-					layer: "noise_payload",
-					data: ciphertext,
-					length: ciphertext.length,
-					error: e instanceof Error ? e.message : String(e),
-				});
-				controller.recordError(
-					"NoiseProcessor.decryptMessage",
-					e instanceof Error ? e : new Error(String(e)),
+			},
+		);
+		core.noiseProcessor.addEventListener(
+			"debug:noiseprocessor:state_update",
+			(event: any) => {
+				controller.recordComponentState(
+					"noiseProcessor",
+					event.detail.stateSnapshot,
 				);
-				throw e;
-			}
-		};
+			},
+		);
+		// Initial state snapshot
+		if (typeof core.noiseProcessor.getDebugStateSnapshot === "function") {
+			controller.recordComponentState(
+				"noiseProcessor",
+				core.noiseProcessor.getDebugStateSnapshot(),
+			);
+		}
 	}
 
-	// --- Connection Manager (XMPP Nodes) ---
+	// --- ConnectionManager debug events ---
 	if (core.connectionManager) {
-		const cmKey = "connectionManager";
-		storeOriginalMethod(cmKey, core.connectionManager, "sendNode");
-		core.connectionManager.sendNode = async (node: BinaryNode) => {
-			controller.recordNetworkEvent({
-				direction: "send",
-				layer: "xmpp_node",
-				data: deepClone(node),
-				length: JSON.stringify(node).length,
-			});
-			try {
-				const origSendNode = originalMethods[cmKey]?.sendNode;
-				if (!origSendNode)
-					throw new Error("Original connectionManager.sendNode is undefined");
-				return await origSendNode.call(core.connectionManager, node);
-			} catch (e: unknown) {
+		core.connectionManager.addEventListener(
+			"debug:connectionmanager:sending_node",
+			(event: any) => {
 				controller.recordNetworkEvent({
 					direction: "send",
 					layer: "xmpp_node",
-					data: deepClone(node),
-					error: e instanceof Error ? e.message : String(e),
+					data: event.detail.node,
+					length: JSON.stringify(event.detail.node).length,
 				});
-				controller.recordError(
-					"ConnectionManager.sendNode",
-					e instanceof Error ? e : new Error(String(e)),
-				);
-				throw e;
-			}
-		};
-
-		// --- Debug event listeners for connectionManager ---
-		if (!originalMethods[cmKey]) {
-			originalMethods[cmKey] = {};
-		}
-		// Store listeners for later removal
-		if (!(originalMethods[cmKey] as any)._debugEventListeners) {
-			(originalMethods[cmKey] as any)._debugEventListeners = {};
-		}
-		const handshakeCompleteListener = () => {
-			if (core.noiseProcessor) {
-				const noiseState = (core.noiseProcessor as any).getState();
-				controller.recordComponentState("noiseProcessor", noiseState);
-				controller.recordClientEvent(
-					"noise_processor.handshake_finalized",
-					deepClone(noiseState),
-					"NoiseProcessor",
-				);
-			}
-		};
-		(core.connectionManager as any).addEventListener(
-			"handshake.complete",
-			handshakeCompleteListener,
+			},
 		);
-		(originalMethods[cmKey] as any)._debugEventListeners["handshake.complete"] =
-			handshakeCompleteListener;
-
-		const nodeReceivedListener = (event: any) => {
-			const node = event.detail?.node as BinaryNode;
-			if (node) {
-				controller.recordNetworkEvent({
-					direction: "receive",
-					layer: "xmpp_node",
-					data: deepClone(node),
-					length: JSON.stringify(node).length,
-				});
-			}
-		};
-		(core.connectionManager as any).addEventListener(
-			"node.received",
-			nodeReceivedListener,
-		);
-		(originalMethods[cmKey] as any)._debugEventListeners["node.received"] =
-			nodeReceivedListener;
-
-		const stateChangeListener = (event: any) => {
+		core.connectionManager.addEventListener("node.received", (event: any) => {
+			controller.recordNetworkEvent({
+				direction: "receive",
+				layer: "xmpp_node",
+				data: event.detail.node,
+				length: JSON.stringify(event.detail.node).length,
+			});
+		});
+		core.connectionManager.addEventListener("state.change", (event: any) => {
 			controller.recordClientEvent(
 				"connection_manager.state.change",
 				event.detail,
 				"ConnectionManager",
 			);
 			controller.recordComponentState("connectionManager", event.detail.state);
-		};
-		(core.connectionManager as any).addEventListener(
-			"state.change",
-			stateChangeListener,
-		);
-		(originalMethods[cmKey] as any)._debugEventListeners["state.change"] =
-			stateChangeListener;
+		});
+		// Initial state snapshot
+		if (typeof core.connectionManager.getDebugStateSnapshot === "function") {
+			controller.recordComponentState(
+				"connectionManager",
+				core.connectionManager.getDebugStateSnapshot(),
+			);
+		}
 	}
 
-	// --- Authenticator ---
+	// --- Authenticator debug events ---
 	if (core.authenticator) {
+		core.authenticator.addEventListener(
+			"debug:authenticator:state_change",
+			(event: any) => {
+				controller.recordComponentState("authenticator", {
+					state: event.detail.state,
+					snapshot:
+						typeof core.authenticator.getDebugStateSnapshot === "function"
+							? core.authenticator.getDebugStateSnapshot()
+							: undefined,
+				});
+			},
+		);
 		core.authenticator.addEventListener("connection.update", (event: any) => {
 			controller.recordClientEvent(
 				"authenticator.connection.update",
 				event.detail,
 				"Authenticator",
-			);
-			controller.recordComponentState(
-				"authenticator",
-				core.authenticator?.authStateProvider?.creds
-					? {
-							registered: core.authenticator.authStateProvider.creds.registered,
-							me: core.authenticator.authStateProvider.creds.me,
-							authState: (core.authenticator as any).state,
-						}
-					: "creds_unavailable",
 			);
 		});
 		core.authenticator.addEventListener("creds.update", (event: any) => {
@@ -328,16 +240,14 @@ export function attachHooks(
 				event.detail,
 				"Authenticator",
 			);
+		});
+		// Initial state snapshot
+		if (typeof core.authenticator.getDebugStateSnapshot === "function") {
 			controller.recordComponentState(
 				"authenticator",
-				core.authenticator?.authStateProvider?.creds
-					? {
-							registered: core.authenticator.authStateProvider.creds.registered,
-							me: core.authenticator.authStateProvider.creds.me,
-						}
-					: "creds_unavailable",
+				core.authenticator.getDebugStateSnapshot(),
 			);
-		});
+		}
 	}
 
 	// --- WhaTSClient (High-level events) ---
@@ -394,103 +304,6 @@ export function attachHooks(
 					{ rawNodeTag: event.detail.rawNode?.tag },
 				);
 			},
-		);
-	}
-
-	// Initial state snapshots
-	if (core.authenticator?.authStateProvider?.creds) {
-		controller.recordComponentState(
-			"authenticator",
-			core.authenticator.authStateProvider.creds,
-		);
-	}
-	if (core.noiseProcessor) {
-		controller.recordComponentState(
-			"noiseProcessor",
-			(core.noiseProcessor as any).getState(),
-		);
-	}
-	if (core.connectionManager) {
-		controller.recordComponentState(
-			"connectionManager",
-			(core.connectionManager as any).state,
-		);
-	}
-	// --- Signal Protocol Store Adapter Hooks ---
-	if (core.client && (core.client as any).signalStore) {
-		const signalStoreKey = "signalStore";
-		const signalStoreInstance = (core.client as any).signalStore;
-
-		// Hook storeSession
-		storeOriginalMethod(signalStoreKey, signalStoreInstance, "storeSession");
-		signalStoreInstance.storeSession = async (
-			identifier: string,
-			record: any,
-		) => {
-			const origStoreSession = originalMethods[signalStoreKey]?.storeSession;
-			if (!origStoreSession) {
-				throw new Error("Original signalStore.storeSession is undefined");
-			}
-			try {
-				await origStoreSession.call(signalStoreInstance, identifier, record);
-			} finally {
-				controller.recordComponentState(`signal:session:${identifier}`, record);
-			}
-		};
-
-		// Hook loadSession (optional, for observing what's loaded)
-		storeOriginalMethod(signalStoreKey, signalStoreInstance, "loadSession");
-		signalStoreInstance.loadSession = async (identifier: string) => {
-			const origLoadSession = originalMethods[signalStoreKey]?.loadSession;
-			if (!origLoadSession) {
-				throw new Error("Original signalStore.loadSession is undefined");
-			}
-			const record = await origLoadSession.call(
-				signalStoreInstance,
-				identifier,
-			);
-			if (record) {
-				controller.recordClientEvent(
-					"signalStore.session.loaded",
-					{ identifier, hasSession: !!record },
-					"SignalStore",
-				);
-			}
-			return record;
-		};
-
-		// Record identity state at hook time
-		if (typeof signalStoreInstance.getOurIdentity === "function") {
-			signalStoreInstance
-				.getOurIdentity()
-				.then((idKey: any) => {
-					controller.recordComponentState("signal:identity", {
-						registrationId:
-							signalStoreInstance.authState?.creds?.registrationId,
-						identityKey: idKey,
-					});
-				})
-				.catch((e: Error) =>
-					controller.recordError("SignalStore.getOurIdentity", e),
-				);
-		}
-		if (signalStoreInstance.authState?.creds) {
-			controller.recordComponentState("signal:identity", {
-				registrationId: signalStoreInstance.authState.creds.registrationId,
-				signedIdentityKey:
-					signalStoreInstance.authState.creds.signedIdentityKey,
-				signedPreKey: signalStoreInstance.authState.creds.signedPreKey,
-				nextPreKeyId: signalStoreInstance.authState.creds.nextPreKeyId,
-			});
-		}
-
-		controller.recordComponentState("signalStoreAdapter", {
-			hooked: true,
-			credsUsername: core.client.auth?.creds?.me?.id,
-		});
-	} else if (core.client) {
-		console.warn(
-			"[DebugHooks] core.client.signalStore not found. Signal state hooks will be disabled.",
 		);
 	}
 }

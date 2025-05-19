@@ -59,6 +59,17 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private qrRetryCount = 0;
 	private state: AuthState = AuthState.IDLE;
 
+	private setState(newState: AuthState): void {
+		if (this.state !== newState) {
+			this.state = newState;
+			this.dispatchEvent(
+				new CustomEvent("debug:authenticator:state_change", {
+					detail: { state: newState },
+				}),
+			);
+		}
+	}
+
 	private initialQrTimeoutMs = 60_000;
 	private subsequentQrTimeoutMs = 20_000;
 
@@ -87,7 +98,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				const error = event.detail.error;
 				this.logger.error({ err: error }, "Connection error");
 				this.clearQrTimeout();
-				this.state = AuthState.FAILED;
+				this.setState(AuthState.FAILED);
 				this.dispatchTypedEvent("connection.update", {
 					connection: "close",
 					error,
@@ -97,7 +108,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		this.connectionManager.addEventListener("ws.close", () => {
 			this.clearQrTimeout();
-			this.state = AuthState.IDLE;
+			this.setState(AuthState.IDLE);
 		});
 	}
 
@@ -158,7 +169,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	};
 
 	private handlePairDeviceIQ(node: BinaryNode): void {
-		this.state = AuthState.AWAITING_QR;
+		this.setState(AuthState.AWAITING_QR);
 
 		if (!node.attrs.id) {
 			throw new Error("Missing message ID in stanza for pair-device");
@@ -416,7 +427,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.logger.warn("Already processing pair-success, ignoring duplicate");
 			return;
 		}
-		this.state = AuthState.PROCESSING_PAIR_SUCCESS;
+		this.setState(AuthState.PROCESSING_PAIR_SUCCESS);
 		this.clearQrTimeout();
 
 		try {
@@ -449,7 +460,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.logger.info(
 				"Pairing complete, expecting connection close and restart",
 			);
-			this.state = AuthState.AUTHENTICATED;
+			this.setState(AuthState.AUTHENTICATED);
 		} catch (error) {
 			if (!(error instanceof Error)) {
 				throw error;
@@ -465,7 +476,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				.catch((err) =>
 					this.logger.error({ err }, "Failed to trigger connection close"),
 				);
-			this.state = AuthState.FAILED;
+			this.setState(AuthState.FAILED);
 		}
 	}
 
@@ -593,6 +604,23 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			],
 		};
 		return { node: registrationIQ, updateCreds };
+	}
+
+	public getDebugStateSnapshot(): {
+		internalState: AuthState;
+		qrRetryCount: number;
+		credsSummary: Partial<AuthenticationCreds>;
+	} {
+		return {
+			internalState: this.state,
+			qrRetryCount: this.qrRetryCount,
+			credsSummary: {
+				me: this.authStateProvider.creds.me,
+				platform: this.authStateProvider.creds.platform,
+				registered: this.authStateProvider.creds.registered,
+				signalIdentities: this.authStateProvider.creds.signalIdentities,
+			},
+		};
 	}
 }
 

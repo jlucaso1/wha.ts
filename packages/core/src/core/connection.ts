@@ -325,6 +325,12 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			);
 		}
 
+		this.dispatchEvent(
+			new CustomEvent("debug:connectionmanager:sending_node", {
+				detail: { node: JSON.parse(JSON.stringify(node)) },
+			}),
+		);
+
 		try {
 			const buffer = encodeBinaryNode(node);
 			const frame = await this.frameHandler.framePayload(buffer);

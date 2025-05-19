@@ -4,13 +4,13 @@ Debugging and instrumentation tools for the wha.ts core library.
 
 ## Overview
 
-This package provides a centralized debug controller, data taps via hooks into core modules, circular buffer storage for various event types, and agent-friendly interfaces (REPL and a structured JSON API). These tools are designed for advanced debugging, troubleshooting, and integration with AI agents like LLMs to analyze application behavior.
+This package provides a centralized debug controller, event-driven instrumentation via debug events emitted by core modules, circular buffer storage for various event types, and agent-friendly interfaces (REPL and a structured JSON API). These tools are designed for advanced debugging, troubleshooting, and integration with AI agents like LLMs to analyze application behavior.
 
 ## Structure
 
 - `src/controller.ts`: Main `DebugController` class, orchestrates data collection and access.
 - `src/datastore.ts`: `DebugDataStore` using circular buffers for efficient event storage (network, client events, errors, component states).
-- `src/hooks.ts`: Functions to attach/detach hooks to `@wha.ts/core` modules, reporting data to the `DebugController`.
+- `src/hooks.ts`: Functions to attach/detach event listeners to `@wha.ts/core` modules, reporting data to the `DebugController` via debug events and state snapshot methods.
 - `src/types.ts`: TypeScript interfaces defining the structure of debug events, states, and commands.
 - `src/repl/`: A command-line REPL for human or LLM-driven interactive debugging.
 - `src/api/`: A structured JSON API server for programmatic access to debug data, suitable for LLMs or external tools.
@@ -19,7 +19,7 @@ This package provides a centralized debug controller, data taps via hooks into c
 ## Usage
 
 1.  **Initialization**:
-    In your main application setup, initialize the `DebugController`. You'll need to pass instances of your core `wha.ts` components for the hooks to attach to.
+    In your main application setup, initialize the `DebugController`. You'll need to pass instances of your core `wha.ts` components for the debug system to attach event listeners to their debug events.
 
     ```typescript
     import { createWAClient } from "@wha.ts/core";
@@ -31,8 +31,6 @@ This package provides a centralized debug controller, data taps via hooks into c
         startDebugAPIServer,
         type WhaTsCoreModules,
     } from "@wha.ts/debug";
-    // Make sure to correctly define and export WhaTsCoreModules from @wha.ts/debug/hooks
-    // or from your core package if it exposes these internals.
 
     async function main() {
         // ... your client setup ...
@@ -49,7 +47,6 @@ This package provides a centralized debug controller, data taps via hooks into c
             authenticator: (client as any).authenticator,
             client: client,
             messageProcessor: (client as any).messageProcessor,
-            // decodeBinaryNode: decodeBinaryNode, // if needed by hooks
         };
 
         const debugController = initDebugController(
@@ -57,7 +54,7 @@ This package provides a centralized debug controller, data taps via hooks into c
                 networkLogCapacity: 500, // Customize buffer sizes
                 clientEventCapacity: 200,
             },
-            coreModules, // This attaches the hooks automatically
+            coreModules, // This attaches event listeners for debug events automatically
         );
 
         // Optionally start REPL or API server

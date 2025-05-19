@@ -3,7 +3,7 @@ import { Mutex } from "@wha.ts/utils/src/mutex-utils";
 import type { NoiseProcessor } from "./noise-processor";
 import type { ILogger } from "./types";
 
-export class FrameHandler {
+export class FrameHandler extends EventTarget {
 	private chunks: Uint8Array[] = [];
 	private bufferedBytes = 0;
 
@@ -18,7 +18,9 @@ export class FrameHandler {
 		) => void | Promise<void>,
 		private readonly routingInfo?: Uint8Array,
 		private readonly noisePrologue: Uint8Array = new Uint8Array(0),
-	) {}
+	) {
+		super();
+	}
 
 	/**
 	 * Helper method to peek at the first 'count' bytes across chunks
@@ -152,6 +154,12 @@ export class FrameHandler {
 
 				const encryptedFrame = frameData.subarray(3);
 
+				this.dispatchEvent(
+					new CustomEvent("debug:framehandler:received_raw_frame", {
+						detail: { encryptedFrame: new Uint8Array(encryptedFrame) },
+					}),
+				);
+
 				let decryptedPayload: Uint8Array;
 				try {
 					if (this.noiseProcessor.isHandshakeFinished) {
@@ -175,6 +183,15 @@ export class FrameHandler {
 	}
 
 	async framePayload(payload: Uint8Array): Promise<Uint8Array> {
+		this.dispatchEvent(
+			new CustomEvent("debug:framehandler:payload_to_frame", {
+				detail: {
+					payload: new Uint8Array(payload),
+					isHandshakeFinished: this.noiseProcessor.isHandshakeFinished,
+				},
+			}),
+		);
+
 		let encryptedPayload: Uint8Array;
 		if (this.noiseProcessor.isHandshakeFinished) {
 			encryptedPayload = await this.noiseProcessor.encryptMessage(payload);
@@ -214,7 +231,15 @@ export class FrameHandler {
 		view.setUint8(0, (frameLength >> 16) & 0xff);
 		view.setUint16(1, frameLength & 0xffff, false);
 
-		return concatBytes(headerBytes, lengthPrefix, encryptedPayload);
+		const framed = concatBytes(headerBytes, lengthPrefix, encryptedPayload);
+
+		this.dispatchEvent(
+			new CustomEvent("debug:framehandler:framed_payload_sent", {
+				detail: { framed: new Uint8Array(framed) },
+			}),
+		);
+
+		return framed;
 	}
 
 	resetFramingState() {

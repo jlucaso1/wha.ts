@@ -104,13 +104,12 @@ export class DebugController {
 	public recordError(
 		source: string,
 		message: string,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		stack?: string,
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		context?: any,
 	): void;
 	public recordError(
 		source: string,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		errorOrMessage: string | Error,
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		stackOrContext?: string | any,
@@ -153,7 +152,6 @@ export class DebugController {
 	// --- Data Access Methods (for REPL/API) ---
 	public getNetworkLog(
 		count?: number,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		filters?: {
 			direction?: "send" | "receive";
 			layer?: NetworkEvent["layer"];
@@ -173,7 +171,6 @@ export class DebugController {
 
 	public getClientEventLog(
 		count?: number,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		filters?: { eventName?: string; sourceComponent?: string },
 	): ClientEventRecord[] {
 		let events = this.dataStore.getClientEvents(count);
@@ -239,12 +236,12 @@ export class DebugController {
 	}
 
 	// Placeholder for potential direct command execution - USE WITH CAUTION
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	public async executeCoreCommand(
 		targetComponent: string,
 		command: string,
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		args: any[],
+		_args: any[],
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	): Promise<any> {
 		if (!this.coreModules) {
 			return Promise.reject(new Error("Core modules not available."));

@@ -36,7 +36,7 @@ interface NoiseState {
 	logger: ILogger;
 }
 
-export class NoiseProcessor {
+export class NoiseProcessor extends EventTarget {
 	private state: NoiseState;
 
 	constructor({
@@ -50,6 +50,7 @@ export class NoiseProcessor {
 		logger: ILogger;
 		routingInfo?: Uint8Array;
 	}) {
+		super();
 		const initialHashData = utf8ToBytes(NOISE_MODE);
 		let handshakeHash =
 			initialHashData.byteLength === 32
@@ -119,6 +120,12 @@ export class NoiseProcessor {
 			readCounter: 0,
 			writeCounter: 0,
 		};
+
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:state_update", {
+				detail: { stateSnapshot: this.getDebugStateSnapshot() },
+			}),
+		);
 	}
 
 	async encryptMessage(plaintext: Uint8Array) {
@@ -134,6 +141,15 @@ export class NoiseProcessor {
 			writeCounter: this.state.writeCounter + 1,
 		};
 		this.mixIntoHandshakeHash(ciphertext);
+
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:payload_encrypted", {
+				detail: {
+					plaintext: new Uint8Array(plaintext),
+					ciphertext: new Uint8Array(ciphertext),
+				},
+			}),
+		);
 		return ciphertext;
 	}
 
@@ -158,6 +174,15 @@ export class NoiseProcessor {
 				: this.state.writeCounter + 1,
 		};
 		this.mixIntoHandshakeHash(ciphertext);
+		// Emit debug event after decryption
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:payload_decrypted", {
+				detail: {
+					ciphertext: new Uint8Array(ciphertext),
+					plaintext: new Uint8Array(plaintext),
+				},
+			}),
+		);
 		return plaintext;
 	}
 
@@ -177,6 +202,12 @@ export class NoiseProcessor {
 			writeCounter: 0,
 			isHandshakeFinished: true,
 		};
+
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:state_update", {
+				detail: { stateSnapshot: this.getDebugStateSnapshot() },
+			}),
+		);
 	}
 
 	async processHandshake(
@@ -195,6 +226,7 @@ export class NoiseProcessor {
 		) {
 			throw new Error("Invalid serverHello message received");
 		}
+
 		this.mixIntoHandshakeHash(serverHello.ephemeral);
 		this.mixKeys(
 			Curve.sharedKey(localEphemeralKeyPair.privateKey, serverHello.ephemeral),
@@ -215,6 +247,10 @@ export class NoiseProcessor {
 			Curve.sharedKey(localStaticKeyPair.privateKey, serverHello.ephemeral),
 		);
 		return encryptedLocalStaticPublic;
+	}
+
+	getDebugStateSnapshot(): Readonly<NoiseState> {
+		return JSON.parse(JSON.stringify(this.state));
 	}
 
 	private verifyCertificateChain(
