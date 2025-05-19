@@ -1,40 +1,18 @@
-import { bytesToBase64, bytesToUtf8 } from "@wha.ts/utils/src/bytes-utils";
+import { sanitizeObjectForJSON } from "../api/sanitize";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
 
-// biome-ignore lint/suspicious/noExplicitAny: For REPL dynamic commands
 function formatDataForDisplay(data: any): string {
-	function replacer(_key: string, value: any) {
-		if (value instanceof Uint8Array) {
-			if (value.length > 128) {
-				return `Uint8Array(${value.length} bytes, base64: ${bytesToBase64(
-					value.slice(0, 32),
-				)}...)`;
-			}
-			try {
-				const text = bytesToUtf8(value);
-				if (/^[-\s]*$/.test(text) && text.length > 0) {
-					return `"${text}" (UTF-8) | base64: ${bytesToBase64(value)}`;
-				}
-			} catch {
-				// ignore
-			}
-			return `Uint8Array(base64: ${bytesToBase64(value)})`;
-		}
-		return value;
+	if (typeof data === "undefined") return "undefined";
+	if (data === null) return "null";
+	if (typeof data === "string") return data;
+	if (typeof data === "number" || typeof data === "boolean")
+		return String(data);
+	try {
+		return JSON.stringify(sanitizeObjectForJSON(data), null, 2);
+	} catch {
+		return "[Unserializable Object]";
 	}
-
-	if (data instanceof Uint8Array) {
-		return replacer("", data);
-	}
-	if (typeof data === "object" && data !== null) {
-		try {
-			return JSON.stringify(data, replacer, 2);
-		} catch {
-			return "[Unserializable Object]";
-		}
-	}
-	return String(data);
 }
 
 export async function handleREPLCommand(

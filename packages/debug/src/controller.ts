@@ -7,27 +7,19 @@ import type {
 	NetworkEvent,
 } from "./types";
 
-// Utility to deep clone, good enough for most debug data
-// For Uint8Array, it will become an object with numeric keys in JSON.stringify
-// which is fine for inspection. If precise Uint8Array type is needed after JSON,
-// it needs custom revival.
-// For performance-critical paths, direct copying or more specialized cloning is better.
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-const deepClone = (obj: any): any => {
+export const deepClone = (obj: any): any => {
 	if (obj === null || typeof obj !== "object") {
 		return obj;
 	}
 	if (obj instanceof Uint8Array) {
-		return new Uint8Array(obj); // Create a copy
+		return new Uint8Array(obj);
 	}
 	if (obj instanceof Date) {
 		return new Date(obj.getTime());
 	}
 	if (Array.isArray(obj)) {
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		return obj.map((item: any) => deepClone(item));
 	}
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	const cloned: { [key: string]: any } = {};
 	for (const key in obj) {
 		if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -46,7 +38,6 @@ export class DebugController {
 		this.dataStore = new DebugDataStore(options);
 	}
 
-	// --- Hook Management ---
 	public attachHooks(coreModules: WhaTsCoreModules): void {
 		if (this.isHooksAttached) {
 			console.warn("[DebugController] Hooks already attached.");
@@ -71,7 +62,6 @@ export class DebugController {
 		console.log("[DebugController] Hooks detached.");
 	}
 
-	// --- Data Recording Methods (called by hooks) ---
 	public recordNetworkEvent(eventData: Omit<NetworkEvent, "timestamp">): void {
 		const event: NetworkEvent = {
 			...eventData,
@@ -86,7 +76,6 @@ export class DebugController {
 
 	public recordClientEvent(
 		eventName: string,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		payload: any,
 		sourceComponent: string,
 	): void {
@@ -99,21 +88,17 @@ export class DebugController {
 		this.dataStore.addClientEvent(event);
 	}
 
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	public recordError(source: string, error: Error, context?: any): void;
 	public recordError(
 		source: string,
 		message: string,
 		stack?: string,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		context?: any,
 	): void;
 	public recordError(
 		source: string,
 		errorOrMessage: string | Error,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		stackOrContext?: string | any,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		context?: any,
 	): void {
 		let record: ErrorRecord;
@@ -149,7 +134,6 @@ export class DebugController {
 		this.dataStore.addComponentStateSnapshot(snapshot);
 	}
 
-	// --- Data Access Methods (for REPL/API) ---
 	public getNetworkLog(
 		count?: number,
 		filters?: {
@@ -235,13 +219,10 @@ export class DebugController {
 		}
 	}
 
-	// Placeholder for potential direct command execution - USE WITH CAUTION
 	public async executeCoreCommand(
 		targetComponent: string,
 		command: string,
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		_args: any[],
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	): Promise<any> {
 		if (!this.coreModules) {
 			return Promise.reject(new Error("Core modules not available."));
