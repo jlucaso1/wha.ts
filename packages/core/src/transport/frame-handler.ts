@@ -156,7 +156,9 @@ export class FrameHandler extends EventTarget {
 
 				this.dispatchEvent(
 					new CustomEvent("debug:framehandler:received_raw_frame", {
-						detail: { encryptedFrame: new Uint8Array(encryptedFrame) },
+						detail: {
+							encryptedFrame,
+						},
 					}),
 				);
 
@@ -186,7 +188,7 @@ export class FrameHandler extends EventTarget {
 		this.dispatchEvent(
 			new CustomEvent("debug:framehandler:payload_to_frame", {
 				detail: {
-					payload: new Uint8Array(payload),
+					payload,
 					isHandshakeFinished: this.noiseProcessor.isHandshakeFinished,
 				},
 			}),
@@ -235,7 +237,7 @@ export class FrameHandler extends EventTarget {
 
 		this.dispatchEvent(
 			new CustomEvent("debug:framehandler:framed_payload_sent", {
-				detail: { framed: new Uint8Array(framed) },
+				detail: { framed },
 			}),
 		);
 

@@ -120,10 +120,10 @@ export class SessionCipher {
 			macInput[33 * 2] = this._encodeTupleByte(VERSION, VERSION);
 			macInput.set(msgBuf, 33 * 2 + 1);
 			const mac = hmacSign(keys[1], macInput);
-			const result = new Uint8Array(msgBuf.byteLength + 9);
-			result[0] = this._encodeTupleByte(VERSION, VERSION);
-			result.set(msgBuf, 1);
-			result.set(mac.slice(0, 8), msgBuf.byteLength + 1);
+			const message = new Uint8Array(msgBuf.byteLength + 9);
+			message[0] = this._encodeTupleByte(VERSION, VERSION);
+			message.set(msgBuf, 1);
+			message.set(mac.slice(0, 8), msgBuf.byteLength + 1);
 			await this.storeRecord(record);
 			let type: number;
 			let body: Uint8Array;
@@ -138,7 +138,7 @@ export class SessionCipher {
 						typeof session.pendingPreKey.signedKeyId === "number"
 							? session.pendingPreKey.signedKeyId
 							: undefined,
-					message: new Uint8Array(result),
+					message,
 				});
 
 				if (
@@ -156,7 +156,7 @@ export class SessionCipher {
 				);
 			} else {
 				type = 1;
-				body = new Uint8Array(result);
+				body = message;
 			}
 			if (typeof session.registrationId !== "number") {
 				throw new Error("Session registrationId is undefined");

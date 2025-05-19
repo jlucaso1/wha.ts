@@ -127,7 +127,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 
 		this.dispatchEvent(
 			new CustomEvent("debug:websocket:received_raw", {
-				detail: { data: new Uint8Array(data) },
+				detail: { data },
 			}),
 		);
 

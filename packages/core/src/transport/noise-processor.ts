@@ -146,8 +146,8 @@ export class NoiseProcessor extends EventTarget {
 		this.dispatchEvent(
 			new CustomEvent("debug:noiseprocessor:payload_encrypted", {
 				detail: {
-					plaintext: new Uint8Array(plaintext),
-					ciphertext: new Uint8Array(ciphertext),
+					plaintext,
+					ciphertext,
 				},
 			}),
 		);
@@ -179,8 +179,8 @@ export class NoiseProcessor extends EventTarget {
 		this.dispatchEvent(
 			new CustomEvent("debug:noiseprocessor:payload_decrypted", {
 				detail: {
-					ciphertext: new Uint8Array(ciphertext),
-					plaintext: new Uint8Array(plaintext),
+					ciphertext,
+					plaintext,
 				},
 			}),
 		);

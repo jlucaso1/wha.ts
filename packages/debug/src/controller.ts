@@ -12,7 +12,7 @@ export const deepClone = (obj: any): any => {
 		return obj;
 	}
 	if (obj instanceof Uint8Array) {
-		return new Uint8Array(obj);
+		return obj;
 	}
 	if (obj instanceof Date) {
 		return new Date(obj.getTime());
@@ -67,7 +67,7 @@ export class DebugController {
 			...eventData,
 			data:
 				eventData.data instanceof Uint8Array
-					? new Uint8Array(eventData.data)
+					? eventData.data
 					: deepClone(eventData.data),
 			timestamp: Date.now(),
 		};

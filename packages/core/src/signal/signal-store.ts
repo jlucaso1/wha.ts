@@ -88,10 +88,10 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 			this.authState.creds.signedPreKey = {
 				keyId: keyRecord.keyId,
 				keyPair: {
-					privateKey: new Uint8Array(keyRecord.keyPair.privateKey),
-					publicKey: new Uint8Array(keyRecord.keyPair.publicKey),
+					privateKey: keyRecord.keyPair.privateKey,
+					publicKey: keyRecord.keyPair.publicKey,
 				},
-				signature: new Uint8Array(keyRecord.signature),
+				signature: keyRecord.signature,
 			};
 			await this.authState.saveCreds();
 		} else {
