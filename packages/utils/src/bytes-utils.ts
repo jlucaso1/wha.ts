@@ -41,3 +41,24 @@ export const padRandomMax16 = (data: Uint8Array): Uint8Array => {
 	padded.fill(paddingBytes, data.length);
 	return padded;
 };
+
+export const isBytes = (value: unknown): value is Uint8Array => {
+	if (value instanceof Uint8Array) {
+		return true;
+	}
+	if (Array.isArray(value)) {
+		return value.every((v) => typeof v === "number");
+	}
+	if (typeof value === "string") {
+		try {
+			const decoded = atob(value);
+			return (
+				decoded.length % 4 === 0 &&
+				decoded.split("").every((c) => c.charCodeAt(0) < 256)
+			);
+		} catch {
+			return false;
+		}
+	}
+	return false;
+};

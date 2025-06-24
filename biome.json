@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"ignore": ["dist", "node_modules"]
+		"ignore": ["dist", "node_modules", "debug-example-storage"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -22,6 +22,11 @@
 			"recommended": true,
 			"suspicious": {
 				"noExplicitAny": "warn"
+			},
+			"correctness": {
+				"noUnusedImports": "warn",
+				"noUnusedPrivateClassMembers": "warn",
+				"noUnusedVariables": "warn"
 			}
 		}
 	},

@@ -58,12 +58,13 @@ const decodeDecompressedBinaryNode = (reader: BinaryReader): BinaryNode => {
 
 	const readPacked8 = (tag: number) => {
 		const startByte = reader.readByte();
-		let value = "";
+		const chars: string[] = [];
 		for (let i = 0; i < (startByte & 127); i++) {
 			const curByte = reader.readByte();
-			value += String.fromCharCode(unpackByte(tag, (curByte & 0xf0) >> 4));
-			value += String.fromCharCode(unpackByte(tag, curByte & 0x0f));
+			chars.push(String.fromCharCode(unpackByte(tag, (curByte & 0xf0) >> 4)));
+			chars.push(String.fromCharCode(unpackByte(tag, curByte & 0x0f)));
 		}
+		let value = chars.join("");
 		if (startByte >> 7 !== 0) {
 			value = value.slice(0, -1);
 		}

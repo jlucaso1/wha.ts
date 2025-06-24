@@ -1,4 +1,4 @@
-import type { KeyPair } from "@wha.ts/utils/src/types";
+import type { KeyPair } from "@wha.ts/utils";
 import type { ChainType } from "./chain_type";
 import type { SessionRecord } from "./session_record";
 

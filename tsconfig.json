@@ -18,6 +18,30 @@
 
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
-		"noPropertyAccessFromIndexSignature": false
-	}
+		"noPropertyAccessFromIndexSignature": false,
+		"baseUrl": ".",
+		"paths": {
+			"@wha.ts/core": ["packages/core/src/index.ts"],
+			"@wha.ts/core/*": ["packages/core/src/*"],
+			"@wha.ts/binary": ["packages/binary/src/index.ts"],
+			"@wha.ts/binary/*": ["packages/binary/src/*"],
+			"@wha.ts/proto": ["packages/proto/src/index.ts"],
+			"@wha.ts/proto/*": ["packages/proto/src/*"],
+			"@wha.ts/signal": ["packages/signal/src/index.ts"],
+			"@wha.ts/signal/*": ["packages/signal/src/*"],
+			"@wha.ts/storage": ["packages/storage/src/index.ts"],
+			"@wha.ts/storage/*": ["packages/storage/src/*"],
+			"@wha.ts/utils": ["packages/utils/src/index.ts"],
+			"@wha.ts/utils/*": ["packages/utils/src/*"],
+			"@wha.ts/debug": ["packages/debug/src/index.ts"],
+			"@wha.ts/debug/*": ["packages/debug/src/*"]
+		}
+	},
+	"include": ["packages/**/*.ts", "packages/**/*.tsx", "packages/**/*.json"],
+	"exclude": [
+		"node_modules",
+		"**/dist",
+		"**/example-storage",
+		"**/debug-example-storage"
+	]
 }

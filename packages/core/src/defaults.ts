@@ -19,4 +19,5 @@ export const DEFAULT_SOCKET_CONFIG = {
 	origin: DEFAULT_ORIGIN,
 };
 
-export const WA_CERT_DETAILS = { SERIAL: 0 };
+export const MIN_PREKEY_COUNT = 10; // Minimum pre-keys to maintain on server
+export const PREKEY_UPLOAD_BATCH_SIZE = 30; // Number of pre-keys to upload in a batch

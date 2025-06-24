@@ -7,6 +7,14 @@
 	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": ["dist"],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"development": "./src/index.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"keywords": ["whatsapp", "typescript", "api", "protobuf"],
 	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
 	"license": "MIT",
@@ -19,7 +27,7 @@
 	},
 	"scripts": {
 		"proto:gen": "@bufbuild/buf generate",
-		"build": "tsup src/*.ts --format=esm --dts"
+		"build": "tsup src/index.ts --format=esm --dts"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5"

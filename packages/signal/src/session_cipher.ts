@@ -1,22 +1,34 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { PreKeySignalMessageSchema, SignalMessageSchema } from "@wha.ts/proto";
-import { concatBytes, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import {
+	PreKeySignalMessageSchema,
+	ProtoKeyPairSchema,
+	SignalMessageSchema,
+} from "@wha.ts/proto";
+import {
+	ProtoChainSchema,
+	ProtoChainType,
+	type ProtoSessionEntry as ProtoSessionEntryType,
+} from "@wha.ts/proto";
+import { concatBytes, utf8ToBytes } from "@wha.ts/utils";
+import { bytesToBase64 } from "@wha.ts/utils";
 import {
 	aesDecrypt,
 	aesEncrypt,
 	hkdfSignalDeriveSecrets,
 	hmacSha256Verify,
 	hmacSign,
-} from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
-import { Mutex } from "@wha.ts/utils/src/mutex-utils";
+} from "@wha.ts/utils";
+import { Curve } from "@wha.ts/utils";
+import { Mutex } from "@wha.ts/utils";
 import { ChainType } from "./chain_type";
 import { ProtocolAddress } from "./protocol_address";
 import { SessionBuilder } from "./session_builder";
-import { type SessionEntry, SessionRecord } from "./session_record";
+import { SessionRecord } from "./session_record";
 import type { SignalSessionStorage } from "./types";
 
 const VERSION = 3;
+
+const MAX_SKIPPED_MESSAGE_KEYS = 2000;
 
 export class SessionCipher {
 	private addr: ProtocolAddress;
@@ -75,6 +87,7 @@ export class SessionCipher {
 			if (!session) {
 				throw new Error("No open session");
 			}
+			if (!session.indexInfo) throw new Error("Session missing indexInfo");
 			const remoteIdentityKey = session.indexInfo.remoteIdentityKey;
 			if (
 				!(await this.storage.isTrustedIdentity(
@@ -85,14 +98,18 @@ export class SessionCipher {
 			) {
 				throw new Error("Untrusted identity key");
 			}
-			const chain = session.getChain(
-				session.currentRatchet.ephemeralKeyPair.publicKey,
-			);
-			if (!chain || chain.chainType === ChainType.RECEIVING) {
+			if (!session.currentRatchet || !session.currentRatchet.ephemeralKeyPair)
+				throw new Error("Session missing currentRatchet or ephemeralKeyPair");
+			const chain =
+				session.chains?.[
+					bytesToBase64(session.currentRatchet.ephemeralKeyPair.publicKey)
+				];
+			if (!chain || chain.chainType === ProtoChainType.RECEIVING) {
 				throw new Error("Tried to encrypt on a receiving chain");
 			}
-			this.fillMessageKeys(chain, chain.chainKey.counter + 1);
-			const keyIndex = chain.chainKey.counter;
+			if (!chain.chainKey) throw new Error("Chain missing chainKey");
+			this.fillMessageKeys(chain, Number(chain.chainKey.counter) + 1);
+			const keyIndex = Number(chain.chainKey.counter);
 			const keyMaterial = chain.messageKeys[keyIndex];
 			if (!keyMaterial) {
 				throw new Error("Missing message key for encryption");
@@ -106,8 +123,8 @@ export class SessionCipher {
 
 			const msg = create(SignalMessageSchema, {
 				ratchetKey: session.currentRatchet.ephemeralKeyPair.publicKey,
-				counter: chain.chainKey.counter,
-				previousCounter: session.currentRatchet.previousCounter,
+				counter: Number(chain.chainKey.counter),
+				previousCounter: Number(session.currentRatchet.previousCounter),
 				ciphertext: aesEncrypt(keys[0], data, keys[2].slice(0, 16)),
 			});
 
@@ -118,12 +135,11 @@ export class SessionCipher {
 			macInput[33 * 2] = this._encodeTupleByte(VERSION, VERSION);
 			macInput.set(msgBuf, 33 * 2 + 1);
 			const mac = hmacSign(keys[1], macInput);
-			const result = new Uint8Array(msgBuf.byteLength + 9);
-			result[0] = this._encodeTupleByte(VERSION, VERSION);
-			result.set(msgBuf, 1);
-			result.set(mac.slice(0, 8), msgBuf.byteLength + 1);
+			const message = new Uint8Array(msgBuf.byteLength + 9);
+			message[0] = this._encodeTupleByte(VERSION, VERSION);
+			message.set(msgBuf, 1);
+			message.set(mac.slice(0, 8), msgBuf.byteLength + 1);
 			await this.storeRecord(record);
-			console.log("[encrypt]", session);
 			let type: number;
 			let body: Uint8Array;
 			if (session.pendingPreKey) {
@@ -137,7 +153,7 @@ export class SessionCipher {
 						typeof session.pendingPreKey.signedKeyId === "number"
 							? session.pendingPreKey.signedKeyId
 							: undefined,
-					message: new Uint8Array(result),
+					message,
 				});
 
 				if (
@@ -155,7 +171,7 @@ export class SessionCipher {
 				);
 			} else {
 				type = 1;
-				body = new Uint8Array(result);
+				body = message;
 			}
 			if (typeof session.registrationId !== "number") {
 				throw new Error("Session registrationId is undefined");
@@ -170,8 +186,8 @@ export class SessionCipher {
 
 	public async decryptWithSessions(
 		data: Uint8Array,
-		sessions: SessionEntry[],
-	): Promise<{ session: SessionEntry; plaintext: Uint8Array }> {
+		sessions: ProtoSessionEntryType[],
+	): Promise<{ session: ProtoSessionEntryType; plaintext: Uint8Array }> {
 		if (!sessions.length) {
 			throw new Error("No sessions available");
 		}
@@ -180,7 +196,8 @@ export class SessionCipher {
 			let plaintext: Uint8Array;
 			try {
 				plaintext = await this.doDecryptWhisperMessage(data, session);
-				session.indexInfo.used = Date.now();
+				if (!session.indexInfo) throw new Error("Session missing indexInfo");
+				session.indexInfo.used = BigInt(Date.now());
 				return {
 					session,
 					plaintext,
@@ -203,6 +220,8 @@ export class SessionCipher {
 				throw new Error("No session record");
 			}
 			const result = await this.decryptWithSessions(data, record.getSessions());
+			if (!result.session.indexInfo)
+				throw new Error("Session missing indexInfo");
 			const remoteIdentityKey = result.session.indexInfo.remoteIdentityKey;
 			if (
 				!(await this.storage.isTrustedIdentity(
@@ -216,12 +235,8 @@ export class SessionCipher {
 			if (record.isClosed(result.session)) {
 				console.warn("Decrypted message with closed session.");
 			}
-			console.debug(
-				{ sessionState: result.session },
-				"[decryptWhisperMessage] State before saving",
-			);
+
 			await this.storeRecord(record);
-			console.debug("[decryptWhisperMessage] State saved successfully");
 			return result.plaintext;
 		});
 	}
@@ -256,12 +271,8 @@ export class SessionCipher {
 				preKeyProto.message,
 				session,
 			);
-			console.debug(
-				{ sessionState: session },
-				"[decryptPreKeyWhisperMessage] State before saving",
-			);
+
 			await this.storeRecord(record);
-			console.debug("[decryptPreKeyWhisperMessage] State saved successfully");
 			if (preKeyId !== undefined && this.storage.removePreKey) {
 				await this.storage.removePreKey(preKeyId);
 			}
@@ -271,7 +282,7 @@ export class SessionCipher {
 
 	private async doDecryptWhisperMessage(
 		messageBuffer: Uint8Array,
-		session: SessionEntry,
+		session: ProtoSessionEntryType,
 	): Promise<Uint8Array> {
 		if (!session) {
 			throw new TypeError("session required");
@@ -287,25 +298,19 @@ export class SessionCipher {
 		const messageProto = messageBuffer.slice(1, -8);
 		const message = fromBinary(SignalMessageSchema, messageProto);
 		this.maybeStepRatchet(session, message.ratchetKey, message.previousCounter);
-		console.trace(
-			{ sessionStateAfterRatchet: session },
-			"[doDecryptWhisperMessage] Session state after maybeStepRatchet",
-		);
-		const chain = session.getChain(message.ratchetKey);
-		if (!chain || chain.chainType === ChainType.SENDING) {
+
+		const chain = session.chains?.[bytesToBase64(message.ratchetKey)];
+		if (!chain || chain.chainType === ProtoChainType.SENDING) {
 			throw new Error("Tried to decrypt on a sending chain");
 		}
-		this.fillMessageKeys(chain, message.counter);
-		if (
-			!Object.prototype.hasOwnProperty.call(chain.messageKeys, message.counter)
-		) {
-			throw new Error("Key used already or never filled");
-		}
+		if (!chain.chainKey) throw new Error("Chain missing chainKey");
+		this.fillMessageKeys(chain, Number(message.counter));
 		const messageKey = chain.messageKeys[message.counter];
 		if (!messageKey) {
-			throw new Error("Message key is undefined");
+			throw new Error(
+				"Key used already or never filled or invalid message counter",
+			);
 		}
-		delete chain.messageKeys[message.counter];
 		const keys = hkdfSignalDeriveSecrets(
 			messageKey,
 			new Uint8Array(32),
@@ -313,6 +318,7 @@ export class SessionCipher {
 		);
 		const ourIdentityKey = await this.storage.getOurIdentity();
 		const macInput = new Uint8Array(messageProto.byteLength + 33 * 2 + 1);
+		if (!session.indexInfo) throw new Error("Session missing indexInfo");
 		macInput.set(session.indexInfo.remoteIdentityKey);
 		macInput.set(ourIdentityKey.publicKey, 33);
 		macInput[33 * 2] = this._encodeTupleByte(VERSION, VERSION);
@@ -323,67 +329,90 @@ export class SessionCipher {
 			message.ciphertext,
 			keys[2].slice(0, 16),
 		);
+		delete chain.messageKeys[message.counter];
 		session.pendingPreKey = undefined;
 		return plaintext;
 	}
 
 	private fillMessageKeys(
 		chain: {
-			chainKey: { counter: number; key: Uint8Array | null | undefined };
+			chainKey?: { counter?: number; key?: Uint8Array | null };
 			messageKeys: Record<number, Uint8Array>;
 		},
 		counter: number,
 	): void {
-		if (chain.chainKey.counter >= counter) {
-			return;
+		if (!chain.chainKey) throw new Error("Chain missing chainKey");
+		const startCounter =
+			typeof chain.chainKey.counter === "number" ? chain.chainKey.counter : 0;
+		if (counter - startCounter > MAX_SKIPPED_MESSAGE_KEYS) {
+			throw new Error("Too many messages skipped");
 		}
-		if (counter - chain.chainKey.counter > 2000) {
-			throw new Error("Over 2000 messages into the future!");
+		if (!chain.chainKey.key) {
+			throw new Error("Chain closed, cannot derive keys");
 		}
-		if (chain.chainKey.key == null) {
-			throw new Error("Chain closed");
+		for (let i = startCounter + 1; i <= counter; i++) {
+			if (Object.keys(chain.messageKeys).length >= MAX_SKIPPED_MESSAGE_KEYS) {
+				throw new Error("Skipped message keys storage limit reached");
+			}
+			const messageKey = hmacSign(chain.chainKey.key, new Uint8Array([1]));
+			const nextChainKey = hmacSign(chain.chainKey.key, new Uint8Array([2]));
+			chain.messageKeys[i] = messageKey;
+			chain.chainKey.key = nextChainKey;
+			chain.chainKey.counter = i;
 		}
-		const key = chain.chainKey.key;
-		chain.messageKeys[chain.chainKey.counter + 1] = hmacSign(
-			key,
-			new Uint8Array([1]),
-		);
-		chain.chainKey.key = hmacSign(key, new Uint8Array([2]));
-		chain.chainKey.counter += 1;
-		this.fillMessageKeys(chain, counter);
 	}
 
 	private maybeStepRatchet(
-		session: SessionEntry,
+		session: ProtoSessionEntryType,
 		remoteKey: Uint8Array,
 		previousCounter: number,
 	): void {
-		if (session.getChain(remoteKey)) {
+		if (session.chains?.[bytesToBase64(remoteKey)]) {
 			return;
 		}
 		const ratchet = session.currentRatchet;
-		const previousRatchet = session.getChain(ratchet.lastRemoteEphemeralKey);
+		if (!ratchet) throw new Error("Session missing currentRatchet");
+		const previousRatchet =
+			session.chains?.[bytesToBase64(ratchet.lastRemoteEphemeralKey)];
 		if (previousRatchet) {
+			if (!previousRatchet.chainKey) throw new Error("Chain missing chainKey");
 			this.fillMessageKeys(previousRatchet, previousCounter);
-			previousRatchet.chainKey.key = null;
+			// Protobuf: set to undefined instead of null
+			previousRatchet.chainKey.key = undefined;
 		}
 		this.calculateRatchet(session, remoteKey, false);
-		const prevCounter = session.getChain(ratchet.ephemeralKeyPair.publicKey);
-		if (prevCounter) {
-			ratchet.previousCounter = prevCounter.chainKey.counter;
-			session.deleteChain(ratchet.ephemeralKeyPair.publicKey);
+		const prevCounter = ratchet.ephemeralKeyPair?.publicKey
+			? session.chains?.[bytesToBase64(ratchet.ephemeralKeyPair.publicKey)]
+			: undefined;
+		if (prevCounter?.chainKey) {
+			ratchet.previousCounter = Number(prevCounter.chainKey.counter);
+			if (ratchet.ephemeralKeyPair?.publicKey) {
+				delete session.chains[
+					bytesToBase64(ratchet.ephemeralKeyPair.publicKey)
+				];
+			}
 		}
-		ratchet.ephemeralKeyPair = Curve.generateKeyPair();
+		const newKeyPair = Curve.generateKeyPair();
+		ratchet.ephemeralKeyPair = create(ProtoKeyPairSchema, {
+			publicKey: newKeyPair.publicKey,
+			privateKey: newKeyPair.privateKey,
+		});
 		this.calculateRatchet(session, remoteKey, true);
 		ratchet.lastRemoteEphemeralKey = remoteKey;
 	}
 
 	private calculateRatchet(
-		session: SessionEntry,
+		session: ProtoSessionEntryType,
 		remoteKey: Uint8Array,
 		sending: boolean,
 	): void {
 		const ratchet = session.currentRatchet;
+		if (!ratchet) throw new Error("Session missing currentRatchet");
+		if (!ratchet.ephemeralKeyPair)
+			throw new Error("Ratchet missing ephemeralKeyPair");
+		if (!ratchet.ephemeralKeyPair.privateKey)
+			throw new Error("Ratchet missing privateKey");
+		if (!ratchet.rootKey) throw new Error("Ratchet missing rootKey");
 		const sharedSecret = Curve.sharedKey(
 			ratchet.ephemeralKeyPair.privateKey,
 			remoteKey,
@@ -394,13 +423,15 @@ export class SessionCipher {
 			utf8ToBytes("WhisperRatchet"),
 		);
 		const chainKey = sending ? ratchet.ephemeralKeyPair.publicKey : remoteKey;
-		session.addChain(chainKey, {
+		if (!chainKey) throw new Error("Missing chainKey for ratchet");
+		if (!session.chains) session.chains = {};
+		session.chains[bytesToBase64(chainKey)] = create(ProtoChainSchema, {
 			messageKeys: {},
 			chainKey: {
 				counter: -1,
 				key: masterKey[1],
 			},
-			chainType: sending ? ChainType.SENDING : ChainType.RECEIVING,
+			chainType: sending ? ProtoChainType.SENDING : ProtoChainType.RECEIVING,
 		});
 		ratchet.rootKey = masterKey[0];
 	}

@@ -1,9 +1,5 @@
 import type { ADVSignedDeviceIdentity } from "@wha.ts/proto";
-import type {
-	KeyPair,
-	SignalIdentity,
-	SignedKeyPair,
-} from "@wha.ts/utils/src/types";
+import type { KeyPair, SignalIdentity, SignedKeyPair } from "@wha.ts/utils";
 
 export type AuthenticationCreds = {
 	noiseKey: KeyPair;
@@ -55,6 +51,14 @@ export interface ISignalProtocolStore {
 	): Promise<{ [id: string]: SignalDataTypeMap[T] | undefined }>;
 
 	set(data: SignalDataSet): Promise<void>;
+
+	/**
+	 * Retrieves all session data for all devices of a given user.
+	 * The returned object maps ProtocolAddress strings (user@server_deviceId) to session data.
+	 */
+	getAllSessionsForUser(
+		userId: string,
+	): Promise<{ [address: string]: SignalDataTypeMap["session"] | undefined }>;
 }
 
 /** Interface for the overall authentication state provider */

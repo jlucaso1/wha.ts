@@ -34,7 +34,7 @@ Here's a simple example of connecting to WhatsApp and listening for connection u
 
 ```typescript
 import { createWAClient } from "@wha.ts/core";
-import { GenericAuthState } from "@wha.ts/core/src/state/providers/generic-auth-state";
+import { GenericAuthState } from "@wha.ts/storage";
 import { createStorage } from "unstorage";
 import fsDriver from "unstorage/drivers/fs-lite";
 
