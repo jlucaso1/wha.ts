@@ -1,5 +1,5 @@
-import { createWAClient } from "@wha.ts/core/src/client";
-import { GenericAuthState } from "@wha.ts/core/src/state/providers/generic-auth-state";
+import { createWAClient } from "@wha.ts/core";
+import { GenericAuthState } from "@wha.ts/storage";
 import { createStorage } from "unstorage";
 import fsDriver from "unstorage/drivers/fs-lite";
 import localStorageDriver from "unstorage/drivers/localstorage";
@@ -9,7 +9,7 @@ const IS_BROWSER = typeof window !== "undefined";
 
 const storage = IS_BROWSER
 	? createStorage({ driver: localStorageDriver({ base: "wha.ts" }) })
-	: createStorage({ driver: fsDriver({ base: "./storage" }) });
+	: createStorage({ driver: fsDriver({ base: "./example-storage" }) });
 
 const authState = await GenericAuthState.init(storage);
 async function runExample() {
@@ -54,9 +54,14 @@ async function runExample() {
 		console.log("[CREDS UPDATE]", "Credentials were updated.");
 	});
 
-	client.addListener("message.received", async (messageData) => {
-		console.info(messageData, "[Example] received message");
+	client.addListener("node.received", ({ node }) => {
+		console.log("[NODE RECEIVED]", {
+			tag: node.tag,
+			attrs: node.attrs,
+		});
+	});
 
+	client.addListener("message.received", async (messageData) => {
 		const messageContent = messageData.message;
 		const senderAddress = messageData.sender;
 
@@ -73,20 +78,12 @@ async function runExample() {
 			await new Promise((resolve) => setTimeout(resolve, 500));
 
 			try {
-				await client.sendTextMessage(
-					userJid,
-					"test-reply",
-					senderAddress.deviceId,
-				);
+				await client.sendTextMessage(userJid, "test-reply");
 				console.log("[Example] Sent reply successfully.");
 			} catch (error) {
 				console.error("[Example] Failed to send reply:", error);
 			}
 		}
-	});
-
-	client.addListener("node.received", (node) => {
-		console.log("[NODE RECEIVED]", node);
 	});
 
 	try {

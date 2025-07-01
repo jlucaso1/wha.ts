@@ -1,6 +1,6 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary/src/jid-utils";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import { jidDecode } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
@@ -14,11 +14,10 @@ import {
 	DevicePropsSchema,
 	DeviceProps_PlatformType,
 } from "@wha.ts/proto";
-import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
-import { sha256 } from "@wha.ts/utils/src/crypto";
-import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
-import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
-import type { KeyPair, SignedKeyPair } from "@wha.ts/utils/src/types";
+import { utf8ToBytes } from "@wha.ts/utils";
+import { sha256 } from "@wha.ts/utils";
+import { KEY_BUNDLE_TYPE, encodeBigEndian } from "@wha.ts/utils";
+import type { KeyPair, SignedKeyPair } from "@wha.ts/utils";
 import { DEFAULT_BROWSER, WA_VERSION } from "../defaults";
 import type { AuthenticationCreds } from "../state/interface";
 
@@ -135,7 +134,7 @@ export const generateRegisterPayload = (
 		passive: false,
 		pull: false,
 		devicePairingData: {
-			$typeName: "proto.ClientPayload.DevicePairingRegistrationData",
+			$typeName: "ClientPayload.DevicePairingRegistrationData",
 			buildHash: appVersionBuf,
 			deviceProps: devicePropsBytes,
 			eRegid: encodeBigEndian(creds.registrationId),

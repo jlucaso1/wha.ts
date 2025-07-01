@@ -1,20 +1,22 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
+	type CertChain,
 	CertChainSchema,
 	CertChain_NoiseCertificate_DetailsSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
-import { NOISE_MODE, WA_CERT_DETAILS } from "../defaults";
+import { NOISE_MODE, WHATSAPP_ROOT_CA_PUBLIC_KEY } from "../defaults";
 
-import { concatBytes, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
 import {
-	aesDecryptGCM,
-	aesEncryptGCM,
-	hkdf,
-	sha256,
-} from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+	bytesToHex,
+	concatBytes,
+	equalBytes,
+	utf8ToBytes,
+} from "@wha.ts/utils";
+import { aesDecryptGCM, aesEncryptGCM, hkdf, sha256 } from "@wha.ts/utils";
+import { Curve } from "@wha.ts/utils";
+import type { KeyPair } from "@wha.ts/utils";
+import { serializer } from "@wha.ts/utils";
 import type { ILogger } from "./types";
 
 interface NoiseState {
@@ -22,15 +24,15 @@ interface NoiseState {
 	salt: Uint8Array;
 	encryptionKey: Uint8Array;
 	decryptionKey: Uint8Array;
-	readCounter: number;
-	writeCounter: number;
+	readCounter: bigint;
+	writeCounter: bigint;
 	isHandshakeFinished: boolean;
 	routingInfo?: Uint8Array;
 	noisePrologue: Uint8Array;
 	logger: ILogger;
 }
 
-export class NoiseProcessor {
+export class NoiseProcessor extends EventTarget {
 	private state: NoiseState;
 
 	constructor({
@@ -44,6 +46,7 @@ export class NoiseProcessor {
 		logger: ILogger;
 		routingInfo?: Uint8Array;
 	}) {
+		super();
 		const initialHashData = utf8ToBytes(NOISE_MODE);
 		let handshakeHash =
 			initialHashData.byteLength === 32
@@ -63,8 +66,8 @@ export class NoiseProcessor {
 			salt,
 			encryptionKey,
 			decryptionKey,
-			readCounter: 0,
-			writeCounter: 0,
+			readCounter: 0n,
+			writeCounter: 0n,
 			isHandshakeFinished: false,
 			routingInfo,
 			noisePrologue,
@@ -110,14 +113,20 @@ export class NoiseProcessor {
 			salt: newSalt,
 			encryptionKey: keyUpdate,
 			decryptionKey: keyUpdate,
-			readCounter: 0,
-			writeCounter: 0,
+			readCounter: 0n,
+			writeCounter: 0n,
 		};
+
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:state_update", {
+				detail: { stateSnapshot: this.getDebugStateSnapshot() },
+			}),
+		);
 	}
 
-	async encryptMessage(plaintext: Uint8Array) {
+	encryptMessage(plaintext: Uint8Array) {
 		const nonce = this.generateIV(this.state.writeCounter);
-		const ciphertext = await aesEncryptGCM(
+		const ciphertext = aesEncryptGCM(
 			plaintext,
 			this.state.encryptionKey,
 			nonce,
@@ -125,18 +134,27 @@ export class NoiseProcessor {
 		);
 		this.state = {
 			...this.state,
-			writeCounter: this.state.writeCounter + 1,
+			writeCounter: this.state.writeCounter + 1n,
 		};
 		this.mixIntoHandshakeHash(ciphertext);
+
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:payload_encrypted", {
+				detail: {
+					plaintext,
+					ciphertext,
+				},
+			}),
+		);
 		return ciphertext;
 	}
 
-	async decryptMessage(ciphertext: Uint8Array) {
+	decryptMessage(ciphertext: Uint8Array) {
 		const counter = this.state.isHandshakeFinished
 			? this.state.readCounter
 			: this.state.writeCounter;
 		const nonce = this.generateIV(counter);
-		const plaintext = await aesDecryptGCM(
+		const plaintext = aesDecryptGCM(
 			ciphertext,
 			this.state.decryptionKey,
 			nonce,
@@ -145,13 +163,22 @@ export class NoiseProcessor {
 		this.state = {
 			...this.state,
 			readCounter: this.state.isHandshakeFinished
-				? this.state.readCounter + 1
+				? this.state.readCounter + 1n
 				: this.state.readCounter,
 			writeCounter: this.state.isHandshakeFinished
 				? this.state.writeCounter
-				: this.state.writeCounter + 1,
+				: this.state.writeCounter + 1n,
 		};
 		this.mixIntoHandshakeHash(ciphertext);
+		// Emit debug event after decryption
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:payload_decrypted", {
+				detail: {
+					ciphertext,
+					plaintext,
+				},
+			}),
+		);
 		return plaintext;
 	}
 
@@ -167,13 +194,19 @@ export class NoiseProcessor {
 			encryptionKey: finalWriteKey,
 			decryptionKey: finalReadKey,
 			handshakeHash: new Uint8Array(0),
-			readCounter: 0,
-			writeCounter: 0,
+			readCounter: 0n,
+			writeCounter: 0n,
 			isHandshakeFinished: true,
 		};
+
+		this.dispatchEvent(
+			new CustomEvent("debug:noiseprocessor:state_update", {
+				detail: { stateSnapshot: this.getDebugStateSnapshot() },
+			}),
+		);
 	}
 
-	async processHandshake(
+	processHandshake(
 		serverHelloBytes: Uint8Array,
 		localStaticKeyPair: KeyPair,
 		localEphemeralKeyPair: KeyPair,
@@ -189,40 +222,21 @@ export class NoiseProcessor {
 		) {
 			throw new Error("Invalid serverHello message received");
 		}
+
 		this.mixIntoHandshakeHash(serverHello.ephemeral);
 		this.mixKeys(
 			Curve.sharedKey(localEphemeralKeyPair.privateKey, serverHello.ephemeral),
 		);
-		const decryptedServerStatic = await this.decryptMessage(serverHello.static);
+		const decryptedServerStatic = this.decryptMessage(serverHello.static);
 		this.mixKeys(
 			Curve.sharedKey(localEphemeralKeyPair.privateKey, decryptedServerStatic),
 		);
-		const decryptedPayload = await this.decryptMessage(serverHello.payload);
+		const decryptedPayload = this.decryptMessage(serverHello.payload);
 		const certChain = fromBinary(CertChainSchema, decryptedPayload);
-		const intermediateCertDetailsBytes = certChain.intermediate?.details;
-		if (!intermediateCertDetailsBytes) {
-			throw new Error(
-				"Invalid certificate: Missing intermediate certificate details",
-			);
-		}
-		const decodedCertDetails = fromBinary(
-			CertChain_NoiseCertificate_DetailsSchema,
-			intermediateCertDetailsBytes,
-		);
-		const issuerSerial = decodedCertDetails.issuerSerial;
-		if (issuerSerial === null || issuerSerial !== WA_CERT_DETAILS.SERIAL) {
-			this.state.logger.error(
-				{
-					expected: WA_CERT_DETAILS.SERIAL,
-					received: issuerSerial,
-				},
-				"Certificate serial mismatch",
-			);
-			throw new Error(
-				`Server certificate validation failed. Expected serial ${WA_CERT_DETAILS.SERIAL}, received ${issuerSerial}`,
-			);
-		}
-		const encryptedLocalStaticPublic = await this.encryptMessage(
+
+		this.verifyCertificateChain(certChain, decryptedServerStatic);
+
+		const encryptedLocalStaticPublic = this.encryptMessage(
 			localStaticKeyPair.publicKey,
 		);
 		this.mixKeys(
@@ -231,9 +245,105 @@ export class NoiseProcessor {
 		return encryptedLocalStaticPublic;
 	}
 
-	private generateIV(counter: number) {
+	getDebugStateSnapshot(): Readonly<NoiseState> {
+		// Exclude logger from the snapshot to avoid serialization errors
+		const { logger, ...rest } = this.state;
+		return JSON.parse(serializer(rest));
+	}
+
+	private verifyCertificateChain(
+		certChain: CertChain,
+		decryptedServerStatic: Uint8Array,
+	): void {
+		const leafCert = certChain.leaf;
+		const intermediateCert = certChain.intermediate;
+
+		if (!leafCert?.details || !leafCert.signature) {
+			throw new Error(
+				"Invalid certificate: Missing leaf certificate details or signature",
+			);
+		}
+		if (!intermediateCert?.details || !intermediateCert.signature) {
+			throw new Error(
+				"Invalid certificate: Missing intermediate certificate details or signature",
+			);
+		}
+
+		const leafCertDetailsBytes = leafCert.details;
+		const intermediateCertDetailsBytes = intermediateCert.details;
+
+		const leafCertDetails = fromBinary(
+			CertChain_NoiseCertificate_DetailsSchema,
+			leafCertDetailsBytes,
+		);
+		const intermediateCertDetails = fromBinary(
+			CertChain_NoiseCertificate_DetailsSchema,
+			intermediateCertDetailsBytes,
+		);
+
+		if (!leafCertDetails.key) {
+			throw new Error(
+				"Invalid certificate: Missing public key in leaf certificate details",
+			);
+		}
+		if (!intermediateCertDetails.key) {
+			throw new Error(
+				"Invalid certificate: Missing public key in intermediate certificate details",
+			);
+		}
+
+		const leafCertPubKey = leafCertDetails.key;
+		const intermediateCertPubKey = intermediateCertDetails.key;
+
+		// 1. Verify intermediate certificate signature with Root CA key
+		const isIntermediateCertValid = Curve.verify(
+			WHATSAPP_ROOT_CA_PUBLIC_KEY,
+			intermediateCertDetailsBytes,
+			intermediateCert.signature,
+		);
+		if (!isIntermediateCertValid) {
+			this.state.logger.error(
+				{},
+				"Intermediate certificate validation failed!",
+			);
+			throw new Error(
+				"Server certificate validation failed: Invalid intermediate certificate signature",
+			);
+		}
+
+		// 2. Verify leaf certificate signature with intermediate cert key
+		const isLeafCertValid = Curve.verify(
+			intermediateCertPubKey,
+			leafCertDetailsBytes,
+			leafCert.signature,
+		);
+		if (!isLeafCertValid) {
+			this.state.logger.error({}, "Leaf certificate validation failed!");
+			throw new Error(
+				"Server certificate validation failed: Invalid leaf certificate signature",
+			);
+		}
+
+		// 3. Match decrypted server static key with leaf cert key
+		if (!equalBytes(decryptedServerStatic, leafCertPubKey)) {
+			this.state.logger.error(
+				{
+					decryptedKeyHex: bytesToHex(decryptedServerStatic),
+					leafCertKeyHex: bytesToHex(leafCertPubKey),
+				},
+				"Server static key mismatch!",
+			);
+			throw new Error(
+				"Server certificate validation failed: Decrypted server static key does not match leaf certificate public key",
+			);
+		}
+	}
+
+	private generateIV(counter: bigint) {
 		const iv = new ArrayBuffer(12);
-		new DataView(iv).setUint32(8, counter);
+		const view = new DataView(iv);
+		view.setUint32(0, 0, false); // First 4 bytes zero
+		view.setBigUint64(4, counter, false); // Last 8 bytes: big-endian counter
 		return new Uint8Array(iv);
 	}
 }

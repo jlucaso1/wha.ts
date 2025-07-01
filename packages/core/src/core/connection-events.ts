@@ -1,4 +1,4 @@
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import type { BinaryNode } from "@wha.ts/binary";
 
 export interface StateChangePayload {
 	state: "connecting" | "open" | "handshaking" | "closing" | "closed";

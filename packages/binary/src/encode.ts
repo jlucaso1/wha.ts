@@ -1,4 +1,4 @@
-import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import { utf8ToBytes } from "@wha.ts/utils";
 import { TAGS, TOKEN_MAP } from "./constants";
 import { type FullJid, jidDecode } from "./jid-utils";
 import type { BinaryNode } from "./types";
@@ -37,8 +37,37 @@ const encodeBinaryNodeInner = (
 		writer.writeBytes(bytes);
 	};
 
-	const writeJid = ({ domainType, device, user, server }: FullJid) => {
-		if (typeof device !== "undefined") {
+	const writeJid = ({
+		domainType,
+		device,
+		user,
+		server,
+		integrator,
+	}: FullJid) => {
+		if (
+			server === "interop" &&
+			typeof device === "number" &&
+			typeof integrator === "number"
+		) {
+			writer.writeByte(TAGS.INTEROP_JID);
+			if (user?.length) {
+				writeString(user);
+			} else {
+				writer.writeByte(TAGS.LIST_EMPTY);
+			}
+			writer.writeInt(device, 2);
+			writer.writeInt(integrator, 2);
+			writeString(server);
+		} else if (server === "msgr" && typeof device === "number") {
+			writer.writeByte(TAGS.FB_JID);
+			if (user?.length) {
+				writeString(user);
+			} else {
+				writer.writeByte(TAGS.LIST_EMPTY);
+			}
+			writer.writeInt(device, 2);
+			writeString(server);
+		} else if (typeof device !== "undefined") {
 			writer.writeByte(TAGS.AD_JID);
 			writer.writeByte(domainType || 0);
 			writer.writeByte(device || 0);
@@ -114,18 +143,21 @@ const encodeBinaryNodeInner = (
 
 	const isNibble = (str: string) => {
 		if (str.length > TAGS.PACKED_MAX) return false;
-		for (const char of str) {
-			const isInNibbleRange = char >= "0" && char <= "9";
-			if (!isInNibbleRange && char !== "-" && char !== ".") return false;
+		for (let i = 0; i < str.length; i++) {
+			const code = str.charCodeAt(i);
+			const isInNibbleRange = code >= 48 && code <= 57; // '0'-'9'
+			if (!isInNibbleRange && code !== 45 && code !== 46) return false; // '-' and '.'
 		}
 		return true;
 	};
 
 	const isHex = (str: string) => {
 		if (str.length > TAGS.PACKED_MAX) return false;
-		for (const char of str) {
-			const isInNibbleRange = char >= "0" && char <= "9";
-			if (!isInNibbleRange && !(char >= "A" && char <= "F")) return false;
+		for (let i = 0; i < str.length; i++) {
+			const code = str.charCodeAt(i);
+			const isInNibbleRange = code >= 48 && code <= 57; // '0'-'9'
+			const isUpperHex = code >= 65 && code <= 70; // 'A'-'F'
+			if (!isInNibbleRange && !isUpperHex) return false;
 		}
 		return true;
 	};

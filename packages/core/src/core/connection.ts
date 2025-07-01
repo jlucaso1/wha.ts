@@ -1,15 +1,15 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { decodeBinaryNode } from "@wha.ts/binary/src/decode";
-import { encodeBinaryNode } from "@wha.ts/binary/src/encode";
-import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
-import { getBinaryNodeChild } from "@wha.ts/binary/src/node-utils";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import { decodeBinaryNode } from "@wha.ts/binary";
+import { encodeBinaryNode } from "@wha.ts/binary";
+import { S_WHATSAPP_NET } from "@wha.ts/binary";
+import { getBinaryNodeChild } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
-import { bytesToHex, utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
+import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import { TypedEventTarget } from "../generics/typed-event-target";
 import type { MessageProcessor } from "../messaging/message-processor";
@@ -181,7 +181,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			const handshakeMsg = fromBinary(HandshakeMessageSchema, data);
 
 			if (handshakeMsg.serverHello) {
-				const clientFinishStatic = await this.noiseProcessor.processHandshake(
+				const clientFinishStatic = this.noiseProcessor.processHandshake(
 					data,
 					this.creds.noiseKey,
 					this.creds.pairingEphemeralKeyPair,
@@ -196,7 +196,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 				const clientPayloadBytes = toBinary(ClientPayloadSchema, clientPayload);
 
 				const payloadEnc =
-					await this.noiseProcessor.encryptMessage(clientPayloadBytes);
+					this.noiseProcessor.encryptMessage(clientPayloadBytes);
 
 				const clientFinishMsg = create(HandshakeMessageSchema, {
 					clientFinish: {
@@ -324,6 +324,12 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 				`Cannot send node while connection state is "${this.state}"`,
 			);
 		}
+
+		this.dispatchEvent(
+			new CustomEvent("debug:connectionmanager:sending_node", {
+				detail: { node: JSON.parse(JSON.stringify(node)) },
+			}),
+		);
 
 		try {
 			const buffer = encodeBinaryNode(node);

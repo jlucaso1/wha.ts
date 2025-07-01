@@ -1,4 +1,4 @@
-import { bytesToHex } from "@wha.ts/utils/src/bytes-utils";
+import { bytesToHex } from "@wha.ts/utils";
 import { IWebSocketClient } from "./types";
 
 const CONNECTING = 0;
@@ -26,7 +26,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		return this.socket?.readyState === CLOSING;
 	}
 
-	once(eventName: string, listener: (...args: any[]) => void) {
+	once(eventName: string, listener: (...args: unknown[]) => void) {
 		const handler = (event: Event | CustomEvent) => {
 			if (event instanceof CustomEvent) {
 				listener(event.detail);
@@ -40,28 +40,17 @@ export class NativeWebSocketClient extends IWebSocketClient {
 	connect(): Promise<void> {
 		if (this.socket && this.socket.readyState !== CLOSED) {
 			this.config.logger.warn({}, "WebSocket already connecting or open");
-			return this.isConnecting
-				? new Promise((res, rej) => {
-						if (this.connectionPromise) {
-							const originalResolve = this.connectionPromise.resolve;
-							const originalReject = this.connectionPromise.reject;
-							this.connectionPromise.resolve = () => {
-								originalResolve();
-								res();
-							};
-							this.connectionPromise.reject = (err) => {
-								originalReject(err);
-								rej(err);
-							};
-						} else {
-							this.once("open", res);
-							this.once("error", rej);
-							this.once("close", () =>
-								rej(new Error("WebSocket closed during connection attempt")),
-							);
-						}
-					})
-				: Promise.resolve();
+			if (this.isConnecting && this.connectionPromise) {
+				// Always return the same promise if already connecting
+				return new Promise((res, rej) => {
+					this.once("open", () => res());
+					this.once("error", (err) => rej(err));
+					this.once("close", () =>
+						rej(new Error("WebSocket closed during connection attempt")),
+					);
+				});
+			}
+			return Promise.resolve();
 		}
 
 		return new Promise<void>((resolve, reject) => {
@@ -98,7 +87,11 @@ export class NativeWebSocketClient extends IWebSocketClient {
 			return;
 		}
 
-		this.config.logger.debug({ data: data.length }, "WebSocket ⬆️");
+		this.dispatchEvent(
+			new CustomEvent("debug:websocket:sending_raw", {
+				detail: { data },
+			}),
+		);
 
 		try {
 			this.socket?.send(data);
@@ -118,7 +111,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		}
 
 		return new Promise((resolve) => {
-			this.once("close", resolve);
+			this.once("close", () => resolve());
 			this.socket?.close(code, reason);
 		});
 	}
@@ -132,7 +125,11 @@ export class NativeWebSocketClient extends IWebSocketClient {
 	private handleMessage = (event: MessageEvent<ArrayBuffer>): void => {
 		const data = new Uint8Array(event.data);
 
-		this.config.logger.debug({ data: data.length }, "WebSocket ⬇️");
+		this.dispatchEvent(
+			new CustomEvent("debug:websocket:received_raw", {
+				detail: { data },
+			}),
+		);
 
 		this.dispatchEvent(new CustomEvent("message", { detail: data }));
 	};

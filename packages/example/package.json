@@ -5,6 +5,9 @@
 	"type": "module",
 	"dependencies": {
 		"@wha.ts/core": "workspace:*",
+		"@wha.ts/debug": "workspace:*",
+		"@wha.ts/storage": "workspace:*",
+		"@wha.ts/binary": "workspace:*",
 		"unstorage": "^1.15.0",
 		"uqr": "^0.1.2"
 	}

@@ -1,20 +1,18 @@
-import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils/src/bytes-utils";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+import { bytesToBase64 } from "@wha.ts/utils";
+import type { KeyPair } from "@wha.ts/utils";
 import { BaseKeyType } from "./base_key_type";
 import { ChainType } from "./chain_type";
 
 import { create, fromBinary, protoInt64, toBinary } from "@bufbuild/protobuf";
 import {
 	ProtoBaseKeyType,
-	ProtoChainKeySchema,
-	ProtoChainSchema,
 	ProtoChainType,
-	ProtoCurrentRatchetSchema,
-	ProtoIndexInfoSchema,
-	ProtoKeyPairSchema,
-	ProtoPendingPreKeySchema,
 	ProtoSessionEntrySchema,
 	ProtoSessionRecordSchema,
+} from "@wha.ts/proto";
+import type {
+	ProtoSessionEntry as ProtoSessionEntryType,
+	ProtoSessionRecord as ProtoSessionRecordType,
 } from "@wha.ts/proto";
 
 const CLOSED_SESSIONS_MAX = 40;
@@ -95,232 +93,29 @@ function fromProtoChainType(type: ProtoChainType): ChainType {
 	}
 }
 
-export class SessionEntry {
-	registrationId?: number;
-	currentRatchet!: CurrentRatchet;
-	indexInfo!: IndexInfo;
-	pendingPreKey?: PendingPreKey;
-	private _chains: { [ephemeralKeyBase64: string]: Chain } = {};
-
-	toString(): string {
-		const baseKey =
-			this.indexInfo?.baseKey && bytesToBase64(this.indexInfo.baseKey);
-		return `<SessionEntry [baseKey=${baseKey}]>`;
-	}
-
-	addChain(ephemeralPublicKey: Uint8Array, value: Chain): void {
-		const id = bytesToBase64(ephemeralPublicKey);
-		if (Object.prototype.hasOwnProperty.call(this._chains, id)) {
-			throw new Error("Overwrite attempt on chain");
-		}
-		this._chains[id] = value;
-	}
-
-	getChain(ephemeralPublicKey: Uint8Array): Chain | undefined {
-		return this._chains[bytesToBase64(ephemeralPublicKey)];
-	}
-
-	deleteChain(ephemeralPublicKey: Uint8Array): void {
-		const id = bytesToBase64(ephemeralPublicKey);
-		if (!Object.prototype.hasOwnProperty.call(this._chains, id)) {
-			console.warn(`Chain not found for deletion: ${id}`);
-			return;
-		}
-		delete this._chains[id];
-	}
-
-	*chains(): IterableIterator<[Uint8Array, Chain]> {
-		for (const [keyBase64, chain] of Object.entries(this._chains)) {
-			yield [base64ToBytes(keyBase64), chain];
-		}
-	}
-
-	/**
-	 * Serialize this session entry to Protobuf binary format.
-	 */
-	serialize(): Uint8Array {
-		const protoEntry = create(ProtoSessionEntrySchema);
-
-		if (this.registrationId !== undefined) {
-			protoEntry.registrationId = this.registrationId;
-		}
-
-		if (!this.currentRatchet) {
-			throw new Error("Serialization error: currentRatchet is missing");
-		}
-		protoEntry.currentRatchet = create(ProtoCurrentRatchetSchema, {
-			ephemeralKeyPair: create(ProtoKeyPairSchema, {
-				publicKey: this.currentRatchet.ephemeralKeyPair.publicKey,
-				privateKey: this.currentRatchet.ephemeralKeyPair.privateKey,
-			}),
-			lastRemoteEphemeralKey: this.currentRatchet.lastRemoteEphemeralKey,
-			previousCounter: this.currentRatchet.previousCounter,
-			rootKey: this.currentRatchet.rootKey,
-		});
-
-		if (!this.indexInfo) {
-			throw new Error("Serialization error: indexInfo is missing");
-		}
-		protoEntry.indexInfo = create(ProtoIndexInfoSchema, {
-			baseKey: this.indexInfo.baseKey,
-			baseKeyType: toProtoBaseKeyType(this.indexInfo.baseKeyType),
-			closed: protoInt64.parse(this.indexInfo.closed),
-			used: protoInt64.parse(this.indexInfo.used),
-			created: protoInt64.parse(this.indexInfo.created),
-			remoteIdentityKey: this.indexInfo.remoteIdentityKey,
-		});
-
-		if (this.pendingPreKey) {
-			protoEntry.pendingPreKey = create(ProtoPendingPreKeySchema, {
-				signedKeyId: this.pendingPreKey.signedKeyId,
-				baseKey: this.pendingPreKey.baseKey,
-				preKeyId: this.pendingPreKey.preKeyId,
-			});
-		}
-
-		for (const [keyBase64, chain] of Object.entries(this._chains)) {
-			const protoChain = create(ProtoChainSchema, {
-				chainKey: create(ProtoChainKeySchema, {
-					counter: chain.chainKey.counter,
-					key: chain.chainKey.key ?? undefined,
-				}),
-				chainType: toProtoChainType(chain.chainType),
-				messageKeys: chain.messageKeys,
-			});
-			protoEntry.chains[keyBase64] = protoChain;
-		}
-
-		return toBinary(ProtoSessionEntrySchema, protoEntry);
-	}
-
-	/**
-	 * Deserialize Protobuf binary data into a SessionEntry.
-	 */
-	static deserialize(data: Uint8Array): SessionEntry {
-		const protoEntry = fromBinary(ProtoSessionEntrySchema, data);
-		const obj = new SessionEntry();
-
-		obj.registrationId = protoEntry.registrationId;
-
-		if (!protoEntry.currentRatchet) {
-			throw new Error("Deserialization failed: Missing currentRatchet");
-		}
-		obj.currentRatchet = {
-			ephemeralKeyPair: {
-				publicKey:
-					protoEntry.currentRatchet.ephemeralKeyPair?.publicKey ??
-					new Uint8Array(),
-				privateKey:
-					protoEntry.currentRatchet.ephemeralKeyPair?.privateKey ??
-					new Uint8Array(),
-			},
-			lastRemoteEphemeralKey: protoEntry.currentRatchet.lastRemoteEphemeralKey,
-			previousCounter: protoEntry.currentRatchet.previousCounter,
-			rootKey: protoEntry.currentRatchet.rootKey,
-		};
-
-		if (!protoEntry.indexInfo) {
-			throw new Error("Deserialization failed: Missing indexInfo");
-		}
-		obj.indexInfo = {
-			baseKey: protoEntry.indexInfo.baseKey,
-			baseKeyType: fromProtoBaseKeyType(protoEntry.indexInfo.baseKeyType),
-			closed: Number(protoEntry.indexInfo.closed),
-			used: Number(protoEntry.indexInfo.used),
-			created: Number(protoEntry.indexInfo.created),
-			remoteIdentityKey: protoEntry.indexInfo.remoteIdentityKey,
-		};
-
-		if (protoEntry.pendingPreKey) {
-			obj.pendingPreKey = {
-				signedKeyId: protoEntry.pendingPreKey.signedKeyId,
-				baseKey: protoEntry.pendingPreKey.baseKey,
-				preKeyId: protoEntry.pendingPreKey.preKeyId,
-			};
-		}
-
-		obj._chains = {};
-		for (const [keyBase64, protoChain] of Object.entries(protoEntry.chains)) {
-			if (!protoChain.chainKey) {
-				throw new Error("Deserialization failed: Missing chainKey in chain");
-			}
-			const chain: Chain = {
-				chainKey: {
-					counter: protoChain.chainKey.counter,
-					key: protoChain.chainKey.key ?? null,
-				},
-				chainType: fromProtoChainType(protoChain.chainType),
-				messageKeys: {},
-			};
-			for (const [msgNumStr, msgKeyBytes] of Object.entries(
-				protoChain.messageKeys,
-			)) {
-				chain.messageKeys[Number(msgNumStr)] = msgKeyBytes;
-			}
-			obj._chains[keyBase64] = chain;
-		}
-
-		return obj;
-	}
-}
-
 export class SessionRecord {
-	sessions: { [baseKeyBase64: string]: SessionEntry } = {};
+	sessions: { [baseKeyBase64: string]: ProtoSessionEntryType } = {};
 	version: string = SESSION_RECORD_VERSION;
 
-	static createEntry(): SessionEntry {
-		return new SessionEntry();
+	static createEntry(): ProtoSessionEntryType {
+		return create(ProtoSessionEntrySchema);
 	}
 
 	static deserialize(data: Uint8Array): SessionRecord {
-		const protoRecord = fromBinary(ProtoSessionRecordSchema, data);
-		const obj = new SessionRecord();
-
-		obj.version = protoRecord.version || SESSION_RECORD_VERSION;
-		if (obj.version !== SESSION_RECORD_VERSION) {
-			console.warn(
-				`Deserializing SessionRecord with version ${obj.version}, expected ${SESSION_RECORD_VERSION}`,
-			);
-		}
-
-		obj.sessions = {};
-		for (const [keyBase64, protoEntry] of Object.entries(
-			protoRecord.sessions,
-		)) {
-			const entryBytes = toBinary(ProtoSessionEntrySchema, protoEntry);
-			try {
-				obj.sessions[keyBase64] = SessionEntry.deserialize(entryBytes);
-			} catch (e) {
-				console.error(
-					`Failed to deserialize session entry for key ${keyBase64}:`,
-					e,
-				);
-			}
-		}
-
-		return obj;
+		const protoRecord = fromBinary(
+			ProtoSessionRecordSchema,
+			data,
+		) as ProtoSessionRecordType;
+		const record = new SessionRecord();
+		record.version = protoRecord.version || SESSION_RECORD_VERSION;
+		record.sessions = protoRecord.sessions;
+		return record;
 	}
 
-	serialize(outputFormat: "binary" | "object" = "binary"): Uint8Array | object {
+	serialize(): Uint8Array {
 		const protoRecord = create(ProtoSessionRecordSchema);
 		protoRecord.version = this.version;
-
-		for (const [keyBase64, entry] of Object.entries(this.sessions)) {
-			try {
-				const entryBytes = entry.serialize();
-				const protoEntry = fromBinary(ProtoSessionEntrySchema, entryBytes);
-				protoRecord.sessions[keyBase64] = protoEntry;
-			} catch (e) {
-				console.error(
-					`Failed to serialize session entry for key ${keyBase64}:`,
-					e,
-				);
-			}
-		}
-
-		if (outputFormat === "object") {
-			return protoRecord;
-		}
+		protoRecord.sessions = this.sessions;
 		return toBinary(ProtoSessionRecordSchema, protoRecord);
 	}
 
@@ -329,10 +124,10 @@ export class SessionRecord {
 		return !!openSession && typeof openSession.registrationId === "number";
 	}
 
-	getSession(baseKey: Uint8Array): SessionEntry | undefined {
+	getSession(baseKey: Uint8Array): ProtoSessionEntryType | undefined {
 		const keyBase64 = bytesToBase64(baseKey);
 		const session = this.sessions[keyBase64];
-		if (session && session.indexInfo.baseKeyType === BaseKeyType.OURS) {
+		if (session && session.indexInfo?.baseKeyType === ProtoBaseKeyType.OURS) {
 			throw new Error(
 				"Attempted to lookup a session using our base key - use getOpenSession or iterate sessions instead.",
 			);
@@ -340,13 +135,17 @@ export class SessionRecord {
 		return session;
 	}
 
-	getOpenSession(): SessionEntry | undefined {
+	getOpenSession(): ProtoSessionEntryType | undefined {
 		let latestUsed = -1;
-		let openSession: SessionEntry | undefined = undefined;
+		let openSession: ProtoSessionEntryType | undefined = undefined;
 		for (const session of Object.values(this.sessions)) {
-			if (!this.isClosed(session)) {
-				if (session.indexInfo.used > latestUsed) {
-					latestUsed = session.indexInfo.used;
+			if (
+				session.indexInfo &&
+				session.indexInfo.closed === protoInt64.parse(-1)
+			) {
+				const usedTime = session.indexInfo ? Number(session.indexInfo.used) : 0;
+				if (usedTime > latestUsed) {
+					latestUsed = usedTime;
 					openSession = session;
 				}
 			}
@@ -354,7 +153,7 @@ export class SessionRecord {
 		return openSession;
 	}
 
-	setSession(session: SessionEntry): void {
+	setSession(session: ProtoSessionEntryType): void {
 		if (!session.indexInfo || !session.indexInfo.baseKey) {
 			throw new Error("Cannot set session: Missing indexInfo or baseKey");
 		}
@@ -362,42 +161,42 @@ export class SessionRecord {
 		this.sessions[bytesToBase64(baseKeyToUse)] = session;
 	}
 
-	getSessions(): SessionEntry[] {
+	getSessions(): ProtoSessionEntryType[] {
 		return Array.from(Object.values(this.sessions)).sort((a, b) => {
-			const aUsed = a.indexInfo?.used ?? 0;
-			const bUsed = b.indexInfo?.used ?? 0;
+			const aUsed = a.indexInfo?.used ? Number(a.indexInfo.used) : 0;
+			const bUsed = b.indexInfo?.used ? Number(b.indexInfo.used) : 0;
 			return bUsed - aUsed;
 		});
 	}
 
-	closeSession(session: SessionEntry): void {
+	closeSession(session: ProtoSessionEntryType): void {
 		if (!session.indexInfo) {
 			console.error("Cannot close session without indexInfo:", session);
 			return;
 		}
 		if (this.isClosed(session)) {
-			console.warn("Session already closed", session.toString());
+			console.warn("Session already closed");
 			return;
 		}
-		console.info("Closing session:", session.toString());
-		session.indexInfo.closed = Date.now();
+		console.info("Closing session");
+		session.indexInfo.closed = protoInt64.parse(Date.now());
 	}
 
-	openSession(session: SessionEntry): void {
+	openSession(session: ProtoSessionEntryType): void {
 		if (!session.indexInfo) {
 			console.error("Cannot open session without indexInfo:", session);
 			return;
 		}
 		if (!this.isClosed(session)) {
-			console.warn("Session already open", session.toString());
+			console.warn("Session already open");
 			return;
 		}
-		console.info("Re-opening session:", session.toString());
-		session.indexInfo.closed = -1;
+		console.info("Re-opening session");
+		session.indexInfo.closed = protoInt64.parse(-1);
 	}
 
-	isClosed(session: SessionEntry): boolean {
-		return !!session.indexInfo && session.indexInfo.closed !== -1;
+	isClosed(session: ProtoSessionEntryType): boolean {
+		return !!session.indexInfo && Number(session.indexInfo.closed) !== -1;
 	}
 
 	removeOldSessions(): void {
@@ -411,8 +210,12 @@ export class SessionRecord {
 		}
 
 		closedSessions.sort(([, a], [, b]) => {
-			const aClosed = a.indexInfo?.closed ?? Number.POSITIVE_INFINITY;
-			const bClosed = b.indexInfo?.closed ?? Number.POSITIVE_INFINITY;
+			const aClosed = a.indexInfo?.closed
+				? Number(a.indexInfo.closed)
+				: Number.POSITIVE_INFINITY;
+			const bClosed = b.indexInfo?.closed
+				? Number(b.indexInfo.closed)
+				: Number.POSITIVE_INFINITY;
 			return aClosed - bClosed;
 		});
 
@@ -427,12 +230,7 @@ export class SessionRecord {
 				console.warn(`Unexpected state during session cleanup at index ${i}`);
 				continue;
 			}
-			const [keyToRemove, sessionToRemove] = closedSession;
-			const closedDate = new Date(sessionToRemove.indexInfo.closed);
-			console.info(
-				`Removing old closed session (closed at ${closedDate.toISOString()}):`,
-				sessionToRemove.toString(),
-			);
+			const [keyToRemove] = closedSession;
 			delete this.sessions[keyToRemove];
 		}
 	}

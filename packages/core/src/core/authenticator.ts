@@ -1,14 +1,12 @@
 import { create, fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
-import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary/src/constants";
-import { S_WHATSAPP_NET } from "@wha.ts/binary/src/jid-utils";
-import {
-	getBinaryNodeChild,
-	getBinaryNodeChildren,
-} from "@wha.ts/binary/src/node-utils";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import { S_WHATSAPP_NET } from "@wha.ts/binary";
+import { getBinaryNodeChild, getBinaryNodeChildren } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
+import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
 import {
 	ADVDeviceIdentitySchema,
 	type ADVSignedDeviceIdentity,
+	type ADVSignedDeviceIdentityHMAC,
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
@@ -21,20 +19,18 @@ import type { ConnectionManager } from "./connection";
 
 import {
 	bytesToBase64,
-	bytesToHex,
 	bytesToUtf8,
 	concatBytes,
 	equalBytes,
-} from "@wha.ts/utils/src/bytes-utils";
-import { hmacSign } from "@wha.ts/utils/src/crypto";
-import { Curve, KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
-import { encodeBigEndian } from "@wha.ts/utils/src/encodeBigEndian";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+} from "@wha.ts/utils";
+import { hmacSign } from "@wha.ts/utils";
+import { Curve, KEY_BUNDLE_TYPE } from "@wha.ts/utils";
+import type { KeyPair } from "@wha.ts/utils";
+import { encodeBigEndian } from "@wha.ts/utils";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "../generics/typed-event-target";
-import { SignalProtocolStoreAdapter } from "../signal/signal-store";
 import { generatePreKeys } from "../state/utils";
 import {
 	formatPreKeyForXMPP,
@@ -59,6 +55,78 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private qrTimeout?: ReturnType<typeof setTimeout>;
 	private qrRetryCount = 0;
 	private state: AuthState = AuthState.IDLE;
+
+	// Helper to generate a unique ID for IQs
+	private generateIQId(prefix = "pk"): string {
+		return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+	}
+
+	// Helper to query available pre-keys on server
+	private async getAvailablePreKeysOnServer(): Promise<number> {
+		const iqId = this.generateIQId("prekey-count");
+		const node: BinaryNode = {
+			tag: "iq",
+			attrs: {
+				id: iqId,
+				xmlns: "encrypt",
+				type: "get",
+				to: S_WHATSAPP_NET,
+			},
+			content: [{ tag: "count", attrs: {} }],
+		};
+
+		this.logger.debug("Querying server for pre-key count...");
+		await this.connectionActions.sendNode(node);
+
+		return new Promise<number>((resolve, reject) => {
+			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
+				const responseNode = event.detail.node;
+				if (responseNode.tag === "iq" && responseNode.attrs.id === iqId) {
+					this.connectionManager.removeEventListener(
+						"node.received",
+						listener as EventListener,
+					);
+					if (responseNode.attrs.type === "result") {
+						const countChild = getBinaryNodeChild(responseNode, "count");
+						const count = Number.parseInt(countChild?.attrs.value || "0", 10);
+						this.logger.info({ count }, "Received pre-key count from server");
+						resolve(count);
+					} else {
+						const errorChild = getBinaryNodeChild(responseNode, "error");
+						const errorMsg =
+							errorChild?.attrs.text || "Unknown error fetching pre-key count";
+						this.logger.error(
+							{ errorMsg, node: responseNode },
+							"Error fetching pre-key count",
+						);
+						reject(new Error(errorMsg));
+					}
+				}
+			};
+			this.connectionManager.addEventListener(
+				"node.received",
+				listener as EventListener,
+			);
+			setTimeout(() => {
+				this.connectionManager.removeEventListener(
+					"node.received",
+					listener as EventListener,
+				);
+				reject(new Error("Timeout waiting for pre-key count response"));
+			}, 15000);
+		});
+	}
+
+	private setState(newState: AuthState): void {
+		if (this.state !== newState) {
+			this.state = newState;
+			this.dispatchEvent(
+				new CustomEvent("debug:authenticator:state_change", {
+					detail: { state: newState },
+				}),
+			);
+		}
+	}
 
 	private initialQrTimeoutMs = 60_000;
 	private subsequentQrTimeoutMs = 20_000;
@@ -88,7 +156,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				const error = event.detail.error;
 				this.logger.error({ err: error }, "Connection error");
 				this.clearQrTimeout();
-				this.state = AuthState.FAILED;
+				this.setState(AuthState.FAILED);
 				this.dispatchTypedEvent("connection.update", {
 					connection: "close",
 					error,
@@ -98,7 +166,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		this.connectionManager.addEventListener("ws.close", () => {
 			this.clearQrTimeout();
-			this.state = AuthState.IDLE;
+			this.setState(AuthState.IDLE);
 		});
 	}
 
@@ -159,7 +227,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	};
 
 	private handlePairDeviceIQ(node: BinaryNode): void {
-		this.state = AuthState.AWAITING_QR;
+		this.setState(AuthState.AWAITING_QR);
 
 		if (!node.attrs.id) {
 			throw new Error("Missing message ID in stanza for pair-device");
@@ -263,21 +331,15 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		};
 	}
 
-	private processPairingSuccessData(
-		stanza: BinaryNode,
+	private extractAndVerifyPairingData(
+		pairSuccessNode: BinaryNode,
 		creds: AuthenticationCreds,
 	): {
-		creds: Partial<AuthenticationCreds>;
-		reply: BinaryNode;
+		account: ADVSignedDeviceIdentity;
+		platformName?: string;
+		deviceJid: string;
+		businessName?: string;
 	} {
-		const msgId = stanza.attrs.id;
-		if (!msgId) {
-			throw new Error("Missing message ID in stanza for pair-success");
-		}
-
-		const pairSuccessNode = getBinaryNodeChild(stanza, "pair-success");
-		if (!pairSuccessNode) throw new Error("Missing 'pair-success' in stanza");
-
 		const deviceIdentityNode = getBinaryNodeChild(
 			pairSuccessNode,
 			"device-identity",
@@ -291,7 +353,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				"Missing device-identity content or device jid in pair-success node",
 			);
 		}
-
 		if (!(deviceIdentityNode.content instanceof Uint8Array)) {
 			throw new Error("Invalid device-identity content");
 		}
@@ -300,39 +361,81 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			ADVSignedDeviceIdentityHMACSchema,
 			deviceIdentityNode.content,
 		);
-
-		if (!hmacIdentity.details || !hmacIdentity.hmac) {
-			throw new Error("Invalid ADVSignedDeviceIdentityHMAC structure");
-		}
-
-		const advSign = hmacSign(creds.advSecretKey, hmacIdentity.details);
-
-		if (!equalBytes(hmacIdentity.hmac, advSign)) {
-			console.error("HMAC Details:", bytesToHex(hmacIdentity.details));
-			console.error("ADV Key:", creds.advSecretKey);
-			console.error("Received HMAC:", bytesToHex(hmacIdentity.hmac));
-			console.error("Calculated HMAC:", bytesToHex(advSign));
-			throw new Error("Invalid ADV account signature HMAC");
-		}
+		this.verifyDeviceIdentityHMAC(creds, hmacIdentity);
 
 		const account = fromBinary(
 			ADVSignedDeviceIdentitySchema,
 			hmacIdentity.details,
 		);
-		if (
-			!account.details ||
-			!account.accountSignatureKey ||
-			!account.accountSignature
-		) {
-			throw new Error("Invalid ADVSignedDeviceIdentity structure");
-		}
+		this.verifyAccountSignature(account, creds);
 
+		return {
+			account,
+			platformName: platformNode?.attrs.name,
+			deviceJid: deviceNode.attrs.jid,
+			businessName: businessNode?.attrs.name,
+		};
+	}
+
+	private createAuthUpdateFromPairingData(
+		verifiedData: {
+			account: ADVSignedDeviceIdentity;
+			platformName?: string;
+			deviceJid: string;
+			businessName?: string;
+		},
+		creds: AuthenticationCreds,
+	): Partial<AuthenticationCreds> {
+		const identity = this._createSignalIdentity(
+			verifiedData.deviceJid,
+			verifiedData.account.accountSignatureKey,
+		);
+
+		return {
+			me: { id: verifiedData.deviceJid, name: verifiedData.businessName },
+			account: toJson(
+				ADVSignedDeviceIdentitySchema,
+				verifiedData.account,
+			) as unknown as ADVSignedDeviceIdentity,
+			signalIdentities: [...(creds.signalIdentities || []), identity],
+			platform: verifiedData.platformName,
+			pairingCode: undefined,
+		};
+	}
+
+	private updateAccountWithDeviceSignature(
+		account: ADVSignedDeviceIdentity,
+		signedIdentityKey: KeyPair,
+	): ADVSignedDeviceIdentity {
+		const deviceMsg = concatBytes(
+			new Uint8Array([6, 1]),
+			account.details,
+			signedIdentityKey.publicKey,
+			account.accountSignatureKey,
+		);
+		const deviceSignature = Curve.sign(signedIdentityKey.privateKey, deviceMsg);
+		return { ...account, deviceSignature };
+	}
+
+	private verifyDeviceIdentityHMAC(
+		creds: AuthenticationCreds,
+		hmacIdentity: ADVSignedDeviceIdentityHMAC,
+	): void {
+		const advSign = hmacSign(creds.advSecretKey, hmacIdentity.details);
+		if (!equalBytes(hmacIdentity.hmac, advSign)) {
+			throw new Error("Invalid ADV account signature HMAC");
+		}
+	}
+
+	private verifyAccountSignature(
+		account: ADVSignedDeviceIdentity,
+		creds: AuthenticationCreds,
+	): void {
 		const accountMsg = concatBytes(
 			new Uint8Array([6, 0]),
 			account.details,
 			creds.signedIdentityKey.publicKey,
 		);
-
 		if (
 			!Curve.verify(
 				account.accountSignatureKey,
@@ -342,57 +445,22 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		) {
 			throw new Error("Invalid account signature");
 		}
+	}
 
-		const deviceMsg = concatBytes(
-			new Uint8Array([6, 1]),
-			account.details,
-			creds.signedIdentityKey.publicKey,
-			account.accountSignatureKey,
-		);
-
-		const deviceSignature = Curve.sign(
-			creds.signedIdentityKey.privateKey,
-			deviceMsg,
-		);
-		const updatedAccount = {
-			...account,
-			deviceSignature,
-		};
-
-		const bizName = businessNode?.attrs.name;
-		const jid = deviceNode.attrs.jid;
-		const identity = this._createSignalIdentity(
-			jid,
-			account.accountSignatureKey,
-		);
-
-		const authUpdate: Partial<AuthenticationCreds> = {
-			me: { id: jid, name: bizName },
-			account: toJson(
-				ADVSignedDeviceIdentitySchema,
-				updatedAccount,
-			) as unknown as ADVSignedDeviceIdentity,
-			signalIdentities: [...(creds.signalIdentities || []), identity],
-			platform: platformNode?.attrs.name,
-			pairingCode: undefined,
-		};
-
-		const encodeReplyAccount = (acc: typeof updatedAccount): Uint8Array => {
-			const replyAcc = create(ADVSignedDeviceIdentitySchema, acc);
+	private buildPairingReplyNode(
+		msgId: string,
+		updatedAccount: ADVSignedDeviceIdentity,
+	): BinaryNode {
+		const accountEnc = (() => {
+			const replyAcc = create(ADVSignedDeviceIdentitySchema, updatedAccount);
 			return toBinary(ADVSignedDeviceIdentitySchema, replyAcc);
-		};
-		const accountEnc = encodeReplyAccount(updatedAccount);
-
-		if (!updatedAccount.details) {
-			throw new Error("Missing device identity details");
-		}
+		})();
 
 		const deviceIdentity = fromBinary(
 			ADVDeviceIdentitySchema,
 			updatedAccount.details,
 		);
-
-		const reply: BinaryNode = {
+		return {
 			tag: "iq",
 			attrs: {
 				to: S_WHATSAPP_NET,
@@ -413,8 +481,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				},
 			],
 		};
-
-		return { creds: authUpdate, reply };
 	}
 
 	private async handlePairSuccessIQ(node: BinaryNode): Promise<void> {
@@ -422,14 +488,33 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.logger.warn("Already processing pair-success, ignoring duplicate");
 			return;
 		}
-		this.state = AuthState.PROCESSING_PAIR_SUCCESS;
+		this.setState(AuthState.PROCESSING_PAIR_SUCCESS);
 		this.clearQrTimeout();
 
 		try {
-			const { creds: updatedCreds, reply } = this.processPairingSuccessData(
-				node,
+			const msgId = node.attrs.id;
+			if (!msgId) {
+				throw new Error("Missing message ID in stanza for pair-success");
+			}
+			const pairSuccessNode = getBinaryNodeChild(node, "pair-success");
+			if (!pairSuccessNode) throw new Error("Missing 'pair-success' in stanza");
+
+			const verifiedData = this.extractAndVerifyPairingData(
+				pairSuccessNode,
 				this.authStateProvider.creds,
 			);
+
+			const accountWithDeviceSig = this.updateAccountWithDeviceSignature(
+				verifiedData.account,
+				this.authStateProvider.creds.signedIdentityKey,
+			);
+
+			const updatedCreds = this.createAuthUpdateFromPairingData(
+				{ ...verifiedData, account: accountWithDeviceSig },
+				this.authStateProvider.creds,
+			);
+
+			const reply = this.buildPairingReplyNode(msgId, accountWithDeviceSig);
 
 			this.logger.info(
 				{
@@ -455,7 +540,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.logger.info(
 				"Pairing complete, expecting connection close and restart",
 			);
-			this.state = AuthState.AUTHENTICATED;
+			this.setState(AuthState.AUTHENTICATED);
 		} catch (error) {
 			if (!(error instanceof Error)) {
 				throw error;
@@ -471,7 +556,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				.catch((err) =>
 					this.logger.error({ err }, "Failed to trigger connection close"),
 				);
-			this.state = AuthState.FAILED;
+			this.setState(AuthState.FAILED);
 		}
 	}
 
@@ -479,41 +564,94 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.clearQrTimeout();
 		this.state = AuthState.AUTHENTICATED;
 
-		this.handleHandshakeComplete().catch((err) => {
-			this.logger.error({ err }, "Error during handshake completion");
-		});
+		// Pre-key replenishment logic
+		const replenishLogic = async () => {
+			try {
+				await this.handleHandshakeComplete();
 
-		const platform = node.attrs.platform;
-		const pushname = node.attrs.pushname;
-		const updates: Partial<AuthenticationCreds> = {};
-		if (platform && this.authStateProvider.creds.platform !== platform) {
-			updates.platform = platform;
-		}
-		if (
-			pushname &&
-			this.authStateProvider.creds.me?.name !== pushname &&
-			this.authStateProvider.creds.me
-		) {
-			updates.me = { ...this.authStateProvider.creds.me, name: pushname };
-		}
-		if (!this.authStateProvider.creds.registered) {
-			updates.registered = true;
-		}
-
-		if (Object.keys(updates).length > 0) {
-			this.logger.info({ updates }, "Updating creds after login success");
-			Object.assign(this.authStateProvider.creds, updates);
-			this.authStateProvider
-				.saveCreds()
-				.then(() => {
-					this.dispatchTypedEvent("creds.update", updates);
-				})
-				.catch((err) =>
-					this.logger.error({ err }, "Failed to save creds after login"),
+				// Only check and replenish if already registered
+				if (this.authStateProvider.creds.registered) {
+					// Import constants dynamically to avoid circular deps
+					const { MIN_PREKEY_COUNT, PREKEY_UPLOAD_BATCH_SIZE } = await import(
+						"../defaults"
+					);
+					const currentServerCount = await this.getAvailablePreKeysOnServer();
+					this.logger.info(
+						{ currentServerCount },
+						"Pre-keys currently on server after login.",
+					);
+					if (currentServerCount < MIN_PREKEY_COUNT) {
+						const needed = PREKEY_UPLOAD_BATCH_SIZE - currentServerCount;
+						if (needed > 0) {
+							this.logger.info({ needed }, "Replenishing pre-keys on relogin.");
+							await this.uploadPreKeysBatch(needed);
+						} else {
+							this.logger.info(
+								"Sufficient pre-keys on server, no replenishment needed now.",
+							);
+						}
+					}
+				}
+			} catch (err) {
+				this.logger.error(
+					{ err },
+					"Error during post-login pre-key management",
 				);
-		}
+			}
 
-		this.dispatchTypedEvent("connection.update", { connection: "open" });
+			// Continue with existing login success logic
+			const platform = node.attrs.platform;
+			const pushname = node.attrs.pushname;
+			const updates: Partial<AuthenticationCreds> = {};
+			if (platform && this.authStateProvider.creds.platform !== platform) {
+				updates.platform = platform;
+			}
+			if (
+				pushname &&
+				this.authStateProvider.creds.me?.name !== pushname &&
+				this.authStateProvider.creds.me
+			) {
+				updates.me = { ...this.authStateProvider.creds.me, name: pushname };
+			}
+			if (!this.authStateProvider.creds.registered) {
+				updates.registered = true;
+			}
+
+			if (Object.keys(updates).length > 0) {
+				this.logger.info({ updates }, "Updating creds after login success");
+				Object.assign(this.authStateProvider.creds, updates);
+				this.authStateProvider
+					.saveCreds()
+					.then(() => {
+						this.dispatchTypedEvent("creds.update", updates);
+					})
+					.catch((err) =>
+						this.logger.error({ err }, "Failed to save creds after login"),
+					);
+			}
+
+			this.dispatchTypedEvent("connection.update", { connection: "open" });
+		};
+
+		replenishLogic().catch((err) => {
+			this.logger.error(
+				{ err },
+				"Critical failure in login success/pre-key replenishment sequence",
+			);
+			const error = err instanceof Error ? err : new Error(String(err));
+			this.dispatchTypedEvent("connection.update", {
+				connection: "close",
+				error,
+			});
+			this.connectionActions
+				.closeConnection(error)
+				.catch((closeErr) =>
+					this.logger.error(
+						{ closeErr },
+						"Failed to close connection after pre-key error",
+					),
+				);
+		});
 	}
 
 	private handleLoginFailure(node: BinaryNode): void {
@@ -535,7 +673,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			);
 	}
 
-	private async prepareRegistrationPreKeys(batchCount = 30): Promise<{
+	private async prepareInitialRegistrationPreKeys(batchCount = 30): Promise<{
 		preKeys: { [id: number]: KeyPair };
 		updateCreds: Partial<AuthenticationCreds>;
 	}> {
@@ -570,7 +708,8 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		updateCreds: Partial<AuthenticationCreds>;
 	}> {
 		const { creds } = this.authStateProvider;
-		const { preKeys, updateCreds } = await this.prepareRegistrationPreKeys();
+		const { preKeys, updateCreds } =
+			await this.prepareInitialRegistrationPreKeys();
 		const preKeyNodes = Object.entries(preKeys).map(([id, keyPair]) =>
 			formatPreKeyForXMPP(keyPair, Number.parseInt(id, 10)),
 		);
@@ -599,6 +738,181 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			],
 		};
 		return { node: registrationIQ, updateCreds };
+	}
+
+	// Fetch a batch of pre-keys intended for upload
+	private async getNextPreKeyBatchForUpload(batchSize: number): Promise<{
+		keysToUpload: { [id: number]: KeyPair };
+		idsUploaded: number[];
+		nextFirstUnuploadedPreKeyId: number;
+	}> {
+		const { creds, keys } = this.authStateProvider;
+		const { firstUnuploadedPreKeyId, nextPreKeyId } = creds;
+		const availableToUpload = nextPreKeyId - firstUnuploadedPreKeyId;
+		const countToFetch = Math.min(batchSize, availableToUpload);
+
+		if (countToFetch <= 0) {
+			this.logger.info("No pre-keys available locally to upload.");
+			return {
+				keysToUpload: {},
+				idsUploaded: [],
+				nextFirstUnuploadedPreKeyId: firstUnuploadedPreKeyId,
+			};
+		}
+
+		const idsToFetch: string[] = [];
+		const numericIdsUploaded: number[] = [];
+		for (let i = 0; i < countToFetch; i++) {
+			const keyId = firstUnuploadedPreKeyId + i;
+			idsToFetch.push(keyId.toString());
+			numericIdsUploaded.push(keyId);
+		}
+
+		this.logger.debug({ idsToFetch }, "Fetching pre-keys for upload batch");
+		const fetchedKeys = (await keys.get("pre-key", idsToFetch)) as {
+			[id: string]: KeyPair;
+		};
+
+		const keysToUpload: { [id: number]: KeyPair } = {};
+		for (const idStr of idsToFetch) {
+			if (fetchedKeys[idStr]) {
+				keysToUpload[Number(idStr)] = fetchedKeys[idStr];
+			} else {
+				this.logger.warn(
+					`Pre-key ${idStr} not found in local store for upload!`,
+				);
+			}
+		}
+
+		return {
+			keysToUpload,
+			idsUploaded: numericIdsUploaded,
+			nextFirstUnuploadedPreKeyId: firstUnuploadedPreKeyId + countToFetch,
+		};
+	}
+
+	// Generate and upload a batch of pre-keys
+	private async uploadPreKeysBatch(count: number): Promise<void> {
+		const { creds } = this.authStateProvider;
+		const currentLocalUnuploadedCount =
+			creds.nextPreKeyId - creds.firstUnuploadedPreKeyId;
+		if (currentLocalUnuploadedCount < count) {
+			const needToGenerate = count - currentLocalUnuploadedCount;
+			this.logger.info(
+				{ needToGenerate },
+				"Generating additional pre-keys before batch upload",
+			);
+			const newLocalKeys = generatePreKeys(creds.nextPreKeyId, needToGenerate);
+			await this.authStateProvider.keys.set({ "pre-key": newLocalKeys });
+			creds.nextPreKeyId += needToGenerate;
+		}
+
+		const { keysToUpload, idsUploaded, nextFirstUnuploadedPreKeyId } =
+			await this.getNextPreKeyBatchForUpload(count);
+
+		if (Object.keys(keysToUpload).length === 0) {
+			this.logger.info("No pre-keys to upload in this batch.");
+			return;
+		}
+
+		const preKeyNodes = Object.entries(keysToUpload).map(([id, keyPair]) =>
+			formatPreKeyForXMPP(keyPair, Number.parseInt(id, 10)),
+		);
+
+		const iqId = this.generateIQId("upload-pk");
+		const uploadIQNode: BinaryNode = {
+			tag: "iq",
+			attrs: {
+				xmlns: "encrypt",
+				type: "set",
+				to: S_WHATSAPP_NET,
+				id: iqId,
+			},
+			content: [
+				{
+					tag: "registration",
+					attrs: {},
+					content: encodeBigEndian(creds.registrationId),
+				},
+				{ tag: "type", attrs: {}, content: KEY_BUNDLE_TYPE },
+				{
+					tag: "identity",
+					attrs: {},
+					content: creds.signedIdentityKey.publicKey,
+				},
+				formatSignedPreKeyForXMPP(creds.signedPreKey),
+				{ tag: "list", attrs: {}, content: preKeyNodes },
+			],
+		};
+
+		this.logger.info(
+			{ count: preKeyNodes.length, ids: idsUploaded },
+			"Uploading pre-keys batch",
+		);
+		await this.connectionActions.sendNode(uploadIQNode);
+
+		return new Promise<void>((resolve, reject) => {
+			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
+				const responseNode = event.detail.node;
+				if (responseNode.tag === "iq" && responseNode.attrs.id === iqId) {
+					this.connectionManager.removeEventListener(
+						"node.received",
+						listener as EventListener,
+					);
+					if (responseNode.attrs.type === "result") {
+						this.logger.info("Pre-key batch uploaded successfully");
+						creds.firstUnuploadedPreKeyId = nextFirstUnuploadedPreKeyId;
+						this.authStateProvider
+							.saveCreds()
+							.then(() => {
+								this.dispatchTypedEvent("creds.update", {
+									firstUnuploadedPreKeyId: creds.firstUnuploadedPreKeyId,
+									nextPreKeyId: creds.nextPreKeyId,
+								});
+								resolve();
+							})
+							.catch(reject);
+					} else {
+						const errorChild = getBinaryNodeChild(responseNode, "error");
+						const errorMsg =
+							errorChild?.attrs.text || "Unknown error uploading pre-key batch";
+						this.logger.error(
+							{ errorMsg, node: responseNode },
+							"Error uploading pre-key batch",
+						);
+						reject(new Error(errorMsg));
+					}
+				}
+			};
+			this.connectionManager.addEventListener(
+				"node.received",
+				listener as EventListener,
+			);
+			setTimeout(() => {
+				this.connectionManager.removeEventListener(
+					"node.received",
+					listener as EventListener,
+				);
+				reject(new Error("Timeout waiting for pre-key batch upload response"));
+			}, 20000);
+		});
+	}
+
+	public getDebugStateSnapshot(): {
+		internalState: AuthState;
+		qrRetryCount: number;
+		credsSummary: Partial<AuthenticationCreds>;
+	} {
+		return {
+			internalState: this.state,
+			qrRetryCount: this.qrRetryCount,
+			credsSummary: {
+				me: this.authStateProvider.creds.me,
+				platform: this.authStateProvider.creds.platform,
+				registered: this.authStateProvider.creds.registered,
+				signalIdentities: this.authStateProvider.creds.signalIdentities,
+			},
+		};
 	}
 }
 

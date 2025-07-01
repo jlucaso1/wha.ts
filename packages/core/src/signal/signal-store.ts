@@ -1,14 +1,11 @@
-import { SessionRecord, type SignalSessionStorage } from "@wha.ts/signal/src";
-import type { ChainType } from "@wha.ts/signal/src/chain_type";
-import {
-	bytesToUtf8,
-	concatBytes,
-	utf8ToBytes,
-} from "@wha.ts/utils/src/bytes-utils";
-import { KEY_BUNDLE_TYPE } from "@wha.ts/utils/src/curve";
-import { deserializer, serializer } from "@wha.ts/utils/src/serializer";
-import type { KeyPair, SignedKeyPair } from "@wha.ts/utils/src/types";
+import { SessionRecord, type SignalSessionStorage } from "@wha.ts/signal";
+import type { ChainType } from "@wha.ts/signal/chain_type";
+import { concatBytes } from "@wha.ts/utils";
+import { KEY_BUNDLE_TYPE } from "@wha.ts/utils";
+import type { KeyPair, SignedKeyPair } from "@wha.ts/utils";
 import type { IAuthStateProvider } from "../state/interface";
+
+import { ProtocolAddress } from "@wha.ts/signal/protocol_address";
 
 export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 	private logger = console;
@@ -45,10 +42,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 			console.warn(`[SignalStore] Pre-key ${idStr} not found!`);
 			return undefined;
 		}
-		return {
-			privateKey: preKey.privateKey,
-			publicKey: preKey.publicKey,
-		};
+		return preKey;
 	}
 
 	async removePreKey(keyId: number): Promise<void> {
@@ -56,37 +50,36 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		await this.authState.keys.set({ "pre-key": { [idStr]: null } });
 	}
 
+	/**
+	 * Loads a session record from binary Protobuf format only.
+	 */
 	async loadSession(identifier: string): Promise<SessionRecord | undefined> {
 		const result = await this.authState.keys.get("session", [identifier]);
 		const sessionData = result[identifier];
 
-		if (sessionData instanceof Uint8Array) {
-			try {
-				const jsonString = bytesToUtf8(sessionData);
-				const plainObject = deserializer(jsonString);
-
-				const recordInstance = SessionRecord.deserialize(plainObject);
-
-				return recordInstance;
-			} catch (e) {
-				this.logger.error(
-					{ err: e, jid: identifier },
-					`Failed to parse/deserialize session JSON for ${identifier}`,
-				);
-				return undefined;
-			}
+		if (!(sessionData instanceof Uint8Array)) {
+			this.logger.error(
+				{ jid: identifier },
+				"Session data is not a Uint8Array (expected Protobuf binary)",
+			);
+			return undefined;
 		}
-
-		return undefined;
+		try {
+			return SessionRecord.deserialize(sessionData);
+		} catch (e) {
+			this.logger.error(
+				{ err: e, jid: identifier },
+				`Failed to deserialize session for ${identifier}`,
+			);
+			return undefined;
+		}
 	}
 
 	async storeSession(
 		identifier: string,
 		sessionRecordInstance: SessionRecord,
 	): Promise<void> {
-		const plainObject = sessionRecordInstance.serialize();
-		const jsonString = serializer(plainObject);
-		const sessionDataToStore = utf8ToBytes(jsonString);
+		const sessionDataToStore = sessionRecordInstance.serialize();
 		await this.authState.keys.set({
 			session: { [identifier]: sessionDataToStore },
 		});
@@ -101,10 +94,10 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 			this.authState.creds.signedPreKey = {
 				keyId: keyRecord.keyId,
 				keyPair: {
-					privateKey: new Uint8Array(keyRecord.keyPair.privateKey),
-					publicKey: new Uint8Array(keyRecord.keyPair.publicKey),
+					privateKey: keyRecord.keyPair.privateKey,
+					publicKey: keyRecord.keyPair.publicKey,
 				},
-				signature: new Uint8Array(keyRecord.signature),
+				signature: keyRecord.signature,
 			};
 			await this.authState.saveCreds();
 		} else {
@@ -140,5 +133,30 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		}
 
 		return undefined;
+	}
+	/**
+	 * Retrieves all session records for all devices of a given user.
+	 * Returns an array of { address: ProtocolAddress, record: SessionRecord }
+	 */
+	async getAllSessionRecordsForUser(
+		userId: string,
+	): Promise<{ address: ProtocolAddress; record: SessionRecord }[]> {
+		const sessions = await this.authState.keys.getAllSessionsForUser(userId);
+		const results: { address: ProtocolAddress; record: SessionRecord }[] = [];
+		for (const [addressStr, sessionData] of Object.entries(sessions)) {
+			if (!sessionData) continue;
+			try {
+				const record = SessionRecord.deserialize(sessionData as Uint8Array);
+				const protoAddrStr = addressStr.replace(/_([0-9]+)$/, ".$1");
+				const address = ProtocolAddress.from(protoAddrStr);
+				results.push({ address, record });
+			} catch (err) {
+				this.logger.error(
+					{ err, address: addressStr },
+					"Failed to deserialize session record for device",
+				);
+			}
+		}
+		return results;
 	}
 }

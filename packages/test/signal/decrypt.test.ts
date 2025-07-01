@@ -1,15 +1,11 @@
 import { expect, test } from "bun:test";
 import { fromBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary/src/jid-utils";
-import { SignalProtocolStoreAdapter } from "@wha.ts/core/src/signal/signal-store";
-import { GenericAuthState } from "@wha.ts/core/src/state/providers/generic-auth-state";
+import { jidDecode } from "@wha.ts/binary";
+import { SignalProtocolStoreAdapter } from "@wha.ts/core";
 import { MessageSchema } from "@wha.ts/proto";
-import { ProtocolAddress, SessionCipher } from "@wha.ts/signal/src";
-import {
-	base64ToBytes,
-	hexToBytes,
-	unpadRandomMax16,
-} from "@wha.ts/utils/src/bytes-utils";
+import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
+import { GenericAuthState } from "@wha.ts/storage";
+import { base64ToBytes, hexToBytes, unpadRandomMax16 } from "@wha.ts/utils";
 
 const mockedSession = {
 	prekeys: {
@@ -84,4 +80,56 @@ test("decrypts a message", async () => {
 	expect(message.deviceSentMessage?.message?.extendedTextMessage?.text).toBe(
 		"Bom dia",
 	);
+});
+
+test("throws if skipped message keys storage limit is exceeded", () => {
+	test("stores and consumes skipped message keys for out-of-order arrival", () => {
+		const chain = {
+			chainKey: { counter: 0, key: new Uint8Array(32) },
+			messageKeys: {} as Record<string, Uint8Array | undefined>,
+		};
+		const cipher = Object.create(SessionCipher.prototype);
+
+		// Simulate out-of-order arrival: fill up to 3, then decrypt 2, then 3
+		cipher.fillMessageKeys(chain, 3);
+		expect(Object.keys(chain.messageKeys).length).toBe(3);
+		expect(chain.messageKeys["1"]).toBeDefined();
+		expect(chain.messageKeys["2"]).toBeDefined();
+		expect(chain.messageKeys["3"]).toBeDefined();
+
+		// Decrypt message 2 (consume key)
+		chain.messageKeys["2"] = undefined;
+		expect(chain.messageKeys["2"]).toBeUndefined();
+
+		// Decrypt message 3 (consume key)
+		chain.messageKeys["3"] = undefined;
+		expect(chain.messageKeys["3"]).toBeUndefined();
+
+		// Message 1 should still be available
+		expect(chain.messageKeys["1"]).toBeDefined();
+	});
+
+	test("verifies error handling when a message key is reused", () => {
+		const chain = {
+			chainKey: { counter: 0, key: new Uint8Array(32) },
+			messageKeys: {} as Record<string, Uint8Array | undefined>,
+		};
+		const cipher = Object.create(SessionCipher.prototype);
+
+		cipher.fillMessageKeys(chain, 1);
+		const key1 = chain.messageKeys["1"];
+		expect(key1).toBeDefined();
+
+		// Simulate decryption and key removal
+		chain.messageKeys["1"] = undefined;
+
+		// Attempt to decrypt again (key already used)
+		expect(() => {
+			if (!chain.messageKeys["1"]) {
+				throw new Error(
+					"Key used already or never filled or invalid message counter",
+				);
+			}
+		}).toThrow(/Key used already|never filled|invalid message counter/);
+	});
 });

@@ -1,11 +1,23 @@
-import { utf8ToBytes } from "@wha.ts/utils/src/bytes-utils";
-import { hkdfSignalDeriveSecrets } from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
-import { Mutex } from "@wha.ts/utils/src/mutex-utils";
-import { BaseKeyType } from "./base_key_type";
+import { create, protoInt64 } from "@bufbuild/protobuf";
+import {
+	ProtoBaseKeyType,
+	ProtoChainSchema,
+	ProtoChainType,
+	ProtoCurrentRatchetSchema,
+	ProtoIndexInfoSchema,
+	ProtoKeyPairSchema,
+	ProtoPendingPreKeySchema,
+	ProtoSessionEntrySchema,
+	type ProtoSessionEntry as ProtoSessionEntryType,
+} from "@wha.ts/proto";
+import { utf8ToBytes } from "@wha.ts/utils";
+import { bytesToBase64 } from "@wha.ts/utils";
+import { hkdfSignalDeriveSecrets } from "@wha.ts/utils";
+import { Curve } from "@wha.ts/utils";
+import { Mutex } from "@wha.ts/utils";
 import { ChainType } from "./chain_type";
 import type { ProtocolAddress } from "./protocol_address";
-import { type SessionEntry, SessionRecord } from "./session_record";
+import { SessionRecord } from "./session_record";
 import type { SignalSessionStorage } from "./types";
 
 export class SessionBuilder {
@@ -57,13 +69,11 @@ export class SessionBuilder {
 				device.signedPreKey.publicKey,
 				device.registrationId,
 			);
-			session.pendingPreKey = {
+			session.pendingPreKey = create(ProtoPendingPreKeySchema, {
 				signedKeyId: device.signedPreKey.keyId,
 				baseKey: baseKey.publicKey,
-			};
-			if (device.preKey) {
-				session.pendingPreKey.preKeyId = device.preKey.keyId;
-			}
+				preKeyId: device.preKey ? device.preKey.keyId : undefined,
+			});
 			let record = await this.storage.loadSession(fqAddr);
 			if (!record) {
 				record = new SessionRecord();
@@ -156,7 +166,7 @@ export class SessionBuilder {
 		theirEphemeralPubKey: Uint8Array | undefined,
 		theirSignedPubKey: Uint8Array | undefined,
 		registrationId: number | undefined,
-	) {
+	): Promise<ProtoSessionEntryType> {
 		let localOurSignedKey = ourSignedKey;
 		let localTheirSignedPubKey = theirSignedPubKey;
 		if (isInitiator) {
@@ -171,18 +181,10 @@ export class SessionBuilder {
 			localTheirSignedPubKey = theirEphemeralPubKey;
 		}
 
-		if (!ourEphemeralKey) {
-			throw new Error("Missing ourEphemeralKey");
-		}
-		if (!theirEphemeralPubKey) {
-			throw new Error("Missing theirEphemeralPubKey");
-		}
-		if (!localOurSignedKey) {
-			throw new Error("Missing ourSignedKey");
-		}
-		if (!localTheirSignedPubKey) {
-			throw new Error("Missing theirSignedPubKey");
-		}
+		if (!ourEphemeralKey) throw new Error("Missing ourEphemeralKey");
+		if (!theirEphemeralPubKey) throw new Error("Missing theirEphemeralPubKey");
+		if (!localOurSignedKey) throw new Error("Missing ourSignedKey");
+		if (!localTheirSignedPubKey) throw new Error("Missing theirSignedPubKey");
 
 		let sharedSecret: Uint8Array;
 		if (!ourEphemeralKey || !theirEphemeralPubKey) {
@@ -190,9 +192,8 @@ export class SessionBuilder {
 		} else {
 			sharedSecret = new Uint8Array(32 * 5);
 		}
-		for (let i = 0; i < 32; i++) {
-			sharedSecret[i] = 0xff;
-		}
+		for (let i = 0; i < 32; i++) sharedSecret[i] = 0xff;
+
 		const ourIdentityKey = await this.storage.getOurIdentity();
 		const a1 = Curve.sharedKey(
 			ourIdentityKey.privateKey,
@@ -206,6 +207,7 @@ export class SessionBuilder {
 			localOurSignedKey.privateKey,
 			localTheirSignedPubKey,
 		);
+
 		if (isInitiator) {
 			sharedSecret.set(new Uint8Array(a1), 32);
 			sharedSecret.set(new Uint8Array(a2), 32 * 2);
@@ -226,54 +228,61 @@ export class SessionBuilder {
 			new Uint8Array(32),
 			utf8ToBytes("WhisperText"),
 		);
-		const session = SessionRecord.createEntry();
-		session.registrationId = registrationId;
-		session.currentRatchet = {
+
+		const session = create(ProtoSessionEntrySchema) as ProtoSessionEntryType;
+		if (registrationId !== undefined) session.registrationId = registrationId;
+
+		session.currentRatchet = create(ProtoCurrentRatchetSchema, {
 			rootKey: masterKey[0],
-			ephemeralKeyPair: isInitiator
-				? Curve.generateKeyPair()
-				: localOurSignedKey,
+			ephemeralKeyPair: create(
+				ProtoKeyPairSchema,
+				isInitiator ? Curve.generateKeyPair() : localOurSignedKey,
+			),
 			lastRemoteEphemeralKey: localTheirSignedPubKey,
 			previousCounter: 0,
-		};
-		session.indexInfo = {
-			created: Date.now(),
-			used: Date.now(),
+		});
+
+		session.indexInfo = create(ProtoIndexInfoSchema, {
+			created: protoInt64.parse(Date.now()),
+			used: protoInt64.parse(Date.now()),
 			remoteIdentityKey: theirIdentityPubKey,
 			baseKey: isInitiator ? ourEphemeralKey.publicKey : theirEphemeralPubKey,
-			baseKeyType: isInitiator ? BaseKeyType.OURS : BaseKeyType.THEIRS,
-			closed: -1,
-		};
+			baseKeyType: isInitiator
+				? ProtoBaseKeyType.OURS
+				: ProtoBaseKeyType.THEIRS,
+			closed: protoInt64.parse(-1),
+		});
+
 		if (isInitiator) {
-			this.calculateSendingRatchet(session, localTheirSignedPubKey);
+			if (localTheirSignedPubKey) {
+				this.calculateSendingRatchet(session, localTheirSignedPubKey);
+			}
 		}
 		return session;
 	}
 
-	calculateSendingRatchet(session: SessionEntry, remoteKey: Uint8Array) {
-		if (!session.currentRatchet) {
+	calculateSendingRatchet(
+		session: ProtoSessionEntryType,
+		remoteKey: Uint8Array,
+	) {
+		if (!session.currentRatchet)
 			throw new Error("Missing currentRatchet in session");
-		}
-		if (!remoteKey) {
-			throw new Error("Missing remoteKey for ratchet");
-		}
+		if (!remoteKey) throw new Error("Missing remoteKey for ratchet");
 		const ratchet = session.currentRatchet;
-		const sharedSecret = Curve.sharedKey(
-			ratchet.ephemeralKeyPair.privateKey,
-			remoteKey,
-		);
+		const privKey = ratchet.ephemeralKeyPair?.privateKey;
+		const pubKey = ratchet.ephemeralKeyPair?.publicKey;
+		if (!privKey || !pubKey) throw new Error("Missing key pair in ratchet");
+		const sharedSecret = Curve.sharedKey(privKey, remoteKey);
 		const masterKey = hkdfSignalDeriveSecrets(
 			sharedSecret,
-			ratchet.rootKey,
+			ratchet.rootKey ?? new Uint8Array(32),
 			utf8ToBytes("WhisperRatchet"),
 		);
-		session.addChain(ratchet.ephemeralKeyPair.publicKey, {
+		if (!session.chains) session.chains = {};
+		session.chains[bytesToBase64(pubKey)] = create(ProtoChainSchema, {
 			messageKeys: {},
-			chainKey: {
-				counter: -1,
-				key: masterKey[1],
-			},
-			chainType: ChainType.SENDING,
+			chainKey: { counter: -1, key: masterKey[1] },
+			chainType: ProtoChainType.SENDING,
 		});
 		ratchet.rootKey = masterKey[0];
 	}

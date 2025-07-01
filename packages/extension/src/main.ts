@@ -1,6 +1,6 @@
 import { type JsonValue, fromBinary, toJson } from "@bufbuild/protobuf";
 import { ClientPayloadSchema, HandshakeMessageSchema } from "@wha.ts/proto";
-import { bytesToBase64, bytesToHex } from "@wha.ts/utils/src/bytes-utils";
+import { bytesToBase64, bytesToHex } from "@wha.ts/utils";
 
 // Extend Window interface for the custom decode function
 declare global {

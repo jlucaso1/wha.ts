@@ -1,6 +1,6 @@
-import { randomBytes } from "@wha.ts/utils/src/crypto";
-import { Curve } from "@wha.ts/utils/src/curve";
-import type { KeyPair } from "@wha.ts/utils/src/types";
+import { randomBytes } from "@wha.ts/utils";
+import { Curve } from "@wha.ts/utils";
+import type { KeyPair } from "@wha.ts/utils";
 import type { AuthenticationCreds } from "./interface";
 
 const generateRegistrationId = (): number => {

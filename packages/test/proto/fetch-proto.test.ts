@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { generateProto } from "@wha.ts/proto/scripts/fetch-proto";
+import { generateProto } from "packages/proto/scripts/fetch-proto";
 
 describe("WAProto proto generation", () => {
 	it("should generate the correct .proto schema string", async () => {

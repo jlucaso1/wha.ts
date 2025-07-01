@@ -1,7 +1,7 @@
 import type { fromBinary } from "@bufbuild/protobuf";
-import type { BinaryNode } from "@wha.ts/binary/src/types";
+import type { BinaryNode } from "@wha.ts/binary";
 import type { MessageSchema } from "@wha.ts/proto";
-import type { ProtocolAddress } from "@wha.ts/signal/src";
+import type { ProtocolAddress } from "@wha.ts/signal";
 import type {
 	ConnectionUpdatePayload,
 	CredsUpdatePayload,
