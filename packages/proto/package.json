@@ -26,14 +26,17 @@
 		"access": "public"
 	},
 	"scripts": {
-		"proto:gen": "@bufbuild/buf generate",
+		"proto:fetch": "bun ./scripts/fetch-proto.ts",
+		"proto:gen": "buf generate",
 		"build": "tsup src/index.ts --format=esm --dts"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5"
 	},
 	"devDependencies": {
+		"@bufbuild/buf": "^1.52.1",
 		"@bufbuild/protoc-gen-es": "^2.2.5",
-		"@bufbuild/buf": "^1.52.1"
+		"acorn": "^8.14.1",
+		"acorn-walk": "^8.3.4"
 	}
 }

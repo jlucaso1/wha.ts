@@ -134,7 +134,7 @@ export const generateRegisterPayload = (
 		passive: false,
 		pull: false,
 		devicePairingData: {
-			$typeName: "proto.ClientPayload.DevicePairingRegistrationData",
+			$typeName: "ClientPayload.DevicePairingRegistrationData",
 			buildHash: appVersionBuf,
 			deviceProps: devicePropsBytes,
 			eRegid: encodeBigEndian(creds.registrationId),
