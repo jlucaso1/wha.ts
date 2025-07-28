@@ -1,26 +1,16 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import type { BinaryNode } from "@wha.ts/binary";
-import {
-	decodeBinaryNode,
-	encodeBinaryNode,
-	getBinaryNodeChild,
-	S_WHATSAPP_NET,
-} from "@wha.ts/binary";
+import { decodeBinaryNode, encodeBinaryNode } from "@wha.ts/binary";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
 import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
-import {
-	DEFAULT_SOCKET_CONFIG,
-	DisconnectReason,
-	NOISE_WA_HEADER,
-} from "../defaults";
+import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import { TypedEventTarget } from "../generics/typed-event-target";
 import type { MessageProcessor } from "../messaging/message-processor";
 import type { AuthenticationCreds } from "../state/interface";
-import { generateMdTagPrefix } from "../state/utils";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";
 import type { ILogger, WebSocketConfig } from "../transport/types";
@@ -34,6 +24,7 @@ import type {
 	ConnectionState,
 	StateChangePayload,
 } from "./connection-events";
+import { IncomingNodeHandler } from "./incoming-node-handler";
 
 class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private logger: ILogger;
@@ -45,7 +36,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private ws!: NativeWebSocketClient;
 	private noiseProcessor!: NoiseProcessor;
 	private frameHandler!: FrameHandler;
-	private epoch = 0;
+	private nodeHandler!: IncomingNodeHandler;
 
 	private messageProcessor!: MessageProcessor;
 
@@ -97,6 +88,17 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			this.handleDecryptedFrame,
 			this.routingInfo,
 			NOISE_WA_HEADER,
+		);
+
+		this.nodeHandler = new IncomingNodeHandler(
+			{
+				setState: this.setState.bind(this),
+				sendNode: this.sendNode.bind(this),
+				close: this.close.bind(this),
+				dispatchTypedEvent: this.dispatchTypedEvent.bind(this),
+			},
+			this.messageProcessor,
+			this.logger,
 		);
 
 		if (this.ws) {
@@ -255,11 +257,13 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private handleDecryptedFrame = async (
 		decryptedPayload: Uint8Array,
 	): Promise<void> => {
-		if (
-			this.state !== "open" &&
-			this.state !== "handshaking" &&
-			this.state !== "authenticating"
-		) {
+		const allowedStates: ConnectionState[] = [
+			"handshaking",
+			"authenticating",
+			"open",
+		];
+
+		if (!allowedStates.includes(this.state)) {
 			this.logger.warn(
 				{ state: this.state },
 				"Received data in unexpected state, ignoring",
@@ -275,83 +279,18 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			return;
 		}
 
-		if (this.state === "open" || this.state === "authenticating") {
-			try {
-				const node = decodeBinaryNode(decryptedPayload);
-
-				if (this.state === "authenticating" && node.tag === "success") {
-					this.setState("open");
-					this.logger.info(
-						"Authentication successful, connection is now fully open.",
-					);
-				}
-
-				// Handle stream:error (e.g., code 515 Restart Required)
-				if (node.tag === "stream:error") {
-					const code = node.attrs.code;
-					const message = `Stream Error (code: ${code})`;
-					this.logger.warn({ node }, message);
-
-					let error: Error;
-					if (code === "515") {
-						error = new Error("Restart Required");
-						(error as any).statusCode = DisconnectReason.restartRequired;
-					} else {
-						error = new Error(message);
-					}
-
-					this.close(error);
-					return;
-				}
-
-				if (
-					node.tag === "iq" &&
-					node.attrs.from === S_WHATSAPP_NET &&
-					node.attrs.type === "get" &&
-					node.attrs.xmlns === "urn:xmpp:ping"
-				) {
-					this.logger.debug({ id: node.attrs.id }, "Responding to ping");
-					const pongNode: BinaryNode = {
-						tag: "iq",
-						attrs: {
-							to: node.attrs.from,
-							type: "result",
-							xmlns: "w:p",
-							id: `${generateMdTagPrefix()}-${this.epoch++}`,
-						},
-					};
-					this.sendNode(pongNode).catch((err) => {
-						this.logger.warn(
-							{ err, id: node.attrs.id },
-							"Failed to send pong response",
-						);
-					});
-					return;
-				}
-
-				const isEncryptedMessage =
-					node.tag === "message" && getBinaryNodeChild(node, "enc");
-
-				if (isEncryptedMessage) {
-					this.messageProcessor.processIncomingNode(node).catch((err) => {
-						this.logger.error(
-							{ err, nodeTag: node.tag, from: node.attrs.from },
-							"Error processing encrypted node in MessageProcessor",
-						);
-					});
-				} else {
-					this.dispatchTypedEvent("node.received", { node });
-				}
-			} catch (error) {
-				if (!(error instanceof Error)) {
-					throw error;
-				}
-				this.logger.error(
-					{ err: error, data: bytesToHex(decryptedPayload) },
-					"Failed to decode BinaryNode from decrypted frame in 'open' state",
-				);
-				this.dispatchTypedEvent("error", { error });
+		try {
+			const node = decodeBinaryNode(decryptedPayload);
+			this.nodeHandler.processNode(node, this.state);
+		} catch (error) {
+			if (!(error instanceof Error)) {
+				throw error;
 			}
+			this.logger.error(
+				{ err: error, data: bytesToHex(decryptedPayload) },
+				"Failed to decode BinaryNode from decrypted frame",
+			);
+			this.dispatchTypedEvent("error", { error });
 		}
 	};
 
