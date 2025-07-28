@@ -1,7 +1,15 @@
 import type { BinaryNode } from "@wha.ts/binary";
 
+export type ConnectionState =
+	| "connecting"
+	| "open"
+	| "handshaking"
+	| "closing"
+	| "closed"
+	| "authenticating";
+
 export interface StateChangePayload {
-	state: "connecting" | "open" | "handshaking" | "closing" | "closed";
+	state: ConnectionState;
 	error?: Error;
 }
 

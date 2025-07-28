@@ -31,14 +31,14 @@ import {
 } from "./auth-payload-generators";
 import type {
 	ConnectionManagerEventMap,
+	ConnectionState,
 	StateChangePayload,
 } from "./connection-events";
 
 class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private logger: ILogger;
 	private config: WebSocketConfig;
-	private state: "connecting" | "open" | "handshaking" | "closing" | "closed" =
-		"closed";
+	private state: ConnectionState = "closed";
 	private routingInfo?: Uint8Array;
 	private creds: AuthenticationCreds;
 
@@ -223,7 +223,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 				this.noiseProcessor.finalizeHandshake();
 
-				this.setState("open");
+				this.setState("authenticating");
 				this.dispatchTypedEvent("handshake.complete", {});
 			} else {
 				throw new Error("Received unexpected message during handshake");
@@ -255,7 +255,11 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private handleDecryptedFrame = async (
 		decryptedPayload: Uint8Array,
 	): Promise<void> => {
-		if (this.state !== "open" && this.state !== "handshaking") {
+		if (
+			this.state !== "open" &&
+			this.state !== "handshaking" &&
+			this.state !== "authenticating"
+		) {
 			this.logger.warn(
 				{ state: this.state },
 				"Received data in unexpected state, ignoring",
@@ -271,9 +275,16 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			return;
 		}
 
-		if (this.state === "open") {
+		if (this.state === "open" || this.state === "authenticating") {
 			try {
 				const node = decodeBinaryNode(decryptedPayload);
+
+				if (this.state === "authenticating" && node.tag === "success") {
+					this.setState("open");
+					this.logger.info(
+						"Authentication successful, connection is now fully open.",
+					);
+				}
 
 				// Handle stream:error (e.g., code 515 Restart Required)
 				if (node.tag === "stream:error") {
@@ -345,7 +356,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	};
 
 	async sendNode(node: BinaryNode): Promise<void> {
-		if (this.state !== "open") {
+		if (this.state !== "open" && this.state !== "authenticating") {
 			throw new Error(
 				`Cannot send node while connection state is "${this.state}"`,
 			);
@@ -370,12 +381,16 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 	private handleWsClose = (code: number, reasonBuffer: Uint8Array): void => {
 		const reason = reasonBuffer.toString();
-		// Use the stored error from the close() call, or create a new one if the close was truly unexpected.
-		const error =
-			this.closingError ||
-			(this.state !== "closing"
-				? new Error(`WebSocket closed unexpectedly: ${code} ${reason}`)
-				: undefined);
+		let error = this.closingError;
+
+		if (this.state === "authenticating" && code === 1006) {
+			error = new Error(
+				"Connection closed, likely due to an expired client version.",
+			);
+		} else if (!error && this.state !== "closing") {
+			error = new Error(`WebSocket closed unexpectedly: ${code} ${reason}`);
+		}
+
 		this.setState(
 			"closed",
 			error ||
@@ -386,7 +401,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		this.removeWsListeners();
 		this.dispatchTypedEvent("ws.close", { code, reason });
 		if (error) this.dispatchTypedEvent("error", { error });
-
 		// Clear the closing error for the next connection cycle
 		this.closingError = undefined;
 	};
