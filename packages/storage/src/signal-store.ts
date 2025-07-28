@@ -70,6 +70,7 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
 						const schema = SignalDataTypeSchemas[type];
+
 						finalResults[id] = deserialize(rawValue, schema);
 					} catch (error) {
 						console.error(

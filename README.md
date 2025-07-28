@@ -33,16 +33,9 @@ yarn add @wha.ts/core
 Here's a simple example of connecting to WhatsApp and listening for connection updates:
 
 ```typescript
-import { createWAClient } from "@wha.ts/core";
-import { GenericAuthState } from "@wha.ts/storage";
-import { createStorage } from "unstorage";
-import fsDriver from "unstorage/drivers/fs-lite";
-
 async function main() {
   // Set up storage for authentication state
-  const storage = createStorage({ 
-    driver: fsDriver({ base: "./whatsapp-storage" }) 
-  });
+  const storage = new FileSystemSimpleKeyValueStore("./example-storage");
 
   // Initialize authentication state
   const authState = await GenericAuthState.init(storage);

@@ -1,16 +1,17 @@
 import { createWAClient } from "@wha.ts/core";
-import { GenericAuthState } from "@wha.ts/storage";
+import {
+	FileSystemSimpleKeyValueStore,
+	GenericAuthState,
+	InMemorySimpleKeyValueStore,
+} from "@wha.ts/storage";
 import { pino } from "pino";
-import { createStorage } from "unstorage";
-import fsDriver from "unstorage/drivers/fs-lite";
-import localStorageDriver from "unstorage/drivers/localstorage";
 import { renderUnicodeCompact } from "uqr";
 
 const IS_BROWSER = typeof window !== "undefined";
 
 const storage = IS_BROWSER
-	? createStorage({ driver: localStorageDriver({ base: "wha.ts" }) })
-	: createStorage({ driver: fsDriver({ base: "./example-storage" }) });
+	? new InMemorySimpleKeyValueStore()
+	: new FileSystemSimpleKeyValueStore("./example-storage");
 
 const logger = pino({
 	level: "debug",

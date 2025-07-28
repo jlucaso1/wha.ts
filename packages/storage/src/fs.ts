@@ -46,11 +46,11 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 		return path.join(this.baseDir, this.keyToRelativeFilePath(key));
 	}
 
-	async getItem<T = unknown>(key: string): Promise<T | null> {
+	async getItem(key: string): Promise<string | null> {
 		const filePath = this.getFullFilePath(key);
 		try {
 			const data = await fs.readFile(filePath, "utf-8");
-			return data ? (JSON.stringify(data) as T) : null;
+			return data ? data : null;
 		} catch (error: any) {
 			if (error.code === "ENOENT") {
 				return null;

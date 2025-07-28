@@ -5,10 +5,9 @@ import type {
 } from "@wha.ts/core";
 import { generatePreKeys, initAuthCreds } from "@wha.ts/core";
 import { AuthenticationCredsSchema } from "@wha.ts/signal/zod-schemas";
-import z from "zod";
 import { CREDS_KEY, SIGNAL_KEY_PREFIX } from "./constants";
 import { InMemorySimpleKeyValueStore } from "./in-memory";
-import { serialize } from "./serialization";
+import { deserialize, serialize } from "./serialization";
 import { GenericSignalKeyStore } from "./signal-store";
 import type { ISimpleKeyValueStore } from "./types";
 
@@ -31,9 +30,9 @@ export class GenericAuthState implements IAuthStateProvider {
 		let creds: AuthenticationCreds;
 		let loadedCreds = false;
 		try {
-			const { data: parsedCreds } = z.safeParse(
-				AuthenticationCredsSchema,
+			const parsedCreds = deserialize(
 				await storage.getItem(CREDS_KEY),
+				AuthenticationCredsSchema,
 			);
 			console.log(
 				"[GenericAuthState] Loaded credentials from storage:",
