@@ -7,8 +7,8 @@ import {
 	KeyPairSchema,
 	SessionRecordSchema,
 	SignedKeyPairSchema,
-	ZodUint8Array,
-} from "@wha.ts/signal/zod-schemas";
+} from "@wha.ts/signal/schemas";
+import { ZodUint8Array } from "@wha.ts/utils/schemas";
 import type z from "zod";
 import { SIGNAL_KEY_PREFIX } from "./constants";
 import { deserialize, serialize } from "./serialization";

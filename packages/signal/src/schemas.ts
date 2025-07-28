@@ -1,14 +1,9 @@
 import type { AuthenticationCreds } from "@wha.ts/core";
-import { base64ToBytes, type SignalIdentity } from "@wha.ts/utils";
-import { z } from "zod";
+import { ZodUint8Array } from "@wha.ts/utils/schemas";
+import { z } from "zod/v4";
 import { BaseKeyType } from "./base_key_type";
 import { ChainType } from "./chain_type";
 import { SessionRecord } from "./session_record";
-
-export const ZodUint8Array = z.preprocess((val) => {
-	if (typeof val === "string") return base64ToBytes(val);
-	return val;
-}, z.instanceof(Uint8Array));
 
 export const ZodBigInt = z.preprocess((val) => {
 	if (typeof val === "string" || typeof val === "number") return BigInt(val);
@@ -26,11 +21,13 @@ export const SignedKeyPairSchema = z.object({
 	keyId: z.number(),
 });
 
-const SignalIdentitySchema: z.ZodType<SignalIdentity> = z.object({
-	identifier: z.object({
-		name: z.string(),
-		deviceId: z.number(),
-	}),
+export const ProtocolAddressSchema = z.object({
+	name: z.string(),
+	deviceId: z.number(),
+});
+
+export const SignalIdentitySchema = z.object({
+	identifier: ProtocolAddressSchema,
 	identifierKey: ZodUint8Array,
 });
 

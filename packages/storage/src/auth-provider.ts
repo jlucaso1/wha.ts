@@ -4,7 +4,7 @@ import type {
 	ISignalProtocolStore,
 } from "@wha.ts/core";
 import { generatePreKeys, initAuthCreds } from "@wha.ts/core";
-import { AuthenticationCredsSchema } from "@wha.ts/signal/zod-schemas";
+import { AuthenticationCredsSchema } from "@wha.ts/signal/schemas";
 import { CREDS_KEY, SIGNAL_KEY_PREFIX } from "./constants";
 import { InMemorySimpleKeyValueStore } from "./in-memory";
 import { deserialize, serialize } from "./serialization";

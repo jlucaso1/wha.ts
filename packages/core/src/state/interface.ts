@@ -1,6 +1,7 @@
 import type { ADVSignedDeviceIdentity } from "@wha.ts/proto";
 import type { SessionRecord } from "@wha.ts/signal";
-import type { KeyPair, SignalIdentity, SignedKeyPair } from "@wha.ts/utils";
+import type { SignalIdentity } from "@wha.ts/signal/types";
+import type { KeyPair, SignedKeyPair } from "@wha.ts/utils";
 
 export type AuthenticationCreds = {
 	noiseKey: KeyPair;
