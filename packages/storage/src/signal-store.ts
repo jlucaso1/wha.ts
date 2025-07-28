@@ -3,7 +3,6 @@ import type {
 	SignalDataSet,
 	SignalDataTypeMap,
 } from "@wha.ts/core";
-import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils";
 import { SIGNAL_KEY_PREFIX } from "./constants";
 import { deserializeWithRevival, serializeWithRevival } from "./serialization";
 import type { ISimpleKeyValueStore } from "./types";
@@ -52,14 +51,20 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
-						let parsedValue: SignalDataTypeMap[T];
-						if (type === "session") {
-							// Session is stored as base64-encoded Uint8Array
-							parsedValue = base64ToBytes(rawValue) as SignalDataTypeMap[T];
-						} else {
+						let parsedValue: SignalDataTypeMap[T] | undefined;
+						if (typeof rawValue === "string") {
 							parsedValue = deserializeWithRevival(
 								rawValue,
 							) as SignalDataTypeMap[T];
+						} else if (typeof rawValue === "object" && rawValue !== null) {
+							// Legacy: already an object, use as-is
+							parsedValue = rawValue as SignalDataTypeMap[T];
+						} else {
+							console.warn(
+								`[GenericSignalKeyStore] Unknown pre-key format for ${storageKey} (id: ${id})`,
+								rawValue,
+							);
+							parsedValue = undefined;
 						}
 						finalResults[id] = parsedValue;
 					} catch (error) {
@@ -100,13 +105,7 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 					itemsToSet.push({ key: key, value: null });
 				} else {
 					try {
-						let serializedValue: string;
-						if (type === "session" && value instanceof Uint8Array) {
-							// Store session as base64 string
-							serializedValue = bytesToBase64(value);
-						} else {
-							serializedValue = serializeWithRevival(value);
-						}
+						const serializedValue = serializeWithRevival(value);
 						itemsToSet.push({ key: key, value: serializedValue });
 					} catch (error) {
 						console.error(
@@ -195,10 +194,8 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
 						const address = key.slice(allSessionKeysPrefix.length);
-						const deserializedValue = Uint8Array.from(atob(rawValue), (c) =>
-							c.charCodeAt(0),
-						);
-
+						const deserializedValue =
+							deserializeWithRevival<Uint8Array>(rawValue);
 						result[address] = deserializedValue;
 					} catch (err: unknown) {
 						const errorMessage =

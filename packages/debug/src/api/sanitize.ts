@@ -24,7 +24,7 @@ export function sanitizeObjectForJSON(obj: any): any {
 	}
 	const sanitized: { [key: string]: any } = {};
 	for (const key in obj) {
-		if (Object.prototype.hasOwnProperty.call(obj, key)) {
+		if (Object.hasOwn(obj, key)) {
 			sanitized[key] = sanitizeObjectForJSON(obj[key]);
 		}
 	}

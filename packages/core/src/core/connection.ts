@@ -1,16 +1,22 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { decodeBinaryNode } from "@wha.ts/binary";
-import { encodeBinaryNode } from "@wha.ts/binary";
-import { S_WHATSAPP_NET } from "@wha.ts/binary";
-import { getBinaryNodeChild } from "@wha.ts/binary";
 import type { BinaryNode } from "@wha.ts/binary";
+import {
+	decodeBinaryNode,
+	encodeBinaryNode,
+	getBinaryNodeChild,
+	S_WHATSAPP_NET,
+} from "@wha.ts/binary";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
 import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
-import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
+import {
+	DEFAULT_SOCKET_CONFIG,
+	DisconnectReason,
+	NOISE_WA_HEADER,
+} from "../defaults";
 import { TypedEventTarget } from "../generics/typed-event-target";
 import type { MessageProcessor } from "../messaging/message-processor";
 import type { AuthenticationCreds } from "../state/interface";
@@ -42,6 +48,8 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private epoch = 0;
 
 	private messageProcessor!: MessageProcessor;
+
+	private closingError?: Error;
 
 	private handleWsOpenEvent = () => this.handleWsOpen();
 	private handleWsMessageEvent = (event: Event) => {
@@ -267,6 +275,24 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			try {
 				const node = decodeBinaryNode(decryptedPayload);
 
+				// Handle stream:error (e.g., code 515 Restart Required)
+				if (node.tag === "stream:error") {
+					const code = node.attrs.code;
+					const message = `Stream Error (code: ${code})`;
+					this.logger.warn({ node }, message);
+
+					let error: Error;
+					if (code === "515") {
+						error = new Error("Restart Required");
+						(error as any).statusCode = DisconnectReason.restartRequired;
+					} else {
+						error = new Error(message);
+					}
+
+					this.close(error);
+					return;
+				}
+
 				if (
 					node.tag === "iq" &&
 					node.attrs.from === S_WHATSAPP_NET &&
@@ -325,12 +351,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			);
 		}
 
-		this.dispatchEvent(
-			new CustomEvent("debug:connectionmanager:sending_node", {
-				detail: { node: JSON.parse(JSON.stringify(node)) },
-			}),
-		);
-
 		try {
 			const buffer = encodeBinaryNode(node);
 			const frame = await this.frameHandler.framePayload(buffer);
@@ -350,10 +370,12 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 	private handleWsClose = (code: number, reasonBuffer: Uint8Array): void => {
 		const reason = reasonBuffer.toString();
+		// Use the stored error from the close() call, or create a new one if the close was truly unexpected.
 		const error =
-			this.state !== "closing"
+			this.closingError ||
+			(this.state !== "closing"
 				? new Error(`WebSocket closed unexpectedly: ${code} ${reason}`)
-				: undefined;
+				: undefined);
 		this.setState(
 			"closed",
 			error ||
@@ -364,12 +386,16 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		this.removeWsListeners();
 		this.dispatchTypedEvent("ws.close", { code, reason });
 		if (error) this.dispatchTypedEvent("error", { error });
+
+		// Clear the closing error for the next connection cycle
+		this.closingError = undefined;
 	};
 
 	async close(error?: Error): Promise<void> {
 		if (this.state === "closing" || this.state === "closed") {
 			return;
 		}
+		this.closingError = error;
 		this.setState("closing", error);
 		try {
 			const closeCode = 1000;

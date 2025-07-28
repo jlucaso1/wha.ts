@@ -1,8 +1,10 @@
 import { create, fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
-import { S_WHATSAPP_NET } from "@wha.ts/binary";
-import { getBinaryNodeChild, getBinaryNodeChildren } from "@wha.ts/binary";
-import type { BinaryNode } from "@wha.ts/binary";
-import type { SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
+import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
+import {
+	getBinaryNodeChild,
+	getBinaryNodeChildren,
+	S_WHATSAPP_NET,
+} from "@wha.ts/binary";
 import {
 	ADVDeviceIdentitySchema,
 	type ADVSignedDeviceIdentity,
@@ -10,33 +12,33 @@ import {
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
-import type {
-	AuthenticationCreds,
-	IAuthStateProvider,
-} from "../state/interface";
-import type { ILogger } from "../transport/types";
-import type { ConnectionManager } from "./connection";
-
+import type { KeyPair } from "@wha.ts/utils";
 import {
 	bytesToBase64,
 	bytesToUtf8,
+	Curve,
 	concatBytes,
+	encodeBigEndian,
 	equalBytes,
+	hmacSign,
+	KEY_BUNDLE_TYPE,
 } from "@wha.ts/utils";
-import { hmacSign } from "@wha.ts/utils";
-import { Curve, KEY_BUNDLE_TYPE } from "@wha.ts/utils";
-import type { KeyPair } from "@wha.ts/utils";
-import { encodeBigEndian } from "@wha.ts/utils";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "../generics/typed-event-target";
+import type {
+	AuthenticationCreds,
+	IAuthStateProvider,
+} from "../state/interface";
 import { generatePreKeys } from "../state/utils";
+import type { ILogger } from "../transport/types";
 import {
 	formatPreKeyForXMPP,
 	formatSignedPreKeyForXMPP,
 } from "./auth-payload-generators";
 import type { AuthenticatorEventMap } from "./authenticator-events";
+import type { ConnectionManager } from "./connection";
 import type { IConnectionActions } from "./types";
 
 enum AuthState {
@@ -58,7 +60,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 	// Helper to generate a unique ID for IQs
 	private generateIQId(prefix = "pk"): string {
-		return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+		return `${prefix}-${Date.now()}-${Math.random()
+			.toString(36)
+			.substring(2, 7)}`;
 	}
 
 	// Helper to query available pre-keys on server
@@ -160,6 +164,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				this.dispatchTypedEvent("connection.update", {
 					connection: "close",
 					error,
+					statusCode: (error as any)?.statusCode,
 				});
 			},
 		);
@@ -194,6 +199,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				this.dispatchTypedEvent("connection.update", {
 					connection: "close",
 					error,
+					statusCode: (error as any)?.statusCode,
 				});
 				await this.connectionActions.closeConnection(error as Error);
 			}

@@ -1,14 +1,13 @@
 import { randomUUID } from "node:crypto";
-import express from "express";
-import type { DebugController } from "../controller";
-import { registerDebugRoutes } from "./routes";
-
 // MCP Imports
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import express from "express";
+import type { DebugController } from "../controller";
 import { registerMcpHandlers } from "./mcp-handlers";
+import { registerDebugRoutes } from "./routes";
 
 const DEFAULT_PORT = 7999;
 const MCP_STREAMABLE_PATH = "/mcp";

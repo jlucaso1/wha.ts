@@ -1,4 +1,5 @@
 import type { decodeBinaryNode } from "@wha.ts/binary";
+import type { ClientEventMap } from "@wha.ts/core/client-events";
 import type { DebugController } from "./controller";
 
 export interface WhaTsCoreModules {
@@ -199,12 +200,13 @@ export function attachHooks(
 				"WhaTSClient",
 			);
 		};
-		const clientEventsToLog = [
+		const clientEventsToLog: (keyof ClientEventMap)[] = [
 			"connection.update",
 			"creds.update",
 			"message.received",
 			"message.decryption_error",
 			"node.received",
+			"node.sent",
 		];
 		for (const eventName of clientEventsToLog) {
 			(core.client as any).addEventListener(eventName, clientListener);

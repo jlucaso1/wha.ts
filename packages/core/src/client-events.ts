@@ -6,7 +6,7 @@ import type {
 	ConnectionUpdatePayload,
 	CredsUpdatePayload,
 } from "./core/authenticator-events";
-import type { NodeReceivedPayload } from "./core/connection-events";
+import type { NodePayload } from "./core/connection-events";
 
 /**
  * Map of event names to their respective payload types for the public API
@@ -25,5 +25,6 @@ export interface ClientEventMap {
 		rawNode: BinaryNode;
 		sender?: ProtocolAddress;
 	};
-	"node.received": NodeReceivedPayload;
+	"node.received": NodePayload;
+	"node.sent": NodePayload;
 }

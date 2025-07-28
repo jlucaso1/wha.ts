@@ -11,6 +11,6 @@
 		"@wha.ts/signal": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.2.9"
+		"@types/bun": "^1.2.19"
 	}
 }

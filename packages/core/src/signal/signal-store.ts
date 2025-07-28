@@ -1,15 +1,29 @@
-import { SessionRecord, type SignalSessionStorage } from "@wha.ts/signal";
+import {
+	ProtocolAddress,
+	SessionRecord,
+	type SignalSessionStorage,
+} from "@wha.ts/signal";
 import type { ChainType } from "@wha.ts/signal/chain_type";
-import { concatBytes } from "@wha.ts/utils";
-import { KEY_BUNDLE_TYPE } from "@wha.ts/utils";
-import type { KeyPair, SignedKeyPair } from "@wha.ts/utils";
+import {
+	deserializeWithRevival,
+	serializeWithRevival,
+} from "@wha.ts/storage/serialization";
+import {
+	bytesToUtf8,
+	concatBytes,
+	KEY_BUNDLE_TYPE,
+	type KeyPair,
+	type SignedKeyPair,
+	utf8ToBytes,
+} from "@wha.ts/utils";
 import type { IAuthStateProvider } from "../state/interface";
-
-import { ProtocolAddress } from "@wha.ts/signal/protocol_address";
+import type { ILogger } from "../transport/types";
 
 export class SignalProtocolStoreAdapter implements SignalSessionStorage {
-	private logger = console;
-	constructor(private authState: IAuthStateProvider) {}
+	constructor(
+		private authState: IAuthStateProvider,
+		private logger: ILogger,
+	) {}
 
 	async getOurRegistrationId(): Promise<number> {
 		return this.authState.creds.registrationId;
@@ -39,7 +53,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		const result = await this.authState.keys.get("pre-key", [idStr]);
 		const preKey = result[idStr];
 		if (!preKey) {
-			console.warn(`[SignalStore] Pre-key ${idStr} not found!`);
+			this.logger.warn(`[SignalStore] Pre-key ${idStr} not found!`);
 			return undefined;
 		}
 		return preKey;
@@ -50,22 +64,26 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		await this.authState.keys.set({ "pre-key": { [idStr]: null } });
 	}
 
-	/**
-	 * Loads a session record from binary Protobuf format only.
-	 */
 	async loadSession(identifier: string): Promise<SessionRecord | undefined> {
 		const result = await this.authState.keys.get("session", [identifier]);
 		const sessionData = result[identifier];
 
+		if (!sessionData) {
+			return undefined;
+		}
+
 		if (!(sessionData instanceof Uint8Array)) {
 			this.logger.error(
-				{ jid: identifier },
-				"Session data is not a Uint8Array (expected Protobuf binary)",
+				{ jid: identifier, sessionData: typeof sessionData },
+				"Session data is not a Uint8Array",
 			);
 			return undefined;
 		}
+
 		try {
-			return SessionRecord.deserialize(sessionData);
+			const jsonString = bytesToUtf8(sessionData);
+			const plainObject = deserializeWithRevival(jsonString);
+			return SessionRecord.fromJSON(plainObject);
 		} catch (e) {
 			this.logger.error(
 				{ err: e, jid: identifier },
@@ -79,7 +97,10 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		identifier: string,
 		sessionRecordInstance: SessionRecord,
 	): Promise<void> {
-		const sessionDataToStore = sessionRecordInstance.serialize();
+		const plainObject = sessionRecordInstance.toJSON();
+		const jsonString = serializeWithRevival(plainObject);
+		const sessionDataToStore = utf8ToBytes(jsonString);
+
 		await this.authState.keys.set({
 			session: { [identifier]: sessionDataToStore },
 		});
@@ -101,7 +122,9 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 			};
 			await this.authState.saveCreds();
 		} else {
-			console.warn(`Attempted to store non-current signed pre-key ${keyIdStr}`);
+			this.logger.warn(
+				`Attempted to store non-current signed pre-key ${keyIdStr}`,
+			);
 		}
 	}
 
@@ -109,8 +132,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		const result = await this.authState.keys.get("peer-identity-key", [
 			identifier,
 		]);
-		const key = result[identifier] as Uint8Array | undefined;
-		return key ? key : undefined;
+		return result[identifier] as Uint8Array | undefined;
 	}
 
 	async getOurIdentity(): Promise<KeyPair> {
@@ -134,10 +156,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 
 		return undefined;
 	}
-	/**
-	 * Retrieves all session records for all devices of a given user.
-	 * Returns an array of { address: ProtocolAddress, record: SessionRecord }
-	 */
+
 	async getAllSessionRecordsForUser(
 		userId: string,
 	): Promise<{ address: ProtocolAddress; record: SessionRecord }[]> {
@@ -146,7 +165,9 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		for (const [addressStr, sessionData] of Object.entries(sessions)) {
 			if (!sessionData) continue;
 			try {
-				const record = SessionRecord.deserialize(sessionData as Uint8Array);
+				const jsonString = bytesToUtf8(sessionData);
+				const plainObject = deserializeWithRevival(jsonString);
+				const record = SessionRecord.fromJSON(plainObject);
 				const protoAddrStr = addressStr.replace(/_([0-9]+)$/, ".$1");
 				const address = ProtocolAddress.from(protoAddrStr);
 				results.push({ address, record });

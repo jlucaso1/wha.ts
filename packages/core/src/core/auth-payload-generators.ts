@@ -1,23 +1,26 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary";
 import type { BinaryNode } from "@wha.ts/binary";
+import { jidDecode } from "@wha.ts/binary";
 import {
 	type ClientPayload,
-	ClientPayloadSchema,
 	ClientPayload_ConnectReason,
 	ClientPayload_ConnectType,
-	ClientPayload_UserAgentSchema,
 	ClientPayload_UserAgent_Platform,
 	ClientPayload_UserAgent_ReleaseChannel,
-	ClientPayload_WebInfoSchema,
+	ClientPayload_UserAgentSchema,
 	ClientPayload_WebInfo_WebSubPlatform,
-	DevicePropsSchema,
+	ClientPayload_WebInfoSchema,
+	ClientPayloadSchema,
 	DeviceProps_PlatformType,
+	DevicePropsSchema,
 } from "@wha.ts/proto";
-import { utf8ToBytes } from "@wha.ts/utils";
-import { sha256 } from "@wha.ts/utils";
-import { KEY_BUNDLE_TYPE, encodeBigEndian } from "@wha.ts/utils";
 import type { KeyPair, SignedKeyPair } from "@wha.ts/utils";
+import {
+	encodeBigEndian,
+	KEY_BUNDLE_TYPE,
+	sha256,
+	utf8ToBytes,
+} from "@wha.ts/utils";
 import { DEFAULT_BROWSER, WA_VERSION } from "../defaults";
 import type { AuthenticationCreds } from "../state/interface";
 

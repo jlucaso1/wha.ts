@@ -6,8 +6,14 @@
 	"main": "./dist/main.js",
 	"module": "./dist/main.js",
 	"types": "./dist/main.d.ts",
-	"files": ["dist"],
-	"keywords": ["whatsapp", "typescript", "api"],
+	"files": [
+		"dist"
+	],
+	"keywords": [
+		"whatsapp",
+		"typescript",
+		"api"
+	],
 	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
 	"license": "MIT",
 	"repository": {
@@ -15,7 +21,7 @@
 		"url": "git+https://github.com/jlucaso1/wha.ts.git"
 	},
 	"dependencies": {
-		"@bufbuild/protobuf": "^2.2.5",
+		"@bufbuild/protobuf": "^2.6.2",
 		"@wha.ts/proto": "workspace:*",
 		"@wha.ts/utils": "workspace:*"
 	}

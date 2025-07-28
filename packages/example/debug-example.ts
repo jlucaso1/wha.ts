@@ -1,17 +1,16 @@
 import { decodeBinaryNode } from "@wha.ts/binary";
 import { createWAClient } from "@wha.ts/core";
 import {
+	initDebugController,
+	startDebugAPIServer,
+	startDebugREPL,
+	type WhaTsCoreModules,
+} from "@wha.ts/debug";
+import {
 	FileSystemSimpleKeyValueStore,
 	GenericAuthState,
 } from "@wha.ts/storage";
 import { renderUnicodeCompact } from "uqr";
-
-import {
-	type WhaTsCoreModules,
-	initDebugController,
-	startDebugAPIServer,
-	startDebugREPL,
-} from "@wha.ts/debug";
 
 const IS_NODE =
 	typeof process !== "undefined" &&

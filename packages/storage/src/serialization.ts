@@ -19,21 +19,18 @@ function reviver(_key: string, value: any): any {
 		value !== null &&
 		typeof value.__tag === "string"
 	) {
-		if (value.__tag === UINT8_ARRAY_TAG && typeof value.data === "string") {
-			return base64ToBytes(value.data);
+		switch (value.__tag) {
+			case UINT8_ARRAY_TAG:
+				if (typeof value.data === "string") {
+					return base64ToBytes(value.data);
+				}
+				break;
+			case BIGINT_TAG:
+				if (typeof value.data === "string") {
+					return BigInt(value.data);
+				}
+				break;
 		}
-		if (value.__tag === BIGINT_TAG && typeof value.data === "string") {
-			return BigInt(value.data);
-		}
-	}
-	if (
-		Array.isArray(value) &&
-		value.length === 2 &&
-		value[0] === "Uint8Array" &&
-		Array.isArray(value[1]) &&
-		value[1].every((item: any) => typeof item === "number")
-	) {
-		return new Uint8Array(value[1]);
 	}
 	return value;
 }

@@ -53,7 +53,10 @@ test("decrypts a message", async () => {
 
 	Object.assign(authStateProvider.creds, mockedSession.creds);
 
-	const signalStore = new SignalProtocolStoreAdapter(authStateProvider);
+	const signalStore = new SignalProtocolStoreAdapter(
+		authStateProvider,
+		console,
+	);
 	const decodedJid = jidDecode(pkgmsg.jid);
 	if (!decodedJid || !decodedJid.user) {
 		throw new Error("Invalid JID");

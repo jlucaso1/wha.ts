@@ -1,11 +1,11 @@
-export type { ClientEventMap } from "./client-events";
 export { createWAClient } from "./client";
-export { initAuthCreds, generatePreKeys } from "./state/utils";
+export type { ClientEventMap } from "./client-events";
+export { SignalProtocolStoreAdapter } from "./signal/signal-store";
 export type {
-	SignalDataSet,
-	ISignalProtocolStore,
-	SignalDataTypeMap,
 	AuthenticationCreds,
 	IAuthStateProvider,
+	ISignalProtocolStore,
+	SignalDataSet,
+	SignalDataTypeMap,
 } from "./state/interface";
-export { SignalProtocolStoreAdapter } from "./signal/signal-store";
+export { generatePreKeys, initAuthCreds } from "./state/utils";

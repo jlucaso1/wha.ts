@@ -1,4 +1,4 @@
-import { type JsonValue, fromBinary, toJson } from "@bufbuild/protobuf";
+import { fromBinary, type JsonValue, toJson } from "@bufbuild/protobuf";
 import { ClientPayloadSchema, HandshakeMessageSchema } from "@wha.ts/proto";
 import { bytesToBase64, bytesToHex } from "@wha.ts/utils";
 

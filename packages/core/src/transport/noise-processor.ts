@@ -1,22 +1,24 @@
-import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { create, fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
 import {
 	type CertChain,
-	CertChainSchema,
 	CertChain_NoiseCertificate_DetailsSchema,
+	CertChainSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
-import { NOISE_MODE, WHATSAPP_ROOT_CA_PUBLIC_KEY } from "../defaults";
-
+import type { KeyPair } from "@wha.ts/utils";
 import {
+	aesDecryptGCM,
+	aesEncryptGCM,
 	bytesToHex,
+	Curve,
 	concatBytes,
 	equalBytes,
+	hkdf,
+	serializer,
+	sha256,
 	utf8ToBytes,
 } from "@wha.ts/utils";
-import { aesDecryptGCM, aesEncryptGCM, hkdf, sha256 } from "@wha.ts/utils";
-import { Curve } from "@wha.ts/utils";
-import type { KeyPair } from "@wha.ts/utils";
-import { serializer } from "@wha.ts/utils";
+import { NOISE_MODE, WHATSAPP_ROOT_CA_PUBLIC_KEY } from "../defaults";
 import type { ILogger } from "./types";
 
 interface NoiseState {
@@ -34,6 +36,7 @@ interface NoiseState {
 
 export class NoiseProcessor extends EventTarget {
 	private state: NoiseState;
+	private logger: ILogger;
 
 	constructor({
 		localStaticKeyPair,
@@ -47,6 +50,7 @@ export class NoiseProcessor extends EventTarget {
 		routingInfo?: Uint8Array;
 	}) {
 		super();
+		this.logger = logger;
 		const initialHashData = utf8ToBytes(NOISE_MODE);
 		let handshakeHash =
 			initialHashData.byteLength === 32
@@ -73,6 +77,11 @@ export class NoiseProcessor extends EventTarget {
 			noisePrologue,
 			logger,
 		};
+
+		logger.debug(
+			{ initialState: this.getDebugStateSnapshot() },
+			"NoiseProcessor initialized",
+		);
 	}
 
 	get isHandshakeFinished() {
@@ -84,6 +93,13 @@ export class NoiseProcessor extends EventTarget {
 	}
 
 	generateInitialHandshakeMessage(localEphemeralKeyPair: KeyPair): Uint8Array {
+		this.logger.debug(
+			{
+				ephemeralPublic: bytesToHex(localEphemeralKeyPair.publicKey),
+			},
+			"Generating ClientHello",
+		);
+
 		const helloMsg = create(HandshakeMessageSchema, {
 			clientHello: {
 				ephemeral: localEphemeralKeyPair.publicKey,
@@ -102,6 +118,11 @@ export class NoiseProcessor extends EventTarget {
 	}
 
 	private mixKeys(inputKeyMaterial: Uint8Array) {
+		this.logger.debug(
+			{ inputKeyMaterial: bytesToHex(inputKeyMaterial) },
+			"Mixing keys",
+		);
+
 		const key = hkdf(inputKeyMaterial, 64, {
 			salt: this.state.salt,
 			info: "",
@@ -116,6 +137,11 @@ export class NoiseProcessor extends EventTarget {
 			readCounter: 0n,
 			writeCounter: 0n,
 		};
+
+		this.logger.debug(
+			{ newState: this.getDebugStateSnapshot() },
+			"Keys mixed, state updated",
+		);
 
 		this.dispatchEvent(
 			new CustomEvent("debug:noiseprocessor:state_update", {
@@ -183,6 +209,8 @@ export class NoiseProcessor extends EventTarget {
 	}
 
 	finalizeHandshake() {
+		this.logger.debug("Finalizing handshake, switching to transport mode");
+
 		const key = hkdf(new Uint8Array(0), 64, {
 			salt: this.state.salt,
 			info: "",
@@ -199,6 +227,11 @@ export class NoiseProcessor extends EventTarget {
 			isHandshakeFinished: true,
 		};
 
+		this.logger.debug(
+			{ finalState: this.getDebugStateSnapshot() },
+			"Handshake finalized",
+		);
+
 		this.dispatchEvent(
 			new CustomEvent("debug:noiseprocessor:state_update", {
 				detail: { stateSnapshot: this.getDebugStateSnapshot() },
@@ -211,6 +244,7 @@ export class NoiseProcessor extends EventTarget {
 		localStaticKeyPair: KeyPair,
 		localEphemeralKeyPair: KeyPair,
 	) {
+		this.logger.debug("Processing ServerHello handshake message...");
 		const { serverHello } = fromBinary(
 			HandshakeMessageSchema,
 			serverHelloBytes,
@@ -223,25 +257,59 @@ export class NoiseProcessor extends EventTarget {
 			throw new Error("Invalid serverHello message received");
 		}
 
+		this.logger.debug(
+			{ serverEphemeral: bytesToHex(serverHello.ephemeral) },
+			"Handshake Step 1: Mixing server ephemeral key",
+		);
 		this.mixIntoHandshakeHash(serverHello.ephemeral);
 		this.mixKeys(
 			Curve.sharedKey(localEphemeralKeyPair.privateKey, serverHello.ephemeral),
 		);
+		this.logger.debug(
+			{ encryptedStatic: bytesToHex(serverHello.static) },
+			"Handshake Step 2: Decrypting server static key",
+		);
 		const decryptedServerStatic = this.decryptMessage(serverHello.static);
+		this.logger.debug(
+			{ decryptedStatic: bytesToHex(decryptedServerStatic) },
+			"Handshake Step 2: Server static key decrypted",
+		);
 		this.mixKeys(
 			Curve.sharedKey(localEphemeralKeyPair.privateKey, decryptedServerStatic),
 		);
+		this.logger.debug(
+			{ encryptedPayload: bytesToHex(serverHello.payload) },
+			"Handshake Step 3: Decrypting server payload (certificate)",
+		);
 		const decryptedPayload = this.decryptMessage(serverHello.payload);
 		const certChain = fromBinary(CertChainSchema, decryptedPayload);
+		this.logger.debug(
+			{ certChain: toJson(CertChainSchema, certChain) },
+			"Handshake Step 3: Server payload decrypted",
+		);
 
+		this.logger.debug("Handshake Step 4: Verifying certificate chain");
 		this.verifyCertificateChain(certChain, decryptedServerStatic);
+		this.logger.debug(
+			"Handshake Step 4: Certificate chain verified successfully",
+		);
 
+		this.logger.debug(
+			{ localStaticPublic: bytesToHex(localStaticKeyPair.publicKey) },
+			"Handshake Step 5: Encrypting local static key",
+		);
 		const encryptedLocalStaticPublic = this.encryptMessage(
 			localStaticKeyPair.publicKey,
+		);
+		this.logger.debug(
+			{ encrypted: bytesToHex(encryptedLocalStaticPublic) },
+			"Handshake Step 5: Local static key encrypted",
 		);
 		this.mixKeys(
 			Curve.sharedKey(localStaticKeyPair.privateKey, serverHello.ephemeral),
 		);
+
+		this.logger.debug("Finished processing ServerHello successfully.");
 		return encryptedLocalStaticPublic;
 	}
 
@@ -255,6 +323,7 @@ export class NoiseProcessor extends EventTarget {
 		certChain: CertChain,
 		decryptedServerStatic: Uint8Array,
 	): void {
+		this.logger.debug("Verifying server certificate chain...");
 		const leafCert = certChain.leaf;
 		const intermediateCert = certChain.intermediate;
 
@@ -296,6 +365,7 @@ export class NoiseProcessor extends EventTarget {
 		const intermediateCertPubKey = intermediateCertDetails.key;
 
 		// 1. Verify intermediate certificate signature with Root CA key
+		this.logger.debug("Verifying intermediate certificate against root CA...");
 		const isIntermediateCertValid = Curve.verify(
 			WHATSAPP_ROOT_CA_PUBLIC_KEY,
 			intermediateCertDetailsBytes,
@@ -310,8 +380,12 @@ export class NoiseProcessor extends EventTarget {
 				"Server certificate validation failed: Invalid intermediate certificate signature",
 			);
 		}
+		this.logger.debug("Intermediate certificate signature OK");
 
 		// 2. Verify leaf certificate signature with intermediate cert key
+		this.logger.debug(
+			"Verifying leaf certificate against intermediate cert...",
+		);
 		const isLeafCertValid = Curve.verify(
 			intermediateCertPubKey,
 			leafCertDetailsBytes,
@@ -323,8 +397,12 @@ export class NoiseProcessor extends EventTarget {
 				"Server certificate validation failed: Invalid leaf certificate signature",
 			);
 		}
+		this.logger.debug("Leaf certificate signature OK");
 
 		// 3. Match decrypted server static key with leaf cert key
+		this.logger.debug(
+			"Matching decrypted server static key with leaf cert key...",
+		);
 		if (!equalBytes(decryptedServerStatic, leafCertPubKey)) {
 			this.state.logger.error(
 				{
@@ -337,6 +415,9 @@ export class NoiseProcessor extends EventTarget {
 				"Server certificate validation failed: Decrypted server static key does not match leaf certificate public key",
 			);
 		}
+		this.logger.debug(
+			"Server static key matches leaf certificate key. Verification successful.",
+		);
 	}
 
 	private generateIV(counter: bigint) {

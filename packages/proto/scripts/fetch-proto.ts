@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
-import * as acorn from "acorn";
 import type { Node } from "acorn";
+import * as acorn from "acorn";
 import * as walk from "acorn-walk";
 
 let whatsAppVersion = "latest";
@@ -73,7 +73,7 @@ async function findAppModules(): Promise<any[]> {
 	const serviceworker = await serviceworkerResp.text();
 
 	const versionMatch = [
-		...serviceworker.matchAll(/client_revision\\":([\d\.]+),/g),
+		...serviceworker.matchAll(/client_revision\\":([\d.]+),/g),
 	];
 	const version = versionMatch[0]?.[1];
 	console.log(`Current version: 2.3000.${version}`);

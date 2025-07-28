@@ -2,7 +2,9 @@
 	"name": "wha.ts-monorepo",
 	"private": true,
 	"type": "module",
-	"workspaces": ["packages/*"],
+	"workspaces": [
+		"packages/*"
+	],
 	"scripts": {
 		"build": "bun run --filter '*' build",
 		"build:core": "bun run --filter \"@wha.ts/core\" build",
@@ -18,15 +20,20 @@
 		"prepublish": "biome format --write ."
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
+		"@biomejs/biome": "^2.1.2",
 		"husky": "^9.1.7",
-		"lint-staged": "^15.5.0",
-		"tsup": "^8.4.0",
-		"typescript": "^5"
+		"lint-staged": "^16.1.2",
+		"tsup": "^8.5.0",
+		"typescript": "^5.8.3"
 	},
 	"lint-staged": {
 		"*": [
 			"biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
 		]
+	},
+	"dependencies": {
+		"pino": "^9.7.0",
+		"pino-pretty": "^13.0.0",
+		"zod": "^4.0.10"
 	}
 }

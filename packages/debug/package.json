@@ -5,7 +5,9 @@
 	"main": "./dist/index.js",
 	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -22,14 +24,13 @@
 	"author": "",
 	"license": "MIT",
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.11.4",
-		"zod": "^3.25.3",
+		"@modelcontextprotocol/sdk": "^1.17.0",
+		"zod": "^4.0.10",
 		"@wha.ts/utils": "workspace:*",
 		"@wha.ts/binary": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/express": "^5.0.2",
-		"express": "^5.1.0",
-		"typescript": "^5.0.0"
+		"express": "^5.1.0"
 	}
 }

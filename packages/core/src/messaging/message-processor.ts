@@ -1,7 +1,6 @@
 import { fromBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary";
-import { getBinaryNodeChild } from "@wha.ts/binary";
 import type { BinaryNode } from "@wha.ts/binary";
+import { getBinaryNodeChild, jidDecode } from "@wha.ts/binary";
 import { MessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
 import { unpadRandomMax16 } from "@wha.ts/utils";

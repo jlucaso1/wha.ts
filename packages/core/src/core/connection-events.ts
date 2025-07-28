@@ -7,7 +7,7 @@ export interface StateChangePayload {
 
 type HandshakeCompletePayload = object;
 
-export interface NodeReceivedPayload {
+export interface NodePayload {
 	node: BinaryNode;
 }
 
@@ -27,7 +27,7 @@ interface WsClosePayload {
 export interface ConnectionManagerEventMap {
 	"state.change": StateChangePayload;
 	"handshake.complete": HandshakeCompletePayload;
-	"node.received": NodeReceivedPayload;
+	"node.received": NodePayload;
 	"node.sent": NodeSentPayload;
 	error: ErrorPayload;
 	"ws.close": WsClosePayload;

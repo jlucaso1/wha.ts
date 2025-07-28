@@ -1,9 +1,9 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary";
 import type { BinaryNode } from "@wha.ts/binary";
+import { jidDecode } from "@wha.ts/binary";
 import {
-	MessageSchema,
 	Message_ExtendedTextMessageSchema,
+	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
 import { padRandomMax16 } from "@wha.ts/utils";
@@ -79,10 +79,22 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			},
 		} satisfies ClientConfig;
 
+		// Listen for connection state changes to send presence update
+		this.addListener("connection.update", (update) => {
+			if (update.connection === "open") {
+				this.sendPresenceUpdate("available").catch((err) => {
+					this.logger.error(
+						{ err },
+						"Failed to send 'available' presence update on connection open",
+					);
+				});
+			}
+		});
+
 		this.auth = this.config.auth;
 		this.logger = this.config.logger;
 
-		this.signalStore = new SignalProtocolStoreAdapter(this.auth);
+		this.signalStore = new SignalProtocolStoreAdapter(this.auth, this.logger);
 
 		this.messageProcessor = new MessageProcessor(this.logger, this.signalStore);
 
@@ -154,6 +166,13 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 				this.dispatchTypedEvent("node.received", event.detail);
 			},
 		);
+
+		this.connectionManager.addEventListener(
+			"node.sent",
+			(event: TypedCustomEvent<ClientEventMap["node.sent"]>) => {
+				this.dispatchTypedEvent("node.sent", event.detail);
+			},
+		);
 	}
 
 	// Public method for test sanity check
@@ -172,6 +191,53 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		this.addEventListener(event, ((e: TypedCustomEvent<ClientEventMap[K]>) => {
 			listener(e.detail);
 		}) as EventListener);
+	}
+
+	/**
+	 * Send a presence update to the server.
+	 * @param type Presence type: "available" | "unavailable" | "composing" | "recording" | "paused"
+	 * @param toJid Optional JID for chatstate presence
+	 */
+	async sendPresenceUpdate(
+		type: "available" | "unavailable" | "composing" | "recording" | "paused",
+		toJid?: string,
+	): Promise<void> {
+		const me = this.auth.creds.me;
+		if (!me) {
+			throw new Error(
+				"Cannot send presence update without being authenticated",
+			);
+		}
+
+		let node: BinaryNode;
+		if (type === "available" || type === "unavailable") {
+			if (!me.name) {
+				this.logger.warn("No client name set, skipping presence update");
+				return;
+			}
+			node = {
+				tag: "presence",
+				attrs: {
+					name: me.name,
+					type,
+				},
+			};
+		} else {
+			if (!toJid) {
+				throw new Error("`toJid` is required for composing/recording presence");
+			}
+			node = {
+				tag: "chatstate",
+				attrs: {
+					from: me.id,
+					to: toJid,
+				},
+				content: [{ tag: type as any, attrs: {} }],
+			};
+		}
+
+		this.logger.debug({ to: toJid, type }, "sending presence update");
+		await this.connectionManager.sendNode(node);
 	}
 
 	async connect(): Promise<void> {
@@ -336,7 +402,11 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 							ackNode.attrs.text || `Server error ${ackNode.attrs.error}`;
 						reject(
 							new Error(
-								`Message delivery failed (ack error ${ackNode.attrs.error}): ${errorText} for ID ${messageId}. Full attrs: ${JSON.stringify(ackNode.attrs)}`,
+								`Message delivery failed (ack error ${
+									ackNode.attrs.error
+								}): ${errorText} for ID ${messageId}. Full attrs: ${JSON.stringify(
+									ackNode.attrs,
+								)}`,
 							),
 						);
 					} else {
@@ -358,6 +428,10 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 				listener as EventListener,
 			);
 		});
+	}
+
+	async reconnect(): Promise<void> {
+		return this.connectionManager.reconnect();
 	}
 }
 

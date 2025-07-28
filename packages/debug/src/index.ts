@@ -1,9 +1,9 @@
+export { startDebugAPIServer } from "./api/server";
 export * from "./controller";
 export * from "./datastore";
 export * from "./hooks";
-export * from "./types";
 export { startDebugREPL } from "./repl";
-export { startDebugAPIServer } from "./api/server";
+export * from "./types";
 
 import { DebugController } from "./controller";
 import type { DebugDataStoreOptions } from "./datastore";

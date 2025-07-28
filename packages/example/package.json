@@ -8,7 +8,7 @@
 		"@wha.ts/debug": "workspace:*",
 		"@wha.ts/storage": "workspace:*",
 		"@wha.ts/binary": "workspace:*",
-		"unstorage": "^1.15.0",
+		"unstorage": "^1.16.1",
 		"uqr": "^0.1.2"
 	}
 }
