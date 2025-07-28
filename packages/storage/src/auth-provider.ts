@@ -34,10 +34,7 @@ export class GenericAuthState implements IAuthStateProvider {
 				await storage.getItem(CREDS_KEY),
 				AuthenticationCredsSchema,
 			);
-			console.log(
-				"[GenericAuthState] Loaded credentials from storage:",
-				parsedCreds,
-			);
+
 			if (parsedCreds) {
 				creds = parsedCreds || initAuthCreds();
 				loadedCreds = true;

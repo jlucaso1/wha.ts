@@ -1,5 +1,6 @@
 const DEFAULT_ORIGIN = "https://web.whatsapp.com";
-export const WA_VERSION = [2, 3000, 1025198988];
+// An whatsapp version expires after 2 months. When expired, the client will not be able to connect to WhatsApp servers.
+export const WA_VERSION = [2, 3000, 1025200398]; // Released on 7/28/2025, 12:25:17 AM, expires on 9/28/2025, 12:25:17 AM
 
 export const DEFAULT_BROWSER = ["Wha.ts", "Desktop", "0.1"] as const;
 

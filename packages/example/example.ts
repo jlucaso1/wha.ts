@@ -13,16 +13,36 @@ const storage = IS_BROWSER
 	? new InMemorySimpleKeyValueStore()
 	: new FileSystemSimpleKeyValueStore("./example-storage");
 
-const logger = pino({
-	level: "debug",
-	transport: {
-		target: "pino-pretty",
-		options: {
-			colorize: true,
-			ignore: "pid,hostname",
-		},
-	},
-});
+const transport = IS_BROWSER
+	? pino.transport({
+			target: "pino-pretty",
+			level: "debug",
+			options: {
+				colorize: true,
+				ignore: "pid,hostname",
+			},
+		})
+	: pino.transport({
+			targets: [
+				{
+					target: "pino-pretty",
+					options: {
+						colorize: true,
+						ignore: "pid,hostname",
+					},
+				},
+				{
+					level: "debug",
+					target: "pino/file",
+					options: {
+						destination: "./example-log.txt",
+						mkdir: true,
+					},
+				},
+			],
+		});
+
+const logger = pino({ base: undefined }, transport);
 
 const authState = await GenericAuthState.init(storage);
 async function runExample() {
