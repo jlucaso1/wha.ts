@@ -1,5 +1,5 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import type { BinaryNode } from "@wha.ts/binary";
+import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
 import { getBinaryNodeChild, jidDecode, S_WHATSAPP_NET } from "@wha.ts/binary";
 import {
 	Message_ExtendedTextMessageSchema,
@@ -39,6 +39,15 @@ import { SignalProtocolStoreAdapter } from "./signal/signal-store";
 import type { IAuthStateProvider } from "./state/interface";
 import { generateMdTagPrefix, generatePreKeys } from "./state/utils";
 import type { ILogger, WebSocketConfig } from "./transport/types";
+
+type EnsureSubtype<Source, T extends Source> = T;
+
+type PresenceState = EnsureSubtype<
+	SINGLE_BYTE_TOKENS_TYPE,
+	"available" | "unavailable"
+>;
+
+type ChatState = EnsureSubtype<SINGLE_BYTE_TOKENS_TYPE, "composing" | "paused">;
 
 interface ClientConfig {
 	auth: IAuthStateProvider;
@@ -212,13 +221,8 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		}) as EventListener);
 	}
 
-	/**
-	 * Send a presence update to the server.
-	 * @param type Presence type: "available" | "unavailable" | "composing" | "recording" | "paused"
-	 * @param toJid Optional JID for chatstate presence
-	 */
 	async sendPresenceUpdate(
-		type: "available" | "unavailable" | "composing" | "recording" | "paused",
+		type: PresenceState | ChatState,
 		toJid?: string,
 	): Promise<void> {
 		const me = this.auth.creds.me;
@@ -251,7 +255,7 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 					from: me.id,
 					to: toJid,
 				},
-				content: [{ tag: type as any, attrs: {} }],
+				content: [{ tag: type, attrs: {} }],
 			};
 		}
 
