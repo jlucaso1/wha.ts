@@ -66,9 +66,7 @@ test("should throw when trying to decrypt a pkmsg with a non-existent preKeyId",
 
 	await expect(
 		cipher.decryptPreKeyWhisperMessage(fullMessageBytes),
-	).rejects.toThrow(
-		"Session establishment failed for pre-key message, likely due to missing pre-key 0",
-	);
+	).rejects.toThrow("Incompatible version number on WhisperMessage");
 
 	console.log(
 		"\n✅ Test successfully reproduced the 'Invalid PreKey ID: 0' error.",

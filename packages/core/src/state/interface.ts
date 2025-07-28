@@ -1,4 +1,5 @@
 import type { ADVSignedDeviceIdentity } from "@wha.ts/proto";
+import type { SessionRecord } from "@wha.ts/signal";
 import type { KeyPair, SignalIdentity, SignedKeyPair } from "@wha.ts/utils";
 
 export type AuthenticationCreds = {
@@ -30,7 +31,7 @@ export type AuthenticationCreds = {
 
 export type SignalDataTypeMap = {
 	"pre-key": KeyPair;
-	session: Uint8Array;
+	session: SessionRecord;
 	"signed-identity-key": KeyPair;
 	"signed-pre-key": SignedKeyPair;
 	"peer-identity-key": Uint8Array;

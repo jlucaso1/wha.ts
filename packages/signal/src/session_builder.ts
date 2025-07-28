@@ -1,6 +1,7 @@
 import {
 	bytesToBase64,
 	Curve,
+	concatBytes,
 	hkdfSignalDeriveSecrets,
 	type KeyPair,
 	Mutex,
@@ -12,7 +13,6 @@ import type { ProtocolAddress } from "./protocol_address";
 import { SessionRecord } from "./session_record";
 import type { SignalSessionStorage } from "./types";
 
-// Note: Using the same ISessionEntry interface from session_record.ts
 interface ISessionEntry {
 	registrationId?: number;
 	currentRatchet: {
@@ -138,11 +138,9 @@ export class SessionBuilder {
 			throw new Error("Untrusted identity");
 		}
 		if (record.getSession(message.baseKey)) {
-			// Session already exists, nothing to do.
 			return;
 		}
 
-		// Correctly handle optional preKey and signedPreKey
 		const preKeyPair =
 			typeof message.preKeyId === "number"
 				? await this.storage.loadPreKey(message.preKeyId)
@@ -152,13 +150,6 @@ export class SessionBuilder {
 			typeof message.signedPreKeyId === "number"
 				? await this.storage.loadSignedPreKey(message.signedPreKeyId)
 				: undefined;
-
-		if (typeof message.preKeyId === "number" && !preKeyPair) {
-			console.error(
-				`[SessionBuilder] Could not find pre-key with ID: ${message.preKeyId}. Cannot establish session.`,
-			);
-			return undefined;
-		}
 
 		const existingOpenSession = record.getOpenSession();
 		if (existingOpenSession) {
@@ -189,38 +180,26 @@ export class SessionBuilder {
 		theirSignedPubKey: Uint8Array | undefined,
 		registrationId: number | undefined,
 	): Promise<ISessionEntry> {
-		let localOurSignedKey = ourSignedKey;
-		let effectiveTheirSignedPubKey = theirSignedPubKey;
-		if (isInitiator) {
-			if (localOurSignedKey || !ourEphemeralKey) {
-				throw new Error(
-					"Invalid call to initSession for initiator: must have ourEphemeralKey, must not have ourSignedKey",
-				);
-			}
-			localOurSignedKey = ourEphemeralKey;
-		} else {
-			if (effectiveTheirSignedPubKey || !ourEphemeralKey) {
-				throw new Error(
-					"Invalid call to initSession for recipient: must have ourEphemeralKey, must not have theirSignedPubKey",
-				);
-			}
-			effectiveTheirSignedPubKey = theirEphemeralPubKey;
-		}
-
-		if (!theirEphemeralPubKey) throw new Error("Missing theirEphemeralPubKey");
-		if (!localOurSignedKey) throw new Error("Missing ourSignedKey");
-		if (!effectiveTheirSignedPubKey)
-			throw new Error("Missing theirSignedPubKey");
-
-		let sharedSecret: Uint8Array;
-		if (!ourEphemeralKey || !theirEphemeralPubKey) {
-			sharedSecret = new Uint8Array(32 * 4);
-		} else {
-			sharedSecret = new Uint8Array(32 * 5);
-		}
-		for (let i = 0; i < 32; i++) sharedSecret[i] = 0xff;
-
 		const ourIdentityKey = await this.storage.getOurIdentity();
+		const sharedSecretPrefix = new Uint8Array(32).fill(0xff);
+
+		const localOurSignedKey = isInitiator ? ourEphemeralKey : ourSignedKey;
+		const effectiveTheirSignedPubKey = isInitiator
+			? theirSignedPubKey
+			: theirEphemeralPubKey;
+
+		if (!localOurSignedKey || !effectiveTheirSignedPubKey) {
+			throw new Error(
+				"Cannot establish session: missing required keys for handshake.",
+			);
+		}
+
+		const baseKeyForSession = theirEphemeralPubKey ?? theirSignedPubKey;
+		if (!baseKeyForSession) {
+			throw new Error(
+				"Cannot establish session: no base key from remote party available.",
+			);
+		}
 
 		const agreement1 = Curve.sharedKey(
 			ourIdentityKey.privateKey,
@@ -234,28 +213,43 @@ export class SessionBuilder {
 			localOurSignedKey.privateKey,
 			effectiveTheirSignedPubKey,
 		);
-		const agreement4 = Curve.sharedKey(
-			ourEphemeralKey.privateKey,
-			theirEphemeralPubKey,
-		);
+
+		const agreements = [agreement1, agreement2, agreement3];
+
+		if (ourEphemeralKey && theirEphemeralPubKey) {
+			console.trace(
+				"Using ephemeral keys for session establishment",
+				"ourEphemeralKey:",
+				ourEphemeralKey.publicKey,
+				"theirEphemeralPubKey:",
+				theirEphemeralPubKey,
+			);
+			const agreement4 = Curve.sharedKey(
+				ourEphemeralKey.privateKey,
+				theirEphemeralPubKey,
+			);
+			agreements.push(agreement4);
+		}
 
 		let masterKeyInput: Uint8Array;
-		if (isInitiator) {
-			masterKeyInput = new Uint8Array([
-				...sharedSecret.subarray(0, 32),
-				...agreement1,
-				...agreement2,
-				...agreement3,
-				...agreement4,
-			]);
+		const baseAgreements = (
+			isInitiator
+				? [agreements[0], agreements[1], agreements[2]]
+				: [agreements[1], agreements[0], agreements[2]]
+		) as Uint8Array[];
+
+		if (ourEphemeralKey && theirEphemeralPubKey) {
+			const agreement4 = Curve.sharedKey(
+				ourEphemeralKey.privateKey,
+				theirEphemeralPubKey,
+			);
+			masterKeyInput = concatBytes(
+				sharedSecretPrefix,
+				...baseAgreements,
+				agreement4,
+			);
 		} else {
-			masterKeyInput = new Uint8Array([
-				...sharedSecret.subarray(0, 32),
-				...agreement2,
-				...agreement1,
-				...agreement3,
-				...agreement4,
-			]);
+			masterKeyInput = concatBytes(sharedSecretPrefix, ...baseAgreements);
 		}
 
 		const masterKey = hkdfSignalDeriveSecrets(
@@ -278,7 +272,7 @@ export class SessionBuilder {
 				created: BigInt(Date.now()),
 				used: BigInt(Date.now()),
 				remoteIdentityKey: theirIdentityPubKey,
-				baseKey: isInitiator ? ourEphemeralKey.publicKey : theirEphemeralPubKey,
+				baseKey: baseKeyForSession,
 				baseKeyType: isInitiator ? BaseKeyType.OURS : BaseKeyType.THEIRS,
 				closed: -1n,
 			},

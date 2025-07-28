@@ -79,9 +79,9 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 			}
 		} catch (error) {
 			console.error(
-				`[GenericSignalKeyStore] Error using getItems for type ${String(type)} and keys ${storageKeys
-					.map(String)
-					.join(", ")}:`,
+				`[GenericSignalKeyStore] Error using getItems for type ${String(
+					type,
+				)} and keys ${storageKeys.map(String).join(", ")}:`,
 				error,
 			);
 		}
@@ -109,7 +109,9 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 						itemsToSet.push({ key: key, value: serializedValue });
 					} catch (error) {
 						console.error(
-							`[GenericSignalKeyStore] Error serializing value for key ${String(key)} (id: ${String(id)}, type: ${String(type)}):`,
+							`[GenericSignalKeyStore] Error serializing value for key ${String(
+								key,
+							)} (id: ${String(id)}, type: ${String(type)}):`,
 							error,
 						);
 					}
@@ -194,8 +196,7 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
 						const address = key.slice(allSessionKeysPrefix.length);
-						const deserializedValue =
-							deserializeWithRevival<Uint8Array>(rawValue);
+						const deserializedValue = deserializeWithRevival(rawValue);
 						result[address] = deserializedValue;
 					} catch (err: unknown) {
 						const errorMessage =
