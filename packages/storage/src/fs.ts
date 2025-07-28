@@ -10,15 +10,15 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 		console.log(
 			`[FileSystemSimpleKeyValueStore] Instance CREATED. Base directory: ${this.baseDir}`,
 		);
-		try {
-			require("node:fs").mkdirSync(this.baseDir, { recursive: true });
-		} catch (err) {
-			console.error(
-				`[FileSystemSimpleKeyValueStore] Failed to create base directory ${this.baseDir}:`,
-				err,
-			);
-			throw err;
-		}
+		import("node:fs/promises").then((fsModule) => {
+			fsModule.mkdir(this.baseDir, { recursive: true }).catch((err) => {
+				console.error(
+					`[FileSystemSimpleKeyValueStore] Failed to create base directory ${this.baseDir}:`,
+					err,
+				);
+				throw err;
+			});
+		});
 	}
 
 	private keyToRelativeFilePath(key: string): string {

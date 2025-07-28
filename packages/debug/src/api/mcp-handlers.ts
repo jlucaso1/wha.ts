@@ -2,23 +2,25 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { parseOptionalInt } from "@wha.ts/utils";
 import { z } from "zod";
-import { bytesToBase64 } from "../../../utils/src/bytes-utils";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
 import {
 	getSanitizedComponentState,
 	getSanitizedComponentStateHistory,
 } from "./api-helpers";
-import { sanitizeObjectForJSON } from "./sanitize";
+import { type JsonSerializable, sanitizeObjectForJSON } from "./sanitize";
 
-// Helper to make network event data JSON serializable
-const sanitizeNetworkEventForJSON = (event: NetworkEvent): NetworkEvent => {
-	const sanitizedEvent = { ...event };
-	if (event.data instanceof Uint8Array) {
-		sanitizedEvent.data = bytesToBase64(event.data);
-	}
-	return sanitizedEvent;
+// Type-safe sanitized network event type
+type SanitizedNetworkEvent = Omit<NetworkEvent, "data"> & {
+	data: JsonSerializable;
 };
+
+const sanitizeNetworkEventForJSON = (
+	event: NetworkEvent,
+): SanitizedNetworkEvent => ({
+	...event,
+	data: sanitizeObjectForJSON(event.data),
+});
 
 export function registerMcpHandlers(
 	mcpServer: McpServer,
@@ -145,7 +147,7 @@ export function registerMcpHandlers(
 			description:
 				"Get the latest state of a specific component. Path param: componentId (string)",
 		},
-		async (uri: URL, variables) => {
+		async (uri: URL, variables: Record<string, unknown>) => {
 			let componentId = variables.componentId;
 			if (Array.isArray(componentId)) componentId = componentId[0];
 			if (typeof componentId !== "string" || !componentId) {
@@ -185,7 +187,7 @@ export function registerMcpHandlers(
 			description:
 				"Get the latest state of multiple components. Path param: componentIds (plus-separated string of componentIds, e.g., authenticator+noiseProcessor)",
 		},
-		async (uri: URL, variables) => {
+		async (uri: URL, variables: Record<string, unknown>) => {
 			let componentIdsParam = variables.componentIds;
 			if (Array.isArray(componentIdsParam))
 				componentIdsParam = componentIdsParam[0];
@@ -206,8 +208,8 @@ export function registerMcpHandlers(
 
 			const componentIds = componentIdsParam
 				.split("+")
-				.map((id) => id.trim())
-				.filter((id) => id);
+				.map((id: string) => id.trim())
+				.filter((id: string) => id);
 			if (componentIds.length === 0) {
 				return {
 					contents: [
@@ -223,7 +225,7 @@ export function registerMcpHandlers(
 				};
 			}
 
-			const results: Record<string, any> = {};
+			const results: Record<string, unknown> = {};
 
 			for (const componentId of componentIds) {
 				results[componentId] = getSanitizedComponentState(
@@ -253,7 +255,7 @@ export function registerMcpHandlers(
 			description:
 				"Get state history of a component. Path param: componentId (string). Query param: count (int)",
 		},
-		async (uri: URL, variables) => {
+		async (uri: URL, variables: Record<string, unknown>) => {
 			let componentId = variables.componentId;
 			if (Array.isArray(componentId)) componentId = componentId[0];
 			if (typeof componentId !== "string" || !componentId) {
@@ -352,7 +354,7 @@ export function registerMcpHandlers(
 		},
 		async (uri: URL) => {
 			const allComponents = controller.listMonitoredComponents();
-			const signalSessionComponentIds = allComponents.filter((id) =>
+			const signalSessionComponentIds = allComponents.filter((id: string) =>
 				id.startsWith("signal:session:"),
 			);
 			return {

@@ -6,15 +6,18 @@ import {
 	getSanitizedComponentState,
 	getSanitizedComponentStateHistory,
 } from "./api-helpers";
+import { type JsonSerializable, sanitizeObjectForJSON } from "./sanitize";
 
-// Helper to make network event data JSON serializable
-const sanitizeNetworkEventForJSON = (event: NetworkEvent): NetworkEvent => {
-	const sanitizedEvent = { ...event };
-	if (event.data instanceof Uint8Array) {
-		sanitizedEvent.data = bytesToBase64(event.data);
-	}
-	return sanitizedEvent;
+type SanitizedNetworkEvent = Omit<NetworkEvent, "data"> & {
+	data: JsonSerializable;
 };
+
+const sanitizeNetworkEventForJSON = (
+	event: NetworkEvent,
+): SanitizedNetworkEvent => ({
+	...event,
+	data: sanitizeObjectForJSON(event.data),
+});
 
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
 export function registerDebugRoutes(app: any, controller: DebugController) {
@@ -72,7 +75,7 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 			return res.status(400).json({ error: "Missing componentId" });
 		}
 		const sanitizedState = getSanitizedComponentState(controller, componentId);
-		if (sanitizedState.error) {
+		if ("error" in sanitizedState) {
 			return res.status(404).json(sanitizedState);
 		}
 		return res.json(sanitizedState);

@@ -7,26 +7,27 @@ import type {
 	NetworkEvent,
 } from "./types";
 
-export const deepClone = (obj: any): any => {
+export const deepClone = <T>(obj: T): T => {
 	if (obj === null || typeof obj !== "object") {
 		return obj;
 	}
 	if (obj instanceof Uint8Array) {
-		return obj;
+		// Return a copy to prevent mutation of the original object
+		return new Uint8Array(obj) as T;
 	}
 	if (obj instanceof Date) {
-		return new Date(obj.getTime());
+		return new Date(obj.getTime()) as T;
 	}
 	if (Array.isArray(obj)) {
-		return obj.map((item: any) => deepClone(item));
+		return obj.map((item) => deepClone(item)) as T;
 	}
 	const cloned: { [key: string]: any } = {};
 	for (const key in obj) {
 		if (Object.hasOwn(obj, key)) {
-			cloned[key] = deepClone(obj[key]);
+			cloned[key] = deepClone((obj as Record<string, unknown>)[key]);
 		}
 	}
-	return cloned;
+	return cloned as T;
 };
 
 export class DebugController {
@@ -67,20 +68,49 @@ export class DebugController {
 	}
 
 	public recordNetworkEvent(eventData: Omit<NetworkEvent, "timestamp">): void {
-		const event: NetworkEvent = {
-			...eventData,
-			data:
-				eventData.data instanceof Uint8Array
-					? eventData.data
-					: deepClone(eventData.data),
-			timestamp: Date.now(),
-		};
+		let event: NetworkEvent;
+		if (
+			eventData.layer === "websocket_raw" ||
+			eventData.layer === "frame_raw" ||
+			eventData.layer === "noise_payload"
+		) {
+			event = {
+				...(eventData as Omit<
+					Extract<
+						NetworkEvent,
+						{ layer: "websocket_raw" | "frame_raw" | "noise_payload" }
+					>,
+					"timestamp"
+				>),
+				data:
+					eventData.data instanceof Uint8Array
+						? new Uint8Array(eventData.data)
+						: new Uint8Array([]),
+				timestamp: Date.now(),
+			};
+		} else if (eventData.layer === "xmpp_node") {
+			event = {
+				...(eventData as Omit<
+					Extract<NetworkEvent, { layer: "xmpp_node" }>,
+					"timestamp"
+				>),
+				data: deepClone(eventData.data) as Extract<
+					NetworkEvent,
+					{ layer: "xmpp_node" }
+				>["data"],
+				timestamp: Date.now(),
+			};
+		} else {
+			throw new Error(
+				`Unknown network event layer: ${(eventData as any).layer}`,
+			);
+		}
 		this.dataStore.addNetworkEvent(event);
 	}
 
 	public recordClientEvent(
 		eventName: string,
-		payload: any,
+		payload: unknown,
 		sourceComponent: string,
 	): void {
 		const event: ClientEventRecord = {
@@ -92,18 +122,18 @@ export class DebugController {
 		this.dataStore.addClientEvent(event);
 	}
 
-	public recordError(source: string, error: Error, context?: any): void;
+	public recordError(source: string, error: Error, context?: unknown): void;
 	public recordError(
 		source: string,
 		message: string,
 		stack?: string,
-		context?: any,
+		context?: unknown,
 	): void;
 	public recordError(
 		source: string,
 		errorOrMessage: string | Error,
-		stackOrContext?: string | any,
-		context?: any,
+		stackOrContext?: string | unknown,
+		context?: unknown,
 	): void {
 		let record: ErrorRecord;
 		if (errorOrMessage instanceof Error) {
@@ -226,8 +256,8 @@ export class DebugController {
 	public async executeCoreCommand(
 		targetComponent: string,
 		command: string,
-		_args: any[],
-	): Promise<any> {
+		_args: unknown[],
+	): Promise<unknown> {
 		if (!this.coreModules) {
 			return Promise.reject(new Error("Core modules not available."));
 		}

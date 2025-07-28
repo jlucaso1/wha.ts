@@ -1,5 +1,5 @@
 import type { DebugController } from "../controller";
-import { sanitizeObjectForJSON } from "./sanitize";
+import { type JsonSerializable, sanitizeObjectForJSON } from "./sanitize";
 
 /**
  * Fetches a component's state and sanitizes it for JSON output.
@@ -10,7 +10,9 @@ import { sanitizeObjectForJSON } from "./sanitize";
 export function getSanitizedComponentState(
 	controller: DebugController,
 	componentId: string,
-): any {
+):
+	| { timestamp: number; componentId: string; state: JsonSerializable }
+	| { error: string; timestamp: number; componentId: string } {
 	const snapshot = controller.getComponentState(componentId);
 	if (snapshot) {
 		return {
@@ -26,11 +28,18 @@ export function getSanitizedComponentState(
 	};
 }
 
+/**
+ * Fetches a component's state history and sanitizes it for JSON output.
+ * @param controller The DebugController instance.
+ * @param componentId The ID of the component.
+ * @param count Optional number of history entries to fetch.
+ * @returns Array of sanitized state snapshots.
+ */
 export function getSanitizedComponentStateHistory(
 	controller: DebugController,
 	componentId: string,
 	count?: number,
-): any[] {
+): { timestamp: number; componentId: string; state: JsonSerializable }[] {
 	const history = controller.getComponentStateHistory(componentId, count);
 	return history.map((s) => ({
 		...s,
