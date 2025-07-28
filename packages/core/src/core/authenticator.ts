@@ -32,7 +32,7 @@ import type {
 import type { ILogger } from "../transport/types";
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { ConnectionManager } from "./connection";
-import type { IConnectionActions } from "./types";
+import type { ErrorWithStatusCode, IConnectionActions } from "./types";
 
 enum AuthState {
 	IDLE = "IDLE",
@@ -86,7 +86,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		this.connectionManager.addEventListener(
 			"error",
-			(event: TypedCustomEvent<{ error: Error }>) => {
+			(event: TypedCustomEvent<{ error: ErrorWithStatusCode }>) => {
 				const error = event.detail.error;
 				this.logger.error({ err: error }, "Connection error");
 				this.clearQrTimeout();
@@ -94,7 +94,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				this.dispatchTypedEvent("connection.update", {
 					connection: "close",
 					error,
-					statusCode: (error as any)?.statusCode,
+					statusCode: error?.statusCode,
 				});
 			},
 		);

@@ -5,6 +5,7 @@ import type { MessageProcessor } from "../messaging/message-processor";
 import { generateMdTagPrefix } from "../state/utils";
 import type { ILogger } from "../transport/types";
 import type { ConnectionState } from "./connection-events";
+import { ErrorWithStatusCode } from "./types";
 
 interface IConnectionManagerActions {
 	setState(newState: ConnectionState, error?: Error): void;
@@ -65,12 +66,12 @@ export class IncomingNodeHandler {
 		const message = `Stream Error (code: ${code})`;
 		this.logger.warn({ node }, message);
 
-		let error: Error;
+		let error: ErrorWithStatusCode;
 		if (code === "515") {
-			error = new Error("Restart Required");
-			(error as any).statusCode = DisconnectReason.restartRequired;
+			error = new ErrorWithStatusCode("Restart Required");
+			error.statusCode = DisconnectReason.restartRequired;
 		} else {
-			error = new Error(message);
+			error = new ErrorWithStatusCode(message);
 		}
 
 		this.connection.close(error);
