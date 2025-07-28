@@ -1,10 +1,9 @@
 import {
 	ProtocolAddress,
-	SessionRecord,
+	type SessionRecord,
 	type SignalSessionStorage,
 } from "@wha.ts/signal";
 import type { ChainType } from "@wha.ts/signal/chain_type";
-import { deserializeWithRevival } from "@wha.ts/storage/serialization";
 import {
 	concatBytes,
 	KEY_BUNDLE_TYPE,
@@ -46,7 +45,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 	async loadPreKey(keyId: number): Promise<KeyPair | undefined> {
 		const idStr = keyId.toString();
 		const result = await this.authState.keys.get("pre-key", [idStr]);
-		const preKey = deserializeWithRevival<KeyPair>(result[idStr]);
+		const preKey = result[idStr];
 
 		if (!preKey) {
 			this.logger.warn(`[SignalStore] Pre-key ${idStr} not found!`);
@@ -69,20 +68,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 			return undefined;
 		}
 
-		if (sessionData instanceof SessionRecord) {
-			return sessionData;
-		}
-
-		try {
-			const record = SessionRecord.fromJSON(sessionData);
-			return record;
-		} catch (e) {
-			this.logger.error(
-				{ err: e, jid: identifier },
-				`Failed to instantiate SessionRecord for ${identifier}`,
-			);
-			return undefined;
-		}
+		return sessionData;
 	}
 
 	async storeSession(
@@ -153,7 +139,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 		for (const [addressStr, sessionData] of Object.entries(sessions)) {
 			if (!sessionData) continue;
 			try {
-				const record = SessionRecord.fromJSON(sessionData);
+				const record = sessionData;
 
 				const protoAddrStr = addressStr.replace(/_([0-9]+)$/, ".$1");
 				const address = ProtocolAddress.from(protoAddrStr);

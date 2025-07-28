@@ -1,11 +1,11 @@
 import type { ISimpleKeyValueStore } from "./types";
 
 export class InMemorySimpleKeyValueStore implements ISimpleKeyValueStore {
-	private store = new Map<string, string>();
+	private store = new Map<string, unknown>();
 
-	async getItem(key: string): Promise<string | null> {
+	async getItem<T = unknown>(key: string): Promise<T | null> {
 		const value = this.store.get(key);
-		return value === undefined ? null : value;
+		return value === undefined ? null : (value as T);
 	}
 
 	async setItem(key: string, value: string): Promise<void> {
@@ -35,11 +35,11 @@ export class InMemorySimpleKeyValueStore implements ISimpleKeyValueStore {
 		}
 	}
 
-	async getItems(
+	async getItems<T = unknown>(
 		keys: string[],
-	): Promise<{ key: string; value: string | null }[]> {
+	): Promise<{ key: string; value: T | null }[]> {
 		return Promise.all(
-			keys.map(async (key) => ({ key, value: await this.getItem(key) })),
+			keys.map(async (key) => ({ key, value: await this.getItem<T>(key) })),
 		);
 	}
 

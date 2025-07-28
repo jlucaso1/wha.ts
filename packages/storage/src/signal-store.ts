@@ -3,9 +3,27 @@ import type {
 	SignalDataSet,
 	SignalDataTypeMap,
 } from "@wha.ts/core";
+import {
+	KeyPairSchema,
+	SessionRecordSchema,
+	SignedKeyPairSchema,
+	ZodUint8Array,
+} from "@wha.ts/signal/zod-schemas";
+import type z from "zod";
 import { SIGNAL_KEY_PREFIX } from "./constants";
-import { deserializeWithRevival, serializeWithRevival } from "./serialization";
+import { deserialize, serialize } from "./serialization";
 import type { ISimpleKeyValueStore } from "./types";
+
+const SignalDataTypeSchemas: {
+	[K in keyof SignalDataTypeMap]: z.ZodType<SignalDataTypeMap[K]>;
+} = {
+	"pre-key": KeyPairSchema,
+	session: SessionRecordSchema,
+	"signed-identity-key": KeyPairSchema,
+	"signed-pre-key": SignedKeyPairSchema,
+	"peer-identity-key": ZodUint8Array,
+	"sender-key": ZodUint8Array,
+};
 
 export class GenericSignalKeyStore implements ISignalProtocolStore {
 	constructor(private storage: ISimpleKeyValueStore) {}
@@ -51,28 +69,12 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
-						let parsedValue: SignalDataTypeMap[T] | undefined;
-						if (typeof rawValue === "string") {
-							parsedValue = deserializeWithRevival(
-								rawValue,
-							) as SignalDataTypeMap[T];
-						} else if (typeof rawValue === "object" && rawValue !== null) {
-							// Legacy: already an object, use as-is
-							parsedValue = rawValue as SignalDataTypeMap[T];
-						} else {
-							console.warn(
-								`[GenericSignalKeyStore] Unknown pre-key format for ${storageKey} (id: ${id})`,
-								rawValue,
-							);
-							parsedValue = undefined;
-						}
-						finalResults[id] = parsedValue;
+						const schema = SignalDataTypeSchemas[type];
+						finalResults[id] = deserialize(rawValue, schema);
 					} catch (error) {
 						console.error(
-							`[GenericSignalKeyStore] Error parsing item ${storageKey} for id ${id}:`,
+							`[GenericSignalKeyStore] Zod validation failed for key ${storageKey}:`,
 							error,
-							"Raw value:",
-							rawValue,
 						);
 					}
 				}
@@ -105,7 +107,7 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 					itemsToSet.push({ key: key, value: null });
 				} else {
 					try {
-						const serializedValue = serializeWithRevival(value);
+						const serializedValue = serialize(value);
 						itemsToSet.push({ key: key, value: serializedValue });
 					} catch (error) {
 						console.error(
@@ -196,8 +198,7 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
 						const address = key.slice(allSessionKeysPrefix.length);
-						const deserializedValue = deserializeWithRevival(rawValue);
-						result[address] = deserializedValue;
+						result[address] = deserialize(rawValue, SessionRecordSchema);
 					} catch (err: unknown) {
 						const errorMessage =
 							err instanceof Error ? err.message : String(err);

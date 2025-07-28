@@ -5,10 +5,6 @@ import { SignalProtocolStoreAdapter } from "@wha.ts/core";
 import { MessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
 import { GenericAuthState } from "@wha.ts/storage";
-import {
-	deserializeWithRevival,
-	serializeWithRevival,
-} from "@wha.ts/storage/serialization";
 import { base64ToBytes, hexToBytes, unpadRandomMax16 } from "@wha.ts/utils";
 
 const mockedSession = {
@@ -51,11 +47,9 @@ const pkgmsg = {
 test("decrypts a message", async () => {
 	const authStateProvider = await GenericAuthState.init();
 
-	const revivedCreds = deserializeWithRevival(
-		serializeWithRevival(mockedSession.creds),
-	);
+	Object.assign(authStateProvider.creds, mockedSession.creds);
 
-	Object.assign(authStateProvider.creds, revivedCreds);
+	await authStateProvider.keys.set({ "pre-key": mockedSession.prekeys });
 
 	const signalStore = new SignalProtocolStoreAdapter(
 		authStateProvider,

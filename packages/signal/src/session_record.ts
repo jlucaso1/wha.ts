@@ -1,4 +1,3 @@
-import { deserializeWithRevival } from "@wha.ts/storage/serialization";
 import type { KeyPair } from "@wha.ts/utils";
 import { bytesToBase64 } from "@wha.ts/utils";
 import { BaseKeyType } from "./base_key_type";
@@ -44,19 +43,14 @@ export class SessionRecord {
 	sessions: { [baseKeyBase64: string]: ISessionEntry } = {};
 	version: string = SESSION_RECORD_VERSION;
 
-	static fromJSON(obj: any): SessionRecord {
-		const revivedObj = deserializeWithRevival(obj);
+	static fromPlainObject(plain: {
+		sessions: { [key: string]: ISessionEntry };
+		version: string;
+	}): SessionRecord {
 		const record = new SessionRecord();
-		record.version = revivedObj.version || SESSION_RECORD_VERSION;
-		record.sessions = revivedObj.sessions || {};
+		record.sessions = plain.sessions || {};
+		record.version = plain.version || SESSION_RECORD_VERSION;
 		return record;
-	}
-
-	toJSON() {
-		return {
-			version: this.version,
-			sessions: this.sessions,
-		};
 	}
 
 	haveOpenSession(): boolean {

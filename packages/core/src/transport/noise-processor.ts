@@ -14,7 +14,6 @@ import {
 	concatBytes,
 	equalBytes,
 	hkdf,
-	serializer,
 	sha256,
 	utf8ToBytes,
 } from "@wha.ts/utils";
@@ -301,7 +300,7 @@ export class NoiseProcessor extends EventTarget {
 	getDebugStateSnapshot(): Readonly<NoiseState> {
 		// Exclude logger from the snapshot to avoid serialization errors
 		const { logger: _, ...rest } = this.state;
-		return JSON.parse(serializer(rest));
+		return rest as Readonly<NoiseState>;
 	}
 
 	private verifyCertificateChain(

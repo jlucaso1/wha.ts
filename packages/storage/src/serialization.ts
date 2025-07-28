@@ -1,52 +1,38 @@
-import { base64ToBytes, bytesToBase64 } from "@wha.ts/utils";
+import { bytesToBase64 } from "@wha.ts/utils";
+import type z from "zod";
+import type { ZodType } from "zod";
 
-const UINT8_ARRAY_TAG = "__IS_UINT8ARRAY__";
-const BIGINT_TAG = "__IS_BIGINT__";
-
-function replacer(_key: string, value: any): any {
+function replacer(_key: string, value: unknown): unknown {
 	if (value instanceof Uint8Array) {
-		return { __tag: UINT8_ARRAY_TAG, data: bytesToBase64(value) };
+		return bytesToBase64(value);
 	}
 	if (typeof value === "bigint") {
-		return { __tag: BIGINT_TAG, data: value.toString() };
+		return value.toString();
 	}
 	return value;
 }
 
-function reviver(_key: string, value: any): any {
-	if (
-		typeof value === "object" &&
-		value !== null &&
-		typeof value.__tag === "string"
-	) {
-		switch (value.__tag) {
-			case UINT8_ARRAY_TAG:
-				if (typeof value.data === "string") {
-					return base64ToBytes(value.data);
-				}
-				break;
-			case BIGINT_TAG:
-				if (typeof value.data === "string") {
-					return BigInt(value.data);
-				}
-				break;
-		}
-	}
-	return value;
-}
-
-export function serializeWithRevival(data: any): string {
+export function serialize(data: unknown): string {
 	return JSON.stringify(data, replacer);
 }
 
-export function deserializeWithRevival<T = any>(
-	input: string | Record<string, any> | Array<any> | null | undefined,
-): T {
-	if (typeof input === "string") {
-		return JSON.parse(input, reviver);
+export function deserialize<T extends ZodType>(
+	jsonString: string | null | undefined,
+	schema: T,
+): z.infer<T> | undefined {
+	if (jsonString === null || jsonString === undefined) {
+		return undefined;
 	}
-	if (input == null) {
-		return input as T;
+
+	try {
+		const data = JSON.parse(jsonString);
+		return schema.parse(data);
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.error(
+			`[Serialization] Failed to deserialize or validate data: ${errorMessage}`,
+		);
+		// Re-throw to let the caller handle the invalid data state
+		throw new Error(`Data validation failed: ${errorMessage}`);
 	}
-	return JSON.parse(JSON.stringify(input), reviver);
 }

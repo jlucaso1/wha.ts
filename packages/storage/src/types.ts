@@ -1,9 +1,14 @@
+type StorageValue = null | string;
+type MaybePromise<T> = T | Promise<T>;
+
 export interface ISimpleKeyValueStore {
-	getItem(key: string): Promise<string | null>;
-	setItem(key: string, value: string): Promise<void>;
-	removeItem(key: string): Promise<void>;
-	getKeys(prefix?: string): Promise<string[]>;
-	clear(prefix?: string): Promise<void>;
-	getItems?(keys: string[]): Promise<{ key: string; value: string | null }[]>;
-	setItems?(items: { key: string; value: string | null }[]): Promise<void>;
+	getItem(key: string): MaybePromise<StorageValue>;
+	setItem(key: string, value: string | null): MaybePromise<void>;
+	removeItem(key: string): MaybePromise<void>;
+	getKeys(prefix?: string): MaybePromise<string[]>;
+	clear(prefix?: string): MaybePromise<void>;
+	getItems?(
+		keys: string[],
+	): MaybePromise<{ key: string; value: StorageValue }[]>;
+	setItems?(items: { key: string; value: string | null }[]): MaybePromise<void>;
 }

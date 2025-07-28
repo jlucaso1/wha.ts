@@ -46,11 +46,11 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 		return path.join(this.baseDir, this.keyToRelativeFilePath(key));
 	}
 
-	async getItem(key: string): Promise<string | null> {
+	async getItem<T = unknown>(key: string): Promise<T | null> {
 		const filePath = this.getFullFilePath(key);
 		try {
 			const data = await fs.readFile(filePath, "utf-8");
-			return data;
+			return data ? (JSON.stringify(data) as T) : null;
 		} catch (error: any) {
 			if (error.code === "ENOENT") {
 				return null;
@@ -63,10 +63,13 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 		}
 	}
 
-	async setItem(key: string, value: string): Promise<void> {
+	async setItem(key: string, value: string | null): Promise<void> {
 		const filePath = this.getFullFilePath(key);
 		try {
 			await fs.mkdir(path.dirname(filePath), { recursive: true });
+			if (value === null) {
+				return await this.removeItem(key);
+			}
 			await fs.writeFile(filePath, value, "utf-8");
 		} catch (error) {
 			console.error(

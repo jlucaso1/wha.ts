@@ -4,9 +4,11 @@ import type {
 	ISignalProtocolStore,
 } from "@wha.ts/core";
 import { generatePreKeys, initAuthCreds } from "@wha.ts/core";
+import { AuthenticationCredsSchema } from "@wha.ts/signal/zod-schemas";
+import z from "zod";
 import { CREDS_KEY, SIGNAL_KEY_PREFIX } from "./constants";
 import { InMemorySimpleKeyValueStore } from "./in-memory";
-import { deserializeWithRevival, serializeWithRevival } from "./serialization";
+import { serialize } from "./serialization";
 import { GenericSignalKeyStore } from "./signal-store";
 import type { ISimpleKeyValueStore } from "./types";
 
@@ -29,9 +31,16 @@ export class GenericAuthState implements IAuthStateProvider {
 		let creds: AuthenticationCreds;
 		let loadedCreds = false;
 		try {
-			const credsString = await storage.getItem(CREDS_KEY);
-			if (credsString) {
-				creds = deserializeWithRevival(credsString);
+			const { data: parsedCreds } = z.safeParse(
+				AuthenticationCredsSchema,
+				await storage.getItem(CREDS_KEY),
+			);
+			console.log(
+				"[GenericAuthState] Loaded credentials from storage:",
+				parsedCreds,
+			);
+			if (parsedCreds) {
+				creds = parsedCreds || initAuthCreds();
 				loadedCreds = true;
 			} else {
 				creds = initAuthCreds();
@@ -60,8 +69,7 @@ export class GenericAuthState implements IAuthStateProvider {
 
 	async saveCreds(): Promise<void> {
 		try {
-			const serializedCreds = serializeWithRevival(this.creds);
-			await this.storage.setItem(CREDS_KEY, serializedCreds);
+			await this.storage.setItem(CREDS_KEY, serialize(this.creds));
 		} catch (error) {
 			console.error("[GenericAuthState] Error saving credentials:", error);
 			throw error;
