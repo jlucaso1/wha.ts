@@ -153,9 +153,11 @@ export class SessionBuilder {
 				? await this.storage.loadSignedPreKey(message.signedPreKeyId)
 				: undefined;
 
-		// Critical check: if a preKeyId was provided, we MUST have found a corresponding key.
 		if (typeof message.preKeyId === "number" && !preKeyPair) {
-			throw new Error(`Invalid PreKey ID: ${message.preKeyId}`);
+			console.error(
+				`[SessionBuilder] Could not find pre-key with ID: ${message.preKeyId}. Cannot establish session.`,
+			);
+			return undefined;
 		}
 
 		const existingOpenSession = record.getOpenSession();

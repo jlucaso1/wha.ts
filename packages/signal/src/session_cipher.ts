@@ -297,9 +297,16 @@ export class SessionCipher {
 			}
 			const builder = new SessionBuilder(this.storage, this.addr);
 			const preKeyId = await builder.initIncoming(record, preKeyProto);
+			if (preKeyId === undefined && !record.getSession(preKeyProto.baseKey)) {
+				throw new Error(
+					`Session establishment failed for pre-key message, likely due to missing pre-key ${preKeyProto.preKeyId}`,
+				);
+			}
 			const session = record.getSession(preKeyProto.baseKey);
 			if (!session) {
-				throw new Error("No session found for baseKey");
+				throw new Error(
+					"No session found for baseKey after session builder ran",
+				);
 			}
 			const plaintext = await this.doDecryptWhisperMessage(
 				preKeyProto.message,

@@ -77,11 +77,6 @@ export class NoiseProcessor extends EventTarget {
 			noisePrologue,
 			logger,
 		};
-
-		logger.debug(
-			{ initialState: this.getDebugStateSnapshot() },
-			"NoiseProcessor initialized",
-		);
 	}
 
 	get isHandshakeFinished() {
@@ -137,11 +132,6 @@ export class NoiseProcessor extends EventTarget {
 			readCounter: 0n,
 			writeCounter: 0n,
 		};
-
-		this.logger.debug(
-			{ newState: this.getDebugStateSnapshot() },
-			"Keys mixed, state updated",
-		);
 
 		this.dispatchEvent(
 			new CustomEvent("debug:noiseprocessor:state_update", {
@@ -315,7 +305,7 @@ export class NoiseProcessor extends EventTarget {
 
 	getDebugStateSnapshot(): Readonly<NoiseState> {
 		// Exclude logger from the snapshot to avoid serialization errors
-		const { logger, ...rest } = this.state;
+		const { logger: _, ...rest } = this.state;
 		return JSON.parse(serializer(rest));
 	}
 

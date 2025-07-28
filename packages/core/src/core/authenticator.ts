@@ -18,10 +18,8 @@ import {
 	bytesToUtf8,
 	Curve,
 	concatBytes,
-	encodeBigEndian,
 	equalBytes,
 	hmacSign,
-	KEY_BUNDLE_TYPE,
 } from "@wha.ts/utils";
 import {
 	type TypedCustomEvent,
@@ -31,12 +29,7 @@ import type {
 	AuthenticationCreds,
 	IAuthStateProvider,
 } from "../state/interface";
-import { generatePreKeys } from "../state/utils";
 import type { ILogger } from "../transport/types";
-import {
-	formatPreKeyForXMPP,
-	formatSignedPreKeyForXMPP,
-} from "./auth-payload-generators";
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { ConnectionManager } from "./connection";
 import type { IConnectionActions } from "./types";
@@ -57,69 +50,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private qrTimeout?: ReturnType<typeof setTimeout>;
 	private qrRetryCount = 0;
 	private state: AuthState = AuthState.IDLE;
-
-	// Helper to generate a unique ID for IQs
-	private generateIQId(prefix = "pk"): string {
-		return `${prefix}-${Date.now()}-${Math.random()
-			.toString(36)
-			.substring(2, 7)}`;
-	}
-
-	// Helper to query available pre-keys on server
-	private async getAvailablePreKeysOnServer(): Promise<number> {
-		const iqId = this.generateIQId("prekey-count");
-		const node: BinaryNode = {
-			tag: "iq",
-			attrs: {
-				id: iqId,
-				xmlns: "encrypt",
-				type: "get",
-				to: S_WHATSAPP_NET,
-			},
-			content: [{ tag: "count", attrs: {} }],
-		};
-
-		this.logger.debug("Querying server for pre-key count...");
-		await this.connectionActions.sendNode(node);
-
-		return new Promise<number>((resolve, reject) => {
-			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
-				const responseNode = event.detail.node;
-				if (responseNode.tag === "iq" && responseNode.attrs.id === iqId) {
-					this.connectionManager.removeEventListener(
-						"node.received",
-						listener as EventListener,
-					);
-					if (responseNode.attrs.type === "result") {
-						const countChild = getBinaryNodeChild(responseNode, "count");
-						const count = Number.parseInt(countChild?.attrs.value || "0", 10);
-						this.logger.info({ count }, "Received pre-key count from server");
-						resolve(count);
-					} else {
-						const errorChild = getBinaryNodeChild(responseNode, "error");
-						const errorMsg =
-							errorChild?.attrs.text || "Unknown error fetching pre-key count";
-						this.logger.error(
-							{ errorMsg, node: responseNode },
-							"Error fetching pre-key count",
-						);
-						reject(new Error(errorMsg));
-					}
-				}
-			};
-			this.connectionManager.addEventListener(
-				"node.received",
-				listener as EventListener,
-			);
-			setTimeout(() => {
-				this.connectionManager.removeEventListener(
-					"node.received",
-					listener as EventListener,
-				);
-				reject(new Error("Timeout waiting for pre-key count response"));
-			}, 15000);
-		});
-	}
 
 	private setState(newState: AuthState): void {
 		if (this.state !== newState) {
@@ -181,30 +111,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.qrTimeout = undefined;
 		}
 	}
-
-	private handleHandshakeComplete = async (): Promise<void> => {
-		try {
-			if (!this.authStateProvider.creds.registered) {
-				this.logger.info("Performing initial registration: uploading pre-keys");
-				const { node: regNode, updateCreds } =
-					await this.generateRegistrationIQ();
-				await this.connectionActions.sendNode(regNode);
-				Object.assign(this.authStateProvider.creds, updateCreds);
-				await this.authStateProvider.saveCreds();
-				this.logger.info("Initial pre-keys uploaded and state updated");
-			}
-		} catch (error) {
-			this.logger.error({ err: error }, "Registration (pre-key upload) failed");
-			if (error instanceof Error) {
-				this.dispatchTypedEvent("connection.update", {
-					connection: "close",
-					error,
-					statusCode: (error as any)?.statusCode,
-				});
-				await this.connectionActions.closeConnection(error as Error);
-			}
-		}
-	};
 
 	private handleNodeReceived = (node: BinaryNode): void => {
 		if (node.tag === "iq") {
@@ -570,94 +476,37 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.clearQrTimeout();
 		this.state = AuthState.AUTHENTICATED;
 
-		// Pre-key replenishment logic
-		const replenishLogic = async () => {
-			try {
-				await this.handleHandshakeComplete();
+		const platform = node.attrs.platform;
+		const pushname = node.attrs.pushname;
+		const updates: Partial<AuthenticationCreds> = {};
+		if (platform && this.authStateProvider.creds.platform !== platform) {
+			updates.platform = platform;
+		}
+		if (
+			pushname &&
+			this.authStateProvider.creds.me?.name !== pushname &&
+			this.authStateProvider.creds.me
+		) {
+			updates.me = { ...this.authStateProvider.creds.me, name: pushname };
+		}
+		if (!this.authStateProvider.creds.registered) {
+			updates.registered = true;
+		}
 
-				// Only check and replenish if already registered
-				if (this.authStateProvider.creds.registered) {
-					// Import constants dynamically to avoid circular deps
-					const { MIN_PREKEY_COUNT, PREKEY_UPLOAD_BATCH_SIZE } = await import(
-						"../defaults"
-					);
-					const currentServerCount = await this.getAvailablePreKeysOnServer();
-					this.logger.info(
-						{ currentServerCount },
-						"Pre-keys currently on server after login.",
-					);
-					if (currentServerCount < MIN_PREKEY_COUNT) {
-						const needed = PREKEY_UPLOAD_BATCH_SIZE - currentServerCount;
-						if (needed > 0) {
-							this.logger.info({ needed }, "Replenishing pre-keys on relogin.");
-							await this.uploadPreKeysBatch(needed);
-						} else {
-							this.logger.info(
-								"Sufficient pre-keys on server, no replenishment needed now.",
-							);
-						}
-					}
-				}
-			} catch (err) {
-				this.logger.error(
-					{ err },
-					"Error during post-login pre-key management",
+		if (Object.keys(updates).length > 0) {
+			this.logger.info({ updates }, "Updating creds after login success");
+			Object.assign(this.authStateProvider.creds, updates);
+			this.authStateProvider
+				.saveCreds()
+				.then(() => {
+					this.dispatchTypedEvent("creds.update", updates);
+				})
+				.catch((err) =>
+					this.logger.error({ err }, "Failed to save creds after login"),
 				);
-			}
+		}
 
-			// Continue with existing login success logic
-			const platform = node.attrs.platform;
-			const pushname = node.attrs.pushname;
-			const updates: Partial<AuthenticationCreds> = {};
-			if (platform && this.authStateProvider.creds.platform !== platform) {
-				updates.platform = platform;
-			}
-			if (
-				pushname &&
-				this.authStateProvider.creds.me?.name !== pushname &&
-				this.authStateProvider.creds.me
-			) {
-				updates.me = { ...this.authStateProvider.creds.me, name: pushname };
-			}
-			if (!this.authStateProvider.creds.registered) {
-				updates.registered = true;
-			}
-
-			if (Object.keys(updates).length > 0) {
-				this.logger.info({ updates }, "Updating creds after login success");
-				Object.assign(this.authStateProvider.creds, updates);
-				this.authStateProvider
-					.saveCreds()
-					.then(() => {
-						this.dispatchTypedEvent("creds.update", updates);
-					})
-					.catch((err) =>
-						this.logger.error({ err }, "Failed to save creds after login"),
-					);
-			}
-
-			this.dispatchTypedEvent("connection.update", { connection: "open" });
-		};
-
-		replenishLogic().catch((err) => {
-			this.logger.error(
-				{ err },
-				"Critical failure in login success/pre-key replenishment sequence",
-			);
-			const error = err instanceof Error ? err : new Error(String(err));
-			this.dispatchTypedEvent("connection.update", {
-				connection: "close",
-				error,
-			});
-			this.connectionActions
-				.closeConnection(error)
-				.catch((closeErr) =>
-					this.logger.error(
-						{ closeErr },
-						"Failed to close connection after pre-key error",
-					),
-				);
-		});
+		this.dispatchTypedEvent("connection.update", { connection: "open" });
 	}
 
 	private handleLoginFailure(node: BinaryNode): void {
@@ -677,231 +526,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			.catch((err) =>
 				this.logger.error({ err }, "Failed to trigger connection close"),
 			);
-	}
-
-	private async prepareInitialRegistrationPreKeys(batchCount = 30): Promise<{
-		preKeys: { [id: number]: KeyPair };
-		updateCreds: Partial<AuthenticationCreds>;
-	}> {
-		const { creds, keys } = this.authStateProvider;
-		const localKeyCount = creds.nextPreKeyId - creds.firstUnuploadedPreKeyId;
-		const keysToUploadCount = batchCount;
-		const startId = creds.firstUnuploadedPreKeyId;
-		let newKeys: { [id: number]: KeyPair } = {};
-
-		if (localKeyCount < batchCount) {
-			const needed = batchCount - localKeyCount;
-			const generationStartId = creds.nextPreKeyId;
-			newKeys = generatePreKeys(generationStartId, needed);
-			await keys.set({ "pre-key": newKeys });
-			creds.nextPreKeyId += needed;
-		}
-
-		const endId = startId + keysToUploadCount - 1;
-		const idsToFetch = Array.from({ length: keysToUploadCount }, (_, i) =>
-			(startId + i).toString(),
-		);
-		const fetchedKeys = await keys.get("pre-key", idsToFetch);
-		const updateCreds: Partial<AuthenticationCreds> = {
-			firstUnuploadedPreKeyId: endId + 1,
-			nextPreKeyId: creds.nextPreKeyId,
-		};
-		return { preKeys: fetchedKeys as { [id: number]: KeyPair }, updateCreds };
-	}
-
-	private async generateRegistrationIQ(): Promise<{
-		node: BinaryNode;
-		updateCreds: Partial<AuthenticationCreds>;
-	}> {
-		const { creds } = this.authStateProvider;
-		const { preKeys, updateCreds } =
-			await this.prepareInitialRegistrationPreKeys();
-		const preKeyNodes = Object.entries(preKeys).map(([id, keyPair]) =>
-			formatPreKeyForXMPP(keyPair, Number.parseInt(id, 10)),
-		);
-		const registrationIQ: BinaryNode = {
-			tag: "iq",
-			attrs: {
-				xmlns: "encrypt",
-				type: "set",
-				to: S_WHATSAPP_NET,
-				id: `reg-${Date.now()}`,
-			},
-			content: [
-				{
-					tag: "registration",
-					attrs: {},
-					content: encodeBigEndian(creds.registrationId),
-				},
-				{ tag: "type", attrs: {}, content: KEY_BUNDLE_TYPE },
-				{
-					tag: "identity",
-					attrs: {},
-					content: creds.signedIdentityKey.publicKey,
-				},
-				formatSignedPreKeyForXMPP(creds.signedPreKey),
-				{ tag: "list", attrs: {}, content: preKeyNodes },
-			],
-		};
-		return { node: registrationIQ, updateCreds };
-	}
-
-	// Fetch a batch of pre-keys intended for upload
-	private async getNextPreKeyBatchForUpload(batchSize: number): Promise<{
-		keysToUpload: { [id: number]: KeyPair };
-		idsUploaded: number[];
-		nextFirstUnuploadedPreKeyId: number;
-	}> {
-		const { creds, keys } = this.authStateProvider;
-		const { firstUnuploadedPreKeyId, nextPreKeyId } = creds;
-		const availableToUpload = nextPreKeyId - firstUnuploadedPreKeyId;
-		const countToFetch = Math.min(batchSize, availableToUpload);
-
-		if (countToFetch <= 0) {
-			this.logger.info("No pre-keys available locally to upload.");
-			return {
-				keysToUpload: {},
-				idsUploaded: [],
-				nextFirstUnuploadedPreKeyId: firstUnuploadedPreKeyId,
-			};
-		}
-
-		const idsToFetch: string[] = [];
-		const numericIdsUploaded: number[] = [];
-		for (let i = 0; i < countToFetch; i++) {
-			const keyId = firstUnuploadedPreKeyId + i;
-			idsToFetch.push(keyId.toString());
-			numericIdsUploaded.push(keyId);
-		}
-
-		this.logger.debug({ idsToFetch }, "Fetching pre-keys for upload batch");
-		const fetchedKeys = (await keys.get("pre-key", idsToFetch)) as {
-			[id: string]: KeyPair;
-		};
-
-		const keysToUpload: { [id: number]: KeyPair } = {};
-		for (const idStr of idsToFetch) {
-			if (fetchedKeys[idStr]) {
-				keysToUpload[Number(idStr)] = fetchedKeys[idStr];
-			} else {
-				this.logger.warn(
-					`Pre-key ${idStr} not found in local store for upload!`,
-				);
-			}
-		}
-
-		return {
-			keysToUpload,
-			idsUploaded: numericIdsUploaded,
-			nextFirstUnuploadedPreKeyId: firstUnuploadedPreKeyId + countToFetch,
-		};
-	}
-
-	// Generate and upload a batch of pre-keys
-	private async uploadPreKeysBatch(count: number): Promise<void> {
-		const { creds } = this.authStateProvider;
-		const currentLocalUnuploadedCount =
-			creds.nextPreKeyId - creds.firstUnuploadedPreKeyId;
-		if (currentLocalUnuploadedCount < count) {
-			const needToGenerate = count - currentLocalUnuploadedCount;
-			this.logger.info(
-				{ needToGenerate },
-				"Generating additional pre-keys before batch upload",
-			);
-			const newLocalKeys = generatePreKeys(creds.nextPreKeyId, needToGenerate);
-			await this.authStateProvider.keys.set({ "pre-key": newLocalKeys });
-			creds.nextPreKeyId += needToGenerate;
-		}
-
-		const { keysToUpload, idsUploaded, nextFirstUnuploadedPreKeyId } =
-			await this.getNextPreKeyBatchForUpload(count);
-
-		if (Object.keys(keysToUpload).length === 0) {
-			this.logger.info("No pre-keys to upload in this batch.");
-			return;
-		}
-
-		const preKeyNodes = Object.entries(keysToUpload).map(([id, keyPair]) =>
-			formatPreKeyForXMPP(keyPair, Number.parseInt(id, 10)),
-		);
-
-		const iqId = this.generateIQId("upload-pk");
-		const uploadIQNode: BinaryNode = {
-			tag: "iq",
-			attrs: {
-				xmlns: "encrypt",
-				type: "set",
-				to: S_WHATSAPP_NET,
-				id: iqId,
-			},
-			content: [
-				{
-					tag: "registration",
-					attrs: {},
-					content: encodeBigEndian(creds.registrationId),
-				},
-				{ tag: "type", attrs: {}, content: KEY_BUNDLE_TYPE },
-				{
-					tag: "identity",
-					attrs: {},
-					content: creds.signedIdentityKey.publicKey,
-				},
-				formatSignedPreKeyForXMPP(creds.signedPreKey),
-				{ tag: "list", attrs: {}, content: preKeyNodes },
-			],
-		};
-
-		this.logger.info(
-			{ count: preKeyNodes.length, ids: idsUploaded },
-			"Uploading pre-keys batch",
-		);
-		await this.connectionActions.sendNode(uploadIQNode);
-
-		return new Promise<void>((resolve, reject) => {
-			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
-				const responseNode = event.detail.node;
-				if (responseNode.tag === "iq" && responseNode.attrs.id === iqId) {
-					this.connectionManager.removeEventListener(
-						"node.received",
-						listener as EventListener,
-					);
-					if (responseNode.attrs.type === "result") {
-						this.logger.info("Pre-key batch uploaded successfully");
-						creds.firstUnuploadedPreKeyId = nextFirstUnuploadedPreKeyId;
-						this.authStateProvider
-							.saveCreds()
-							.then(() => {
-								this.dispatchTypedEvent("creds.update", {
-									firstUnuploadedPreKeyId: creds.firstUnuploadedPreKeyId,
-									nextPreKeyId: creds.nextPreKeyId,
-								});
-								resolve();
-							})
-							.catch(reject);
-					} else {
-						const errorChild = getBinaryNodeChild(responseNode, "error");
-						const errorMsg =
-							errorChild?.attrs.text || "Unknown error uploading pre-key batch";
-						this.logger.error(
-							{ errorMsg, node: responseNode },
-							"Error uploading pre-key batch",
-						);
-						reject(new Error(errorMsg));
-					}
-				}
-			};
-			this.connectionManager.addEventListener(
-				"node.received",
-				listener as EventListener,
-			);
-			setTimeout(() => {
-				this.connectionManager.removeEventListener(
-					"node.received",
-					listener as EventListener,
-				);
-				reject(new Error("Timeout waiting for pre-key batch upload response"));
-			}, 20000);
-		});
 	}
 
 	public getDebugStateSnapshot(): {
