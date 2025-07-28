@@ -217,11 +217,6 @@ export class NoiseProcessor extends EventTarget {
 			isHandshakeFinished: true,
 		};
 
-		this.logger.debug(
-			{ finalState: this.getDebugStateSnapshot() },
-			"Handshake finalized",
-		);
-
 		this.dispatchEvent(
 			new CustomEvent("debug:noiseprocessor:state_update", {
 				detail: { stateSnapshot: this.getDebugStateSnapshot() },
