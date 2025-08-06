@@ -1,29 +1,11 @@
-/**
- * Typed event system for better type safety when using the EventTarget API.
- * This provides strongly-typed event dispatching and handling.
- */
-
-/**
- * Extends the CustomEvent interface to provide better typing for event details
- */
 export interface TypedCustomEvent<TDetail> extends CustomEvent {
 	readonly detail: TDetail;
 }
-
-/**
- * A base class extending EventTarget to provide type safety for events.
- * TEventMap is a record mapping event names to their respective payload types.
- */
 
 export class TypedEventTarget<
 	// biome-ignore lint/suspicious/noExplicitAny: This is a generic type for event mapping.
 	TEventMap extends Record<string, any>,
 > extends EventTarget {
-	/**
-	 * Add an event listener with proper typing for the event detail
-	 *
-	 * Method overloads to maintain compatibility with EventTarget while providing type safety
-	 */
 	// @ts-expect-error
 	public addEventListener<K extends keyof TEventMap>(
 		type: K,
@@ -39,11 +21,6 @@ export class TypedEventTarget<
 		super.addEventListener(type, callback, options);
 	}
 
-	/**
-	 * Remove an event listener with proper typing for the event detail
-	 *
-	 * Method overloads to maintain compatibility with EventTarget while providing type safety
-	 */
 	// @ts-expect-error
 	public removeEventListener<K extends keyof TEventMap>(
 		type: K,
@@ -59,9 +36,6 @@ export class TypedEventTarget<
 		super.removeEventListener(type, callback, options);
 	}
 
-	/**
-	 * Dispatch an event with type checking for the event detail
-	 */
 	protected dispatchTypedEvent<K extends keyof TEventMap>(
 		type: K,
 		detail: TEventMap[K],

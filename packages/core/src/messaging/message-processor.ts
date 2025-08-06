@@ -4,8 +4,8 @@ import { getBinaryNodeChild, jidDecode } from "@wha.ts/binary";
 import { MessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
 import { GroupCipher } from "@wha.ts/signal/groups/cipher";
+import { TypedEventTarget } from "@wha.ts/types/generics/typed-event-target";
 import { unpadRandomMax16 } from "@wha.ts/utils";
-import { TypedEventTarget } from "../generics/typed-event-target";
 import type { SignalProtocolStoreAdapter } from "../signal/signal-store";
 import type {
 	IAuthStateProvider,

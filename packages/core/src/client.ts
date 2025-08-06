@@ -6,14 +6,17 @@ import {
 	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
-import type { DecryptionDumper } from "@wha.ts/types";
+import type { ClientEventMap, IPlugin, MergePlugins } from "@wha.ts/types";
 import { generateMdTagPrefix, generatePreKeys } from "@wha.ts/types";
+import {
+	type TypedCustomEvent,
+	TypedEventTarget,
+} from "@wha.ts/types/generics/typed-event-target";
 import {
 	encodeBigEndian,
 	KEY_BUNDLE_TYPE,
 	padRandomMax16,
 } from "@wha.ts/utils";
-import type { ClientEventMap } from "./client-events";
 import {
 	formatPreKeyForXMPP,
 	formatSignedPreKeyForXMPP,
@@ -32,11 +35,8 @@ import {
 	PREKEY_UPLOAD_BATCH_SIZE,
 	WA_VERSION,
 } from "./defaults";
-import {
-	type TypedCustomEvent,
-	TypedEventTarget,
-} from "./generics/typed-event-target";
 import { MessageProcessor } from "./messaging/message-processor";
+import { PluginManager } from "./plugins/plugin-manager";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";
 import type { IAuthStateProvider } from "./state/interface";
 import type { ILogger, WebSocketConfig } from "./transport/types";
@@ -50,18 +50,17 @@ type PresenceState = EnsureSubtype<
 
 type ChatState = EnsureSubtype<SINGLE_BYTE_TOKENS_TYPE, "composing" | "paused">;
 
-interface ClientConfig<TStorage> {
+interface ClientConfig<
+	_TStorage,
+	TPlugins extends readonly IPlugin[] = readonly [],
+> {
 	auth: IAuthStateProvider;
 	logger?: ILogger;
 	wsOptions?: Partial<WebSocketConfig>;
 	version?: number[];
 	browser?: readonly [string, string, string];
 	connectionManager?: ConnectionManager;
-	dumper?: {
-		func: DecryptionDumper<TStorage>;
-		path: string;
-		storage: TStorage;
-	};
+	plugins?: TPlugins;
 }
 
 export declare interface WhaTSClient {
@@ -79,16 +78,20 @@ export declare interface WhaTSClient {
 	): void;
 }
 export class WhaTSClient<
-	TStorage = unknown,
+	_TStorage = unknown,
+	TPlugins extends readonly IPlugin[] = readonly [],
 > extends TypedEventTarget<ClientEventMap> {
-	private config: Omit<ClientConfig<TStorage>, "logger"> & { logger: ILogger };
+	private config: Omit<ClientConfig<_TStorage, TPlugins>, "logger"> & {
+		logger: ILogger;
+	};
 	private messageProcessor: MessageProcessor;
 	protected connectionManager: ConnectionManager;
 	private authenticator: Authenticator;
 	private epoch = 0;
+	private pluginManager: PluginManager;
 	public signalStore: SignalProtocolStoreAdapter;
 
-	constructor(config: ClientConfig<TStorage>) {
+	constructor(config: ClientConfig<_TStorage, TPlugins>) {
 		super();
 
 		const logger = config.logger || (console as ILogger);
@@ -107,8 +110,8 @@ export class WhaTSClient<
 				),
 				logger: logger,
 			},
-			dumper: config.dumper,
-		} satisfies ClientConfig<TStorage>;
+			plugins: config.plugins,
+		} satisfies ClientConfig<_TStorage, TPlugins>;
 
 		this.addListener("connection.update", (update) => {
 			if (update.connection === "open") {
@@ -126,23 +129,42 @@ export class WhaTSClient<
 
 		this.signalStore = new SignalProtocolStoreAdapter(this.auth, this.logger);
 
-		let onPreDecryptCallback: ((node: BinaryNode) => void) | undefined;
-		if (this.config.dumper) {
-			const { func: dumperFunc, path: dumpDir, storage } = this.config.dumper;
-			onPreDecryptCallback = (node: BinaryNode) => {
-				dumperFunc(dumpDir, node, this.auth.creds, storage);
-			};
-			this.logger.warn(
-				`[DEBUG] Decryption bundle dumping is ENABLED. Saving to: ${dumpDir}`,
-			);
-		}
+		// Initialize plugin manager with plugins
+		const allPlugins: IPlugin[] = this.config.plugins
+			? [...this.config.plugins]
+			: [];
+
+		this.pluginManager = new PluginManager(this, allPlugins);
+		this.pluginManager.installAll();
+
+		// Merge plugin APIs onto client instance
+		const exposedApis = this.pluginManager.getExposedApis();
+		Object.assign(this, exposedApis);
+
+		// Get aggregated pre-decrypt callbacks from plugins
+		const preDecryptCallbacks = this.pluginManager.getPreDecryptTaps();
+		const combinedPreDecryptCallback =
+			preDecryptCallbacks.length > 0
+				? (node: BinaryNode) => {
+						for (const callback of preDecryptCallbacks) {
+							try {
+								callback(node);
+							} catch (error) {
+								this.logger.error(
+									{ err: error },
+									"Plugin pre-decrypt callback failed",
+								);
+							}
+						}
+					}
+				: undefined;
 
 		this.messageProcessor = new MessageProcessor(
 			this.logger,
 			this.signalStore,
 			this.auth.keys,
 			this.auth,
-			onPreDecryptCallback,
+			combinedPreDecryptCallback,
 		);
 
 		this.connectionManager =
@@ -596,8 +618,12 @@ export class WhaTSClient<
 	}
 }
 
-export const createWAClient = <TStorage>(
-	config: ClientConfig<TStorage>,
-): WhaTSClient<TStorage> => {
-	return new WhaTSClient(config);
+export const createWAClient = <
+	_TStorage = unknown,
+	const TPlugins extends readonly IPlugin[] = readonly [],
+>(
+	config: ClientConfig<_TStorage, TPlugins>,
+): WhaTSClient<_TStorage, TPlugins> & MergePlugins<TPlugins> => {
+	return new WhaTSClient(config) as WhaTSClient<_TStorage, TPlugins> &
+		MergePlugins<TPlugins>;
 };

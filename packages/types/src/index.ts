@@ -1,4 +1,3 @@
-import type { BinaryNode } from "@wha.ts/binary";
 import { SenderKeyRecordSchema } from "@wha.ts/signal/groups/schemas";
 import { SessionRecordSchema } from "@wha.ts/signal/schemas";
 import {
@@ -116,13 +115,13 @@ export interface IStorageDatabase {
 	getCollection<TValue = string>(name: string): ICollection<TValue>;
 }
 
-export type DecryptionDumper<TStorage> = (
-	dumpDir: string,
-	node: BinaryNode,
-	creds: AuthenticationCreds,
-	storage: TStorage,
-) => void | Promise<void>;
-
+export type {
+	ClientEventMap,
+	DeepReadonly,
+	IPlugin,
+	MergePlugins,
+	PluginAPI,
+} from "./plugins";
 export {
 	generateMdTagPrefix,
 	generatePreKeys,

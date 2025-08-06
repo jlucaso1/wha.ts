@@ -1,14 +1,12 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { BinaryNode } from "@wha.ts/binary";
-import type { AuthenticationCreds } from "@wha.ts/types";
 import { bytesToBase64 } from "@wha.ts/utils";
 import type { FileSystemStorageDatabase } from "./fs";
 
 export async function dumpDecryptionData(
 	dumpDir: string,
 	node: BinaryNode,
-	_creds: AuthenticationCreds,
 	storage: FileSystemStorageDatabase,
 ): Promise<void> {
 	const timestamp = Date.now();
