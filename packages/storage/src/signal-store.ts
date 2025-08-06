@@ -3,27 +3,10 @@ import type {
 	SignalDataSet,
 	SignalDataTypeMap,
 } from "@wha.ts/core";
-import {
-	KeyPairSchema,
-	SessionRecordSchema,
-	SignedKeyPairSchema,
-} from "@wha.ts/signal/schemas";
-import { ZodUint8Array } from "@wha.ts/utils/schemas";
-import type z from "zod";
+import { SignalDataTypeMapSchemas } from "@wha.ts/core/state/interface";
 import { SIGNAL_KEY_PREFIX } from "./constants";
 import { deserialize, serialize } from "./serialization";
 import type { ISimpleKeyValueStore } from "./types";
-
-const SignalDataTypeSchemas: {
-	[K in keyof SignalDataTypeMap]: z.ZodType<SignalDataTypeMap[K]>;
-} = {
-	"pre-key": KeyPairSchema,
-	session: SessionRecordSchema,
-	"signed-identity-key": KeyPairSchema,
-	"signed-pre-key": SignedKeyPairSchema,
-	"peer-identity-key": ZodUint8Array,
-	"sender-key": ZodUint8Array,
-};
 
 export class GenericSignalKeyStore implements ISignalProtocolStore {
 	constructor(private storage: ISimpleKeyValueStore) {}
@@ -69,9 +52,12 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
-						const schema = SignalDataTypeSchemas[type];
+						const schema = SignalDataTypeMapSchemas[type];
 
-						finalResults[id] = deserialize(rawValue, schema);
+						finalResults[id] = deserialize(
+							rawValue,
+							schema,
+						) as SignalDataTypeMap[T];
 					} catch (error) {
 						console.error(
 							`[GenericSignalKeyStore] Zod validation failed for key ${storageKey}:`,
@@ -199,7 +185,10 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 				if (rawValue !== null && rawValue !== undefined) {
 					try {
 						const address = key.slice(allSessionKeysPrefix.length);
-						result[address] = deserialize(rawValue, SessionRecordSchema);
+						result[address] = deserialize(
+							rawValue,
+							SignalDataTypeMapSchemas.session,
+						);
 					} catch (err: unknown) {
 						const errorMessage =
 							err instanceof Error ? err.message : String(err);

@@ -32,7 +32,6 @@ export function deserialize<T extends ZodType>(
 		console.error(
 			`[Serialization] Failed to deserialize or validate data: ${errorMessage}`,
 		);
-		// Re-throw to let the caller handle the invalid data state
 		throw new Error(`Data validation failed: ${errorMessage}`);
 	}
 }

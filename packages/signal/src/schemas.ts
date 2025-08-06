@@ -1,5 +1,5 @@
 import type { AuthenticationCreds } from "@wha.ts/core";
-import { ZodUint8Array } from "@wha.ts/utils/schemas";
+import { SignedKeyPairSchema, ZodUint8Array } from "@wha.ts/utils/schemas";
 import { z } from "zod/v4";
 import { BaseKeyType } from "./base_key_type";
 import { ChainType } from "./chain_type";
@@ -13,12 +13,6 @@ export const ZodBigInt = z.preprocess((val) => {
 export const KeyPairSchema = z.object({
 	publicKey: ZodUint8Array,
 	privateKey: ZodUint8Array,
-});
-
-export const SignedKeyPairSchema = z.object({
-	keyPair: KeyPairSchema,
-	signature: ZodUint8Array,
-	keyId: z.number(),
 });
 
 export const ProtocolAddressSchema = z.object({
