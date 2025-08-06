@@ -184,7 +184,7 @@ export class WhaTSClient<
 			"connection.update",
 			(event: TypedCustomEvent<ConnectionUpdatePayload>) => {
 				this.dispatchTypedEvent("connection.update", event.detail);
-				if (event.detail.connection === "open") {
+				if (event.detail.connection === "open" && this.auth.creds.me?.id) {
 					this.preKeyManager.checkAndUploadPreKeys().catch((err) => {
 						this.logger.error({ err }, "Initial pre-key check failed");
 					});

@@ -7,7 +7,6 @@ import {
 	type IStorageDatabase,
 	initAuthCreds,
 } from "@wha.ts/types";
-import { generatePreKeys } from "@wha.ts/utils";
 import { Mutex } from "@wha.ts/utils/mutex-utils";
 import { CREDS_KEY } from "./constants";
 import { InMemoryStorageDatabase } from "./in-memory";
@@ -38,7 +37,6 @@ export class GenericAuthState implements IAuthStateProvider {
 		db: IStorageDatabase = new InMemoryStorageDatabase(),
 	): Promise<GenericAuthState> {
 		let creds: AuthenticationCreds;
-		let loadedCreds = false;
 		const credsCollection = db.getCollection<string>("auth-creds");
 
 		try {
@@ -49,7 +47,6 @@ export class GenericAuthState implements IAuthStateProvider {
 
 			if (parsedCreds) {
 				creds = parsedCreds || initAuthCreds();
-				loadedCreds = true;
 			} else {
 				creds = initAuthCreds();
 			}
@@ -63,15 +60,6 @@ export class GenericAuthState implements IAuthStateProvider {
 
 		const keyStore = new GenericSignalKeyStore(db);
 		const authState = new GenericAuthState(creds, keyStore, db);
-
-		if (!loadedCreds) {
-			const INITIAL_PREKEY_COUNT = 30;
-			const preKeys = generatePreKeys(creds.nextPreKeyId, INITIAL_PREKEY_COUNT);
-			// This `set` will now route to the appropriate collection via GenericSignalKeyStore
-			await keyStore.set({ "pre-key": preKeys });
-			creds.nextPreKeyId += INITIAL_PREKEY_COUNT;
-			await authState.saveCreds();
-		}
 
 		return authState;
 	}
@@ -103,13 +91,6 @@ export class GenericAuthState implements IAuthStateProvider {
 				this.creds = initAuthCreds();
 				this.keys = new GenericSignalKeyStore(this.db);
 
-				const INITIAL_PREKEY_COUNT = 30;
-				const preKeys = generatePreKeys(
-					this.creds.nextPreKeyId,
-					INITIAL_PREKEY_COUNT,
-				);
-				await this.keys.set({ "pre-key": preKeys });
-				this.creds.nextPreKeyId += INITIAL_PREKEY_COUNT;
 				await this.saveCreds();
 			} catch (error) {
 				console.error(
