@@ -1,9 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { decodeBinaryNode } from "@wha.ts/binary";
-import { encodeBinaryNode } from "@wha.ts/binary";
-import { S_WHATSAPP_NET } from "@wha.ts/binary";
-import { getBinaryNodeChild } from "@wha.ts/binary";
 import type { BinaryNode } from "@wha.ts/binary";
+import { decodeBinaryNode, encodeBinaryNode } from "@wha.ts/binary";
 import {
 	type ClientPayload,
 	ClientPayloadSchema,
@@ -11,10 +8,12 @@ import {
 } from "@wha.ts/proto";
 import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
-import { TypedEventTarget } from "../generics/typed-event-target";
+import {
+	type TypedCustomEvent,
+	TypedEventTarget,
+} from "../generics/typed-event-target";
 import type { MessageProcessor } from "../messaging/message-processor";
 import type { AuthenticationCreds } from "../state/interface";
-import { generateMdTagPrefix } from "../state/utils";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";
 import type { ILogger, WebSocketConfig } from "../transport/types";
@@ -25,36 +24,41 @@ import {
 } from "./auth-payload-generators";
 import type {
 	ConnectionManagerEventMap,
+	ConnectionState,
 	StateChangePayload,
 } from "./connection-events";
+import { IncomingNodeHandler } from "./incoming-node-handler";
 
 class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private logger: ILogger;
 	private config: WebSocketConfig;
-	private state: "connecting" | "open" | "handshaking" | "closing" | "closed" =
-		"closed";
+	private state: ConnectionState = "closed";
 	private routingInfo?: Uint8Array;
 	private creds: AuthenticationCreds;
 
 	private ws!: NativeWebSocketClient;
 	private noiseProcessor!: NoiseProcessor;
 	private frameHandler!: FrameHandler;
-	private epoch = 0;
+	private nodeHandler!: IncomingNodeHandler;
 
 	private messageProcessor!: MessageProcessor;
 
+	private closingError?: Error;
+
 	private handleWsOpenEvent = () => this.handleWsOpen();
-	private handleWsMessageEvent = (event: Event) => {
-		if (event instanceof CustomEvent) this.handleWsMessage(event.detail);
+	private handleWsMessageEvent = (
+		event: TypedCustomEvent<{ data: Uint8Array }>,
+	) => {
+		this.handleWsMessage(event.detail.data);
 	};
-	private handleWsErrorEvent = (event: Event) => {
-		if (event instanceof CustomEvent) this.handleWsError(event.detail);
+	private handleWsErrorEvent = (event: TypedCustomEvent<Error>) => {
+		this.handleWsError(event.detail);
 	};
-	private handleWsCloseEvent = (event: Event) => {
-		if (event instanceof CustomEvent) {
-			const { code, reason } = event.detail;
-			this.handleWsClose(code, reason);
-		}
+	private handleWsCloseEvent = (
+		event: TypedCustomEvent<{ code: number; reason: string }>,
+	) => {
+		const { code, reason } = event.detail;
+		this.handleWsClose(code, utf8ToBytes(reason));
 	};
 
 	constructor(
@@ -91,6 +95,17 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			NOISE_WA_HEADER,
 		);
 
+		this.nodeHandler = new IncomingNodeHandler(
+			{
+				setState: this.setState.bind(this),
+				sendNode: this.sendNode.bind(this),
+				close: this.close.bind(this),
+				dispatchTypedEvent: this.dispatchTypedEvent.bind(this),
+			},
+			this.messageProcessor,
+			this.logger,
+		);
+
 		if (this.ws) {
 			this.removeWsListeners();
 		}
@@ -104,7 +119,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private setupWsListeners(): void {
 		this.ws.addEventListener("open", this.handleWsOpenEvent);
 		this.ws.addEventListener(
-			"message",
+			"received",
 			this.handleWsMessageEvent as EventListener,
 		);
 		this.ws.addEventListener("error", this.handleWsErrorEvent as EventListener);
@@ -114,7 +129,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private removeWsListeners(): void {
 		this.ws.removeEventListener("open", this.handleWsOpenEvent);
 		this.ws.removeEventListener(
-			"message",
+			"received",
 			this.handleWsMessageEvent as EventListener,
 		);
 		this.ws.removeEventListener(
@@ -215,7 +230,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 				this.noiseProcessor.finalizeHandshake();
 
-				this.setState("open");
+				this.setState("authenticating");
 				this.dispatchTypedEvent("handshake.complete", {});
 			} else {
 				throw new Error("Received unexpected message during handshake");
@@ -247,7 +262,13 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private handleDecryptedFrame = async (
 		decryptedPayload: Uint8Array,
 	): Promise<void> => {
-		if (this.state !== "open" && this.state !== "handshaking") {
+		const allowedStates: ConnectionState[] = [
+			"handshaking",
+			"authenticating",
+			"open",
+		];
+
+		if (!allowedStates.includes(this.state)) {
 			this.logger.warn(
 				{ state: this.state },
 				"Received data in unexpected state, ignoring",
@@ -263,73 +284,27 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			return;
 		}
 
-		if (this.state === "open") {
-			try {
-				const node = decodeBinaryNode(decryptedPayload);
-
-				if (
-					node.tag === "iq" &&
-					node.attrs.from === S_WHATSAPP_NET &&
-					node.attrs.type === "get" &&
-					node.attrs.xmlns === "urn:xmpp:ping"
-				) {
-					this.logger.debug({ id: node.attrs.id }, "Responding to ping");
-					const pongNode: BinaryNode = {
-						tag: "iq",
-						attrs: {
-							to: node.attrs.from,
-							type: "result",
-							xmlns: "w:p",
-							id: `${generateMdTagPrefix()}-${this.epoch++}`,
-						},
-					};
-					this.sendNode(pongNode).catch((err) => {
-						this.logger.warn(
-							{ err, id: node.attrs.id },
-							"Failed to send pong response",
-						);
-					});
-					return;
-				}
-
-				const isEncryptedMessage =
-					node.tag === "message" && getBinaryNodeChild(node, "enc");
-
-				if (isEncryptedMessage) {
-					this.messageProcessor.processIncomingNode(node).catch((err) => {
-						this.logger.error(
-							{ err, nodeTag: node.tag, from: node.attrs.from },
-							"Error processing encrypted node in MessageProcessor",
-						);
-					});
-				} else {
-					this.dispatchTypedEvent("node.received", { node });
-				}
-			} catch (error) {
-				if (!(error instanceof Error)) {
-					throw error;
-				}
-				this.logger.error(
-					{ err: error, data: bytesToHex(decryptedPayload) },
-					"Failed to decode BinaryNode from decrypted frame in 'open' state",
-				);
-				this.dispatchTypedEvent("error", { error });
+		try {
+			const node = decodeBinaryNode(decryptedPayload);
+			this.nodeHandler.processNode(node, this.state);
+		} catch (error) {
+			if (!(error instanceof Error)) {
+				throw error;
 			}
+			this.logger.error(
+				{ err: error, data: bytesToHex(decryptedPayload) },
+				"Failed to decode BinaryNode from decrypted frame",
+			);
+			this.dispatchTypedEvent("error", { error });
 		}
 	};
 
 	async sendNode(node: BinaryNode): Promise<void> {
-		if (this.state !== "open") {
+		if (this.state !== "open" && this.state !== "authenticating") {
 			throw new Error(
 				`Cannot send node while connection state is "${this.state}"`,
 			);
 		}
-
-		this.dispatchEvent(
-			new CustomEvent("debug:connectionmanager:sending_node", {
-				detail: { node: JSON.parse(JSON.stringify(node)) },
-			}),
-		);
 
 		try {
 			const buffer = encodeBinaryNode(node);
@@ -350,10 +325,16 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 	private handleWsClose = (code: number, reasonBuffer: Uint8Array): void => {
 		const reason = reasonBuffer.toString();
-		const error =
-			this.state !== "closing"
-				? new Error(`WebSocket closed unexpectedly: ${code} ${reason}`)
-				: undefined;
+		let error = this.closingError;
+
+		if (this.state === "authenticating" && code === 1006) {
+			error = new Error(
+				"Connection closed, likely due to an expired client version.",
+			);
+		} else if (!error && this.state !== "closing") {
+			error = new Error(`WebSocket closed unexpectedly: ${code} ${reason}`);
+		}
+
 		this.setState(
 			"closed",
 			error ||
@@ -364,12 +345,15 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 		this.removeWsListeners();
 		this.dispatchTypedEvent("ws.close", { code, reason });
 		if (error) this.dispatchTypedEvent("error", { error });
+		// Clear the closing error for the next connection cycle
+		this.closingError = undefined;
 	};
 
 	async close(error?: Error): Promise<void> {
 		if (this.state === "closing" || this.state === "closed") {
 			return;
 		}
+		this.closingError = error;
 		this.setState("closing", error);
 		try {
 			const closeCode = 1000;
@@ -422,6 +406,20 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			this.logger.error({ err: error }, "Reconnect attempt failed");
 			throw error;
 		}
+	}
+
+	public getDebugStateSnapshot() {
+		return {
+			state: this.state,
+			routingInfo: this.routingInfo ? bytesToHex(this.routingInfo) : undefined,
+			creds: {
+				me: this.creds.me,
+				routingInfo: this.creds.routingInfo
+					? bytesToHex(this.creds.routingInfo)
+					: undefined,
+			},
+			wsConfig: this.config,
+		};
 	}
 }
 

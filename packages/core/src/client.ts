@@ -1,13 +1,23 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import { jidDecode } from "@wha.ts/binary";
-import type { BinaryNode } from "@wha.ts/binary";
+import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
+import { getBinaryNodeChild, jidDecode, S_WHATSAPP_NET } from "@wha.ts/binary";
 import {
-	MessageSchema,
 	Message_ExtendedTextMessageSchema,
+	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
-import { padRandomMax16 } from "@wha.ts/utils";
+import type { DecryptionDumper } from "@wha.ts/types";
+import { generateMdTagPrefix, generatePreKeys } from "@wha.ts/types";
+import {
+	encodeBigEndian,
+	KEY_BUNDLE_TYPE,
+	padRandomMax16,
+} from "@wha.ts/utils";
 import type { ClientEventMap } from "./client-events";
+import {
+	formatPreKeyForXMPP,
+	formatSignedPreKeyForXMPP,
+} from "./core/auth-payload-generators";
 import { Authenticator } from "./core/authenticator";
 import type {
 	ConnectionUpdatePayload,
@@ -15,7 +25,13 @@ import type {
 } from "./core/authenticator-events";
 import { ConnectionManager } from "./core/connection";
 import type { IConnectionActions } from "./core/types";
-import { DEFAULT_BROWSER, DEFAULT_SOCKET_CONFIG, WA_VERSION } from "./defaults";
+import {
+	DEFAULT_BROWSER,
+	DEFAULT_SOCKET_CONFIG,
+	MIN_PREKEY_COUNT,
+	PREKEY_UPLOAD_BATCH_SIZE,
+	WA_VERSION,
+} from "./defaults";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
@@ -23,19 +39,32 @@ import {
 import { MessageProcessor } from "./messaging/message-processor";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";
 import type { IAuthStateProvider } from "./state/interface";
-import { generateMdTagPrefix } from "./state/utils";
 import type { ILogger, WebSocketConfig } from "./transport/types";
 
-interface ClientConfig {
+type EnsureSubtype<Source, T extends Source> = T;
+
+type PresenceState = EnsureSubtype<
+	SINGLE_BYTE_TOKENS_TYPE,
+	"available" | "unavailable"
+>;
+
+type ChatState = EnsureSubtype<SINGLE_BYTE_TOKENS_TYPE, "composing" | "paused">;
+
+interface ClientConfig<TStorage> {
 	auth: IAuthStateProvider;
 	logger?: ILogger;
 	wsOptions?: Partial<WebSocketConfig>;
 	version?: number[];
 	browser?: readonly [string, string, string];
 	connectionManager?: ConnectionManager;
+	dumper?: {
+		func: DecryptionDumper<TStorage>;
+		path: string;
+		storage: TStorage;
+	};
 }
 
-declare interface WhaTSClient {
+export declare interface WhaTSClient {
 	ws: ConnectionManager["ws"];
 	auth: IAuthStateProvider;
 	logger: ILogger;
@@ -49,16 +78,17 @@ declare interface WhaTSClient {
 		listener: (data: ClientEventMap[K]) => void,
 	): void;
 }
-// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: solve later
-class WhaTSClient extends TypedEventTarget<ClientEventMap> {
-	private config: Omit<ClientConfig, "logger"> & { logger: ILogger };
+export class WhaTSClient<
+	TStorage = unknown,
+> extends TypedEventTarget<ClientEventMap> {
+	private config: Omit<ClientConfig<TStorage>, "logger"> & { logger: ILogger };
 	private messageProcessor: MessageProcessor;
 	protected connectionManager: ConnectionManager;
 	private authenticator: Authenticator;
 	private epoch = 0;
 	public signalStore: SignalProtocolStoreAdapter;
 
-	constructor(config: ClientConfig) {
+	constructor(config: ClientConfig<TStorage>) {
 		super();
 
 		const logger = config.logger || (console as ILogger);
@@ -77,14 +107,43 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 				),
 				logger: logger,
 			},
-		} satisfies ClientConfig;
+			dumper: config.dumper,
+		} satisfies ClientConfig<TStorage>;
+
+		this.addListener("connection.update", (update) => {
+			if (update.connection === "open") {
+				this.sendPresenceUpdate("available").catch((err) => {
+					this.logger.error(
+						{ err },
+						"Failed to send 'available' presence update on connection open",
+					);
+				});
+			}
+		});
 
 		this.auth = this.config.auth;
 		this.logger = this.config.logger;
 
-		this.signalStore = new SignalProtocolStoreAdapter(this.auth);
+		this.signalStore = new SignalProtocolStoreAdapter(this.auth, this.logger);
 
-		this.messageProcessor = new MessageProcessor(this.logger, this.signalStore);
+		let onPreDecryptCallback: ((node: BinaryNode) => void) | undefined;
+		if (this.config.dumper) {
+			const { func: dumperFunc, path: dumpDir, storage } = this.config.dumper;
+			onPreDecryptCallback = (node: BinaryNode) => {
+				dumperFunc(dumpDir, node, this.auth.creds, storage);
+			};
+			this.logger.warn(
+				`[DEBUG] Decryption bundle dumping is ENABLED. Saving to: ${dumpDir}`,
+			);
+		}
+
+		this.messageProcessor = new MessageProcessor(
+			this.logger,
+			this.signalStore,
+			this.auth.keys,
+			this.auth,
+			onPreDecryptCallback,
+		);
 
 		this.connectionManager =
 			config.connectionManager ??
@@ -111,6 +170,11 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			"connection.update",
 			(event: TypedCustomEvent<ConnectionUpdatePayload>) => {
 				this.dispatchTypedEvent("connection.update", event.detail);
+				if (event.detail.connection === "open") {
+					this.checkAndUploadPreKeys().catch((err) => {
+						this.logger.error({ err }, "Initial pre-key check failed");
+					});
+				}
 				if (event.detail.isNewLogin) {
 					this.connectionManager.reconnect();
 				}
@@ -154,9 +218,15 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 				this.dispatchTypedEvent("node.received", event.detail);
 			},
 		);
+
+		this.connectionManager.addEventListener(
+			"node.sent",
+			(event: TypedCustomEvent<ClientEventMap["node.sent"]>) => {
+				this.dispatchTypedEvent("node.sent", event.detail);
+			},
+		);
 	}
 
-	// Public method for test sanity check
 	public isConnectionManagerReady(): boolean {
 		return (
 			!!this.connectionManager &&
@@ -174,6 +244,48 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		}) as EventListener);
 	}
 
+	async sendPresenceUpdate(
+		type: PresenceState | ChatState,
+		toJid?: string,
+	): Promise<void> {
+		const me = this.auth.creds.me;
+		if (!me) {
+			throw new Error(
+				"Cannot send presence update without being authenticated",
+			);
+		}
+
+		let node: BinaryNode;
+		if (type === "available" || type === "unavailable") {
+			if (!me.name) {
+				this.logger.warn("No client name set, skipping presence update");
+				return;
+			}
+			node = {
+				tag: "presence",
+				attrs: {
+					name: me.name,
+					type,
+				},
+			};
+		} else {
+			if (!toJid) {
+				throw new Error("`toJid` is required for composing/recording presence");
+			}
+			node = {
+				tag: "chatstate",
+				attrs: {
+					from: me.id,
+					to: toJid,
+				},
+				content: [{ tag: type, attrs: {} }],
+			};
+		}
+
+		this.logger.debug({ to: toJid, type }, "sending presence update");
+		await this.connectionManager.sendNode(node);
+	}
+
 	async connect(): Promise<void> {
 		try {
 			await this.connectionManager.connect();
@@ -187,20 +299,6 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		await this.connectionManager.close(new Error(reason));
 	}
 
-	/**
-	 * Sends a text message to a given JID.
-	 * Handles encryption and session management automatically.
-	 *
-	 * @param jid The recipient's user JID (e.g., "1234567890@s.whatsapp.net").
-	 * @param text The text content of the message.
-	 * @param specificDeviceId Optional specific device ID to target. Defaults to 0 (primary device).
-	 * @returns The unique message ID generated for this message.
-	 * @throws Throws an error if the JID is invalid, encryption fails, or sending fails.
-	 */
-	/**
-	 * Sends a text message to a given JID and waits for server ACK.
-	 * Returns messageId, and either ack or error.
-	 */
 	async sendTextMessage(
 		jid: string,
 		text: string,
@@ -336,7 +434,11 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 							ackNode.attrs.text || `Server error ${ackNode.attrs.error}`;
 						reject(
 							new Error(
-								`Message delivery failed (ack error ${ackNode.attrs.error}): ${errorText} for ID ${messageId}. Full attrs: ${JSON.stringify(ackNode.attrs)}`,
+								`Message delivery failed (ack error ${
+									ackNode.attrs.error
+								}): ${errorText} for ID ${messageId}. Full attrs: ${JSON.stringify(
+									ackNode.attrs,
+								)}`,
 							),
 						);
 					} else {
@@ -359,8 +461,143 @@ class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 			);
 		});
 	}
+
+	async reconnect(): Promise<void> {
+		return this.connectionManager.reconnect();
+	}
+
+	private async getServerPreKeyCount(): Promise<number> {
+		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
+		const iq: BinaryNode = {
+			tag: "iq",
+			attrs: {
+				id: msgId,
+				type: "get",
+				xmlns: "encrypt",
+				to: S_WHATSAPP_NET,
+			},
+			content: [{ tag: "count", attrs: {} }],
+		};
+
+		await this.connectionManager.sendNode(iq);
+		const response = await this.waitForRequest(msgId);
+		const countNode = getBinaryNodeChild(response, "count");
+		const count = parseInt(countNode?.attrs.value || "0", 10);
+		return count;
+	}
+
+	public async uploadPreKeys(): Promise<void> {
+		const { creds } = this.auth;
+		const newPreKeys = generatePreKeys(
+			creds.nextPreKeyId,
+			PREKEY_UPLOAD_BATCH_SIZE,
+		);
+		const newPreKeysArray = Object.values(newPreKeys);
+
+		this.logger.info(`Uploading ${newPreKeysArray.length} pre-keys...`);
+
+		const preKeyNodes = Object.entries(newPreKeys).map(([id, keyPair]) =>
+			formatPreKeyForXMPP(keyPair, Number(id)),
+		);
+		const signedPreKeyNode = formatSignedPreKeyForXMPP(creds.signedPreKey);
+
+		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
+		const iq: BinaryNode = {
+			tag: "iq",
+			attrs: {
+				id: msgId,
+				type: "set",
+				xmlns: "encrypt",
+				to: S_WHATSAPP_NET,
+			},
+			content: [
+				{
+					tag: "registration",
+					attrs: {},
+					content: encodeBigEndian(creds.registrationId),
+				},
+				{ tag: "type", attrs: {}, content: KEY_BUNDLE_TYPE },
+				{
+					tag: "identity",
+					attrs: {},
+					content: creds.signedIdentityKey.publicKey,
+				},
+				{ tag: "list", attrs: {}, content: preKeyNodes },
+				signedPreKeyNode,
+			],
+		};
+
+		await this.connectionManager.sendNode(iq);
+		await this.waitForRequest(msgId);
+
+		await this.auth.keys.set({ "pre-key": newPreKeys });
+		creds.nextPreKeyId += newPreKeysArray.length;
+		await this.auth.saveCreds();
+
+		this.logger.info(
+			`Successfully uploaded ${newPreKeysArray.length} pre-keys. Next pre-key ID is ${creds.nextPreKeyId}.`,
+		);
+	}
+
+	public async checkAndUploadPreKeys() {
+		try {
+			const count = await this.getServerPreKeyCount();
+			this.logger.info({ count }, "Server pre-key count");
+			if (count <= MIN_PREKEY_COUNT) {
+				this.logger.info(
+					{ count, threshold: MIN_PREKEY_COUNT },
+					"Low pre-key count, uploading more.",
+				);
+				await this.uploadPreKeys();
+			}
+		} catch (err) {
+			this.logger.error({ err }, "Failed to check/upload pre-keys");
+		}
+	}
+
+	private waitForRequest(reqId: string, timeoutMs = 15000) {
+		return new Promise<BinaryNode>((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				cleanup();
+				reject(
+					new Error(
+						`Timeout waiting for response to request ${reqId} after ${timeoutMs}ms`,
+					),
+				);
+			}, timeoutMs);
+
+			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
+				const responseNode = event.detail.node;
+				if (responseNode.tag === "iq" && responseNode.attrs.id === reqId) {
+					cleanup();
+					if (responseNode.attrs.type === "error") {
+						reject(
+							new Error(`Request ${reqId} failed with an error response.`),
+						);
+					} else {
+						resolve(responseNode);
+					}
+				}
+			};
+
+			const cleanup = () => {
+				clearTimeout(timeoutId);
+				this.connectionManager.removeEventListener(
+					"node.received",
+					listener as EventListener,
+				);
+			};
+
+			this.connectionManager.addEventListener(
+				"node.received",
+				listener as EventListener,
+			);
+		});
+	}
 }
 
-export const createWAClient = (config: ClientConfig): WhaTSClient => {
+export const createWAClient = <TStorage>(
+	config: ClientConfig<TStorage>,
+): WhaTSClient<TStorage> => {
 	return new WhaTSClient(config);
 };

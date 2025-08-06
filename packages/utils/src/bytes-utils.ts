@@ -3,8 +3,8 @@ export {
 	bytesToUtf8,
 	concatBytes,
 	equalBytes,
-	utf8ToBytes,
 	hexToBytes,
+	utf8ToBytes,
 } from "@noble/ciphers/utils";
 
 export const bytesToBase64 = (bytes: Uint8Array): string => {

@@ -1,122 +1,56 @@
-import { bytesToBase64 } from "@wha.ts/utils";
 import type { KeyPair } from "@wha.ts/utils";
+import { bytesToBase64 } from "@wha.ts/utils";
 import { BaseKeyType } from "./base_key_type";
-import { ChainType } from "./chain_type";
 
-import { create, fromBinary, protoInt64, toBinary } from "@bufbuild/protobuf";
-import {
-	ProtoBaseKeyType,
-	ProtoChainType,
-	ProtoSessionEntrySchema,
-	ProtoSessionRecordSchema,
-} from "@wha.ts/proto";
-import type {
-	ProtoSessionEntry as ProtoSessionEntryType,
-	ProtoSessionRecord as ProtoSessionRecordType,
-} from "@wha.ts/proto";
-
+export const SESSION_RECORD_VERSION = "v2-plain-json";
 const CLOSED_SESSIONS_MAX = 40;
-const SESSION_RECORD_VERSION = "v2-proto";
 
-interface CurrentRatchet {
-	ephemeralKeyPair: KeyPair;
-	lastRemoteEphemeralKey: Uint8Array;
-	previousCounter: number;
-	rootKey: Uint8Array;
+// Exporting these interfaces to be used by SessionCipher and SessionBuilder
+export interface ISessionEntry {
+	registrationId?: number;
+	currentRatchet: {
+		ephemeralKeyPair: KeyPair;
+		lastRemoteEphemeralKey: Uint8Array;
+		previousCounter: number;
+		rootKey: Uint8Array;
+	};
+	indexInfo: {
+		baseKey: Uint8Array;
+		baseKeyType: BaseKeyType;
+		closed: bigint;
+		used: bigint;
+		created: bigint;
+		remoteIdentityKey: Uint8Array;
+	};
+	pendingPreKey?: {
+		signedKeyId: number;
+		baseKey: Uint8Array;
+		preKeyId?: number;
+	};
+	chains: { [ephemeralKeyB64: string]: IChain };
 }
 
-interface IndexInfo {
-	baseKey: Uint8Array;
-	baseKeyType: BaseKeyType;
-	closed: number;
-	used: number;
-	created: number;
-	remoteIdentityKey: Uint8Array;
-}
-
-interface PendingPreKey {
-	signedKeyId: number;
-	baseKey: Uint8Array;
-	preKeyId?: number;
-}
-
-interface Chain {
+export interface IChain {
 	chainKey: {
 		counter: number;
 		key: Uint8Array | null;
 	};
-	chainType: ChainType;
+	chainType: number;
 	messageKeys: { [messageNumber: number]: Uint8Array };
 }
 
-function toProtoBaseKeyType(type: BaseKeyType): ProtoBaseKeyType {
-	switch (type) {
-		case BaseKeyType.OURS:
-			return ProtoBaseKeyType.OURS;
-		case BaseKeyType.THEIRS:
-			return ProtoBaseKeyType.THEIRS;
-		default:
-			return ProtoBaseKeyType.UNSPECIFIED;
-	}
-}
-
-function fromProtoBaseKeyType(type: ProtoBaseKeyType): BaseKeyType {
-	switch (type) {
-		case ProtoBaseKeyType.OURS:
-			return BaseKeyType.OURS;
-		case ProtoBaseKeyType.THEIRS:
-			return BaseKeyType.THEIRS;
-		default:
-			throw new Error(`Unrecognized ProtoBaseKeyType: ${type}`);
-	}
-}
-
-function toProtoChainType(type: ChainType): ProtoChainType {
-	switch (type) {
-		case ChainType.SENDING:
-			return ProtoChainType.SENDING;
-		case ChainType.RECEIVING:
-			return ProtoChainType.RECEIVING;
-		default:
-			return ProtoChainType.UNSPECIFIED;
-	}
-}
-
-function fromProtoChainType(type: ProtoChainType): ChainType {
-	switch (type) {
-		case ProtoChainType.SENDING:
-			return ChainType.SENDING;
-		case ProtoChainType.RECEIVING:
-			return ChainType.RECEIVING;
-		default:
-			throw new Error(`Unrecognized ProtoChainType: ${type}`);
-	}
-}
-
 export class SessionRecord {
-	sessions: { [baseKeyBase64: string]: ProtoSessionEntryType } = {};
+	sessions: { [baseKeyBase64: string]: ISessionEntry } = {};
 	version: string = SESSION_RECORD_VERSION;
 
-	static createEntry(): ProtoSessionEntryType {
-		return create(ProtoSessionEntrySchema);
-	}
-
-	static deserialize(data: Uint8Array): SessionRecord {
-		const protoRecord = fromBinary(
-			ProtoSessionRecordSchema,
-			data,
-		) as ProtoSessionRecordType;
+	static fromPlainObject(plain: {
+		sessions: { [key: string]: ISessionEntry };
+		version: string;
+	}): SessionRecord {
 		const record = new SessionRecord();
-		record.version = protoRecord.version || SESSION_RECORD_VERSION;
-		record.sessions = protoRecord.sessions;
+		record.sessions = plain.sessions || {};
+		record.version = plain.version || SESSION_RECORD_VERSION;
 		return record;
-	}
-
-	serialize(): Uint8Array {
-		const protoRecord = create(ProtoSessionRecordSchema);
-		protoRecord.version = this.version;
-		protoRecord.sessions = this.sessions;
-		return toBinary(ProtoSessionRecordSchema, protoRecord);
 	}
 
 	haveOpenSession(): boolean {
@@ -124,10 +58,10 @@ export class SessionRecord {
 		return !!openSession && typeof openSession.registrationId === "number";
 	}
 
-	getSession(baseKey: Uint8Array): ProtoSessionEntryType | undefined {
+	getSession(baseKey: Uint8Array): ISessionEntry | undefined {
 		const keyBase64 = bytesToBase64(baseKey);
 		const session = this.sessions[keyBase64];
-		if (session && session.indexInfo?.baseKeyType === ProtoBaseKeyType.OURS) {
+		if (session?.indexInfo?.baseKeyType === BaseKeyType.OURS) {
 			throw new Error(
 				"Attempted to lookup a session using our base key - use getOpenSession or iterate sessions instead.",
 			);
@@ -135,15 +69,13 @@ export class SessionRecord {
 		return session;
 	}
 
-	getOpenSession(): ProtoSessionEntryType | undefined {
-		let latestUsed = -1;
-		let openSession: ProtoSessionEntryType | undefined = undefined;
+	getOpenSession(): ISessionEntry | undefined {
+		let latestUsed = -1n;
+		let openSession: ISessionEntry | undefined;
+
 		for (const session of Object.values(this.sessions)) {
-			if (
-				session.indexInfo &&
-				session.indexInfo.closed === protoInt64.parse(-1)
-			) {
-				const usedTime = session.indexInfo ? Number(session.indexInfo.used) : 0;
+			if (session.indexInfo && session.indexInfo.closed === -1n) {
+				const usedTime = session.indexInfo.used;
 				if (usedTime > latestUsed) {
 					latestUsed = usedTime;
 					openSession = session;
@@ -153,7 +85,7 @@ export class SessionRecord {
 		return openSession;
 	}
 
-	setSession(session: ProtoSessionEntryType): void {
+	setSession(session: ISessionEntry): void {
 		if (!session.indexInfo || !session.indexInfo.baseKey) {
 			throw new Error("Cannot set session: Missing indexInfo or baseKey");
 		}
@@ -161,15 +93,15 @@ export class SessionRecord {
 		this.sessions[bytesToBase64(baseKeyToUse)] = session;
 	}
 
-	getSessions(): ProtoSessionEntryType[] {
-		return Array.from(Object.values(this.sessions)).sort((a, b) => {
-			const aUsed = a.indexInfo?.used ? Number(a.indexInfo.used) : 0;
-			const bUsed = b.indexInfo?.used ? Number(b.indexInfo.used) : 0;
-			return bUsed - aUsed;
+	getSessions(): ISessionEntry[] {
+		return Object.values(this.sessions).sort((a, b) => {
+			const aUsed = a.indexInfo?.used ?? 0n;
+			const bUsed = b.indexInfo?.used ?? 0n;
+			return Number(bUsed - aUsed);
 		});
 	}
 
-	closeSession(session: ProtoSessionEntryType): void {
+	closeSession(session: ISessionEntry): void {
 		if (!session.indexInfo) {
 			console.error("Cannot close session without indexInfo:", session);
 			return;
@@ -179,10 +111,10 @@ export class SessionRecord {
 			return;
 		}
 		console.info("Closing session");
-		session.indexInfo.closed = protoInt64.parse(Date.now());
+		session.indexInfo.closed = BigInt(Date.now());
 	}
 
-	openSession(session: ProtoSessionEntryType): void {
+	openSession(session: ISessionEntry): void {
 		if (!session.indexInfo) {
 			console.error("Cannot open session without indexInfo:", session);
 			return;
@@ -192,11 +124,11 @@ export class SessionRecord {
 			return;
 		}
 		console.info("Re-opening session");
-		session.indexInfo.closed = protoInt64.parse(-1);
+		session.indexInfo.closed = -1n;
 	}
 
-	isClosed(session: ProtoSessionEntryType): boolean {
-		return !!session.indexInfo && Number(session.indexInfo.closed) !== -1;
+	isClosed(session: ISessionEntry): boolean {
+		return !!session.indexInfo && session.indexInfo.closed !== -1n;
 	}
 
 	removeOldSessions(): void {
@@ -210,13 +142,9 @@ export class SessionRecord {
 		}
 
 		closedSessions.sort(([, a], [, b]) => {
-			const aClosed = a.indexInfo?.closed
-				? Number(a.indexInfo.closed)
-				: Number.POSITIVE_INFINITY;
-			const bClosed = b.indexInfo?.closed
-				? Number(b.indexInfo.closed)
-				: Number.POSITIVE_INFINITY;
-			return aClosed - bClosed;
+			const aClosed = a.indexInfo?.closed ?? BigInt(Number.POSITIVE_INFINITY);
+			const bClosed = b.indexInfo?.closed ?? BigInt(Number.POSITIVE_INFINITY);
+			return Number(aClosed - bClosed);
 		});
 
 		const sessionsToRemoveCount = closedSessions.length - CLOSED_SESSIONS_MAX;
@@ -225,13 +153,10 @@ export class SessionRecord {
 		);
 
 		for (let i = 0; i < sessionsToRemoveCount; i++) {
-			const closedSession = closedSessions[i];
-			if (!closedSession) {
-				console.warn(`Unexpected state during session cleanup at index ${i}`);
-				continue;
+			const keyToRemove = closedSessions[i]?.[0];
+			if (keyToRemove) {
+				delete this.sessions[keyToRemove];
 			}
-			const [keyToRemove] = closedSession;
-			delete this.sessions[keyToRemove];
 		}
 	}
 

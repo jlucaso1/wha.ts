@@ -1,5 +1,7 @@
 import type { KeyPair } from "@wha.ts/utils";
+import type { z } from "zod/v4";
 import type { ChainType } from "./chain_type";
+import type { ProtocolAddressSchema, SignalIdentitySchema } from "./schemas";
 import type { SessionRecord } from "./session_record";
 
 export interface SignalSessionStorage {
@@ -16,3 +18,7 @@ export interface SignalSessionStorage {
 	loadPreKey(keyId: number): Promise<KeyPair | undefined>;
 	loadSignedPreKey(keyId: number): Promise<KeyPair | undefined>;
 }
+
+export type ProtocolAddress = z.infer<typeof ProtocolAddressSchema>;
+
+export type SignalIdentity = z.infer<typeof SignalIdentitySchema>;

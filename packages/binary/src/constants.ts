@@ -1294,6 +1294,19 @@ export const DOUBLE_BYTE_TOKENS = [
 	],
 ] as const;
 
+export const NON_STANDARD_TAGS = [
+	"ib",
+	"skey",
+	"offline_preview",
+	"offline_batch",
+	"registration",
+	"identity",
+	"list",
+	"device-identity",
+	"pair-device-sign",
+	"dirty",
+] as const;
+
 export const TOKEN_MAP: { [token: string]: { dict?: number; index: number } } =
 	{};
 

@@ -1,32 +1,38 @@
-import type { ISimpleKeyValueStore } from "./types";
+import type { ICollection, IStorageDatabase } from "@wha.ts/types";
 
-export class InMemorySimpleKeyValueStore implements ISimpleKeyValueStore {
-	private store = new Map<string, string>();
+export class InMemoryCollection<TValue = string>
+	implements ICollection<TValue>
+{
+	private store = new Map<string, TValue>();
 
-	async getItem(key: string): Promise<string | null> {
+	async get(key: string): Promise<TValue | null> {
 		const value = this.store.get(key);
 		return value === undefined ? null : value;
 	}
 
-	async setItem(key: string, value: string): Promise<void> {
-		this.store.set(key, value);
+	async set(key: string, value: TValue | null): Promise<void> {
+		if (value === null) {
+			this.store.delete(key);
+		} else {
+			this.store.set(key, value);
+		}
 	}
 
-	async removeItem(key: string): Promise<void> {
+	async remove(key: string): Promise<void> {
 		this.store.delete(key);
 	}
 
-	async getKeys(prefix?: string): Promise<string[]> {
-		const keys = Array.from(this.store.keys());
+	async keys(prefix?: string): Promise<string[]> {
+		const allKeys = Array.from(this.store.keys());
 		if (prefix) {
-			return keys.filter((k) => k.startsWith(prefix));
+			return allKeys.filter((k) => k.startsWith(prefix));
 		}
-		return keys;
+		return allKeys;
 	}
 
 	async clear(prefix?: string): Promise<void> {
 		if (prefix) {
-			const keysToRemove = await this.getKeys(prefix);
+			const keysToRemove = await this.keys(prefix);
 			for (const k of keysToRemove) {
 				this.store.delete(k);
 			}
@@ -34,24 +40,15 @@ export class InMemorySimpleKeyValueStore implements ISimpleKeyValueStore {
 			this.store.clear();
 		}
 	}
+}
 
-	async getItems(
-		keys: string[],
-	): Promise<{ key: string; value: string | null }[]> {
-		return Promise.all(
-			keys.map(async (key) => ({ key, value: await this.getItem(key) })),
-		);
-	}
+export class InMemoryStorageDatabase implements IStorageDatabase {
+	private collections = new Map<string, InMemoryCollection<unknown>>();
 
-	async setItems(
-		items: { key: string; value: string | null }[],
-	): Promise<void> {
-		for (const item of items) {
-			if (item.value === null) {
-				await this.removeItem(item.key);
-			} else {
-				await this.setItem(item.key, item.value);
-			}
+	getCollection<TValue = string>(name: string): ICollection<TValue> {
+		if (!this.collections.has(name)) {
+			this.collections.set(name, new InMemoryCollection<TValue>());
 		}
+		return this.collections.get(name) as InMemoryCollection<TValue>;
 	}
 }

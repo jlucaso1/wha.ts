@@ -6,7 +6,9 @@
 	"main": "./dist/index.js",
 	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -15,7 +17,11 @@
 		},
 		"./package.json": "./package.json"
 	},
-	"keywords": ["whatsapp", "typescript", "api"],
+	"keywords": [
+		"whatsapp",
+		"typescript",
+		"api"
+	],
 	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
 	"license": "MIT",
 	"repository": {

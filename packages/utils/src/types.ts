@@ -1,17 +1,6 @@
-export type KeyPair = { publicKey: Uint8Array; privateKey: Uint8Array };
+import type { z } from "zod/v4";
+import type { KeyPairSchema, SignedKeyPairSchema } from "./schemas";
 
-export type SignedKeyPair = {
-	keyPair: KeyPair;
-	signature: Uint8Array;
-	keyId: number;
-};
+export type KeyPair = z.infer<typeof KeyPairSchema>;
 
-type ProtocolAddress = {
-	name: string;
-	deviceId: number;
-};
-
-export type SignalIdentity = {
-	identifier: ProtocolAddress;
-	identifierKey: Uint8Array;
-};
+export type SignedKeyPair = z.infer<typeof SignedKeyPairSchema>;

@@ -6,7 +6,9 @@
 	"main": "./dist/index.js",
 	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -19,7 +21,7 @@
 		"build": "tsup src/index.ts --format=esm --dts"
 	},
 	"dependencies": {
-		"@wha.ts/core": "workspace:*",
+		"@wha.ts/types": "workspace:*",
 		"@wha.ts/utils": "workspace:*"
 	},
 	"devDependencies": {

@@ -1,5 +1,4 @@
-import { concatBytes } from "@wha.ts/utils";
-import { Mutex } from "@wha.ts/utils";
+import { concatBytes, Mutex } from "@wha.ts/utils";
 import type { NoiseProcessor } from "./noise-processor";
 import type { ILogger } from "./types";
 
@@ -22,10 +21,6 @@ export class FrameHandler extends EventTarget {
 		super();
 	}
 
-	/**
-	 * Helper method to peek at the first 'count' bytes across chunks
-	 * without consuming them. Returns null if not enough bytes are available.
-	 */
 	private peekBytes(count: number): Uint8Array | null {
 		if (this.bufferedBytes < count) {
 			return null;
@@ -154,19 +149,11 @@ export class FrameHandler extends EventTarget {
 
 				const encryptedFrame = frameData.subarray(3);
 
-				this.dispatchEvent(
-					new CustomEvent("debug:framehandler:received_raw_frame", {
-						detail: {
-							encryptedFrame,
-						},
-					}),
-				);
-
 				let decryptedPayload: Uint8Array;
 				try {
 					if (this.noiseProcessor.isHandshakeFinished) {
 						decryptedPayload =
-							await this.noiseProcessor.decryptMessage(encryptedFrame);
+							this.noiseProcessor.decryptMessage(encryptedFrame);
 					} else {
 						decryptedPayload = encryptedFrame;
 					}
@@ -185,18 +172,9 @@ export class FrameHandler extends EventTarget {
 	}
 
 	async framePayload(payload: Uint8Array): Promise<Uint8Array> {
-		this.dispatchEvent(
-			new CustomEvent("debug:framehandler:payload_to_frame", {
-				detail: {
-					payload,
-					isHandshakeFinished: this.noiseProcessor.isHandshakeFinished,
-				},
-			}),
-		);
-
 		let encryptedPayload: Uint8Array;
 		if (this.noiseProcessor.isHandshakeFinished) {
-			encryptedPayload = await this.noiseProcessor.encryptMessage(payload);
+			encryptedPayload = this.noiseProcessor.encryptMessage(payload);
 		} else {
 			encryptedPayload = payload;
 		}
@@ -234,12 +212,6 @@ export class FrameHandler extends EventTarget {
 		view.setUint16(1, frameLength & 0xffff, false);
 
 		const framed = concatBytes(headerBytes, lengthPrefix, encryptedPayload);
-
-		this.dispatchEvent(
-			new CustomEvent("debug:framehandler:framed_payload_sent", {
-				detail: { framed },
-			}),
-		);
 
 		return framed;
 	}

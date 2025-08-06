@@ -1,9 +1,8 @@
-import { randomBytes } from "@wha.ts/utils";
-import { Curve } from "@wha.ts/utils";
 import type { KeyPair } from "@wha.ts/utils";
+import { Curve, randomBytes } from "@wha.ts/utils";
 import type { AuthenticationCreds } from "./interface";
 
-const generateRegistrationId = (): number => {
+export const generateRegistrationId = (): number => {
 	const random = randomBytes(2);
 
 	const numbers = Uint16Array.from(random);
@@ -36,6 +35,7 @@ export const initAuthCreds = (): AuthenticationCreds => {
 		registered: false,
 		pairingCode: undefined,
 		routingInfo: undefined,
+		processedMessages: [],
 	};
 };
 

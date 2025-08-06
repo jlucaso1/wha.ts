@@ -1,7 +1,0 @@
-{
-	"mcpServers": {
-		"whatsapp-debug": {
-			"url": "http://localhost:7999/sse"
-		}
-	}
-}

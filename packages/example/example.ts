@@ -1,25 +1,71 @@
 import { createWAClient } from "@wha.ts/core";
-import { GenericAuthState } from "@wha.ts/storage";
-import { createStorage } from "unstorage";
-import fsDriver from "unstorage/drivers/fs-lite";
-import localStorageDriver from "unstorage/drivers/localstorage";
+import {
+	FileSystemStorageDatabase,
+	GenericAuthState,
+	InMemoryStorageDatabase,
+} from "@wha.ts/storage";
+import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
+import type { IStorageDatabase } from "@wha.ts/types";
+import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
 
 const IS_BROWSER = typeof window !== "undefined";
 
 const storage = IS_BROWSER
-	? createStorage({ driver: localStorageDriver({ base: "wha.ts" }) })
-	: createStorage({ driver: fsDriver({ base: "./example-storage" }) });
+	? new InMemoryStorageDatabase()
+	: new FileSystemStorageDatabase("./example-storage");
+
+const transport = IS_BROWSER
+	? pino.transport({
+			target: "pino-pretty",
+			level: "debug",
+			options: {
+				colorize: true,
+				ignore: "pid,hostname",
+			},
+		})
+	: pino.transport({
+			targets: [
+				{
+					target: "pino-pretty",
+					options: {
+						colorize: true,
+						ignore: "pid,hostname",
+					},
+				},
+				{
+					level: "debug",
+					target: "pino/file",
+					options: {
+						destination: "./example-log.txt",
+						mkdir: true,
+					},
+				},
+			],
+		});
+
+const logger = pino({ base: undefined }, transport);
 
 const authState = await GenericAuthState.init(storage);
+
 async function runExample() {
+	const dumperConfig =
+		!IS_BROWSER && process.env.CAPTURE === "true"
+			? {
+					func: dumpDecryptionData,
+					path: "./decryption-dumps",
+					storage: storage as FileSystemStorageDatabase,
+				}
+			: undefined;
+
 	const client = createWAClient({
 		auth: authState,
-		logger: console,
+		logger: logger,
+		dumper: dumperConfig,
 	});
 
 	client.addListener("connection.update", (update) => {
-		console.log("[CONNECTION UPDATE]", JSON.stringify(update));
+		logger.debug("[CONNECTION UPDATE]", JSON.stringify(update));
 
 		const { connection, qr, isNewLogin, error } = update;
 
@@ -28,17 +74,17 @@ async function runExample() {
 		}
 
 		if (connection === "connecting") {
-			console.log("🔌 Connecting...");
+			logger.info("🔌 Connecting...");
 		}
 
 		if (connection === "open") {
-			console.log("✅ Connection successful!");
-			console.log("   Your JID:", client.auth.creds.me?.id);
+			logger.info("✅ Connection successful!");
+			logger.info("   Your JID:", client.auth.creds.me?.id);
 		}
 
 		if (isNewLogin) {
-			console.log("✨ Pairing successful (new login)!");
-			console.log(
+			logger.info("✨ Pairing successful (new login)!");
+			logger.info(
 				"   Credentials saved. Waiting for server to close connection for restart...",
 			);
 		}
@@ -51,11 +97,18 @@ async function runExample() {
 	});
 
 	client.addListener("creds.update", () => {
-		console.log("[CREDS UPDATE]", "Credentials were updated.");
+		logger.info("[CREDS UPDATE]", "Credentials were updated.");
 	});
 
 	client.addListener("node.received", ({ node }) => {
-		console.log("[NODE RECEIVED]", {
+		logger.info("[NODE RECEIVED]", {
+			tag: node.tag,
+			attrs: node.attrs,
+		});
+	});
+
+	client.addListener("node.sent", ({ node }) => {
+		logger.info("[NODE SENT]", {
 			tag: node.tag,
 			attrs: node.attrs,
 		});
@@ -73,29 +126,29 @@ async function runExample() {
 		if (conversationText === "test") {
 			const userJid = `${senderAddress.id}@s.whatsapp.net`;
 
-			console.log(`Replying to ${userJid} (device ${senderAddress.deviceId})`);
+			logger.info(`Replying to ${userJid} (device ${senderAddress.deviceId})`);
 
 			await new Promise((resolve) => setTimeout(resolve, 500));
 
 			try {
 				await client.sendTextMessage(userJid, "test-reply");
-				console.log("[Example] Sent reply successfully.");
+				logger.info("[Example] Sent reply successfully.");
 			} catch (error) {
-				console.error("[Example] Failed to send reply:", error);
+				logger.error("[Example] Failed to send reply:", error);
 			}
 		}
 	});
 
 	try {
 		await client.connect();
-		console.log(
+		logger.info(
 			"Connection process initiated. Waiting for events (QR code or login success)...",
 		);
 	} catch (error) {
-		console.error("💥 Failed to initiate connection:", error);
+		logger.error("💥 Failed to initiate connection:", error);
 	}
 }
 
 runExample().catch((err) => {
-	console.error("Unhandled error during script execution:", err);
+	logger.error("Unhandled error during script execution:", err);
 });

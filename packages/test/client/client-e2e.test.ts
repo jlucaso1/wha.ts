@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { createWAClient } from "@wha.ts/core";
 import type { ClientEventMap } from "@wha.ts/core";
+import { createWAClient } from "@wha.ts/core";
 import { GenericAuthState } from "@wha.ts/storage";
+import { pino } from "pino";
 
 const E2E_TEST_TIMEOUT = 10_000;
 
@@ -11,14 +12,15 @@ test(
 		const authState = await GenericAuthState.init();
 		const client = createWAClient({
 			auth: authState,
-			logger: console,
+			logger: pino({
+				base: undefined,
+			}),
 		});
 
 		let connectionOpened = false;
 
 		const qrCodePromise = new Promise<string>((resolve, reject) => {
 			const handleUpdate = (update: ClientEventMap["connection.update"]) => {
-				console.log("[E2E Test] Connection Update:", JSON.stringify(update));
 				const { connection, qr, isNewLogin, error } = update;
 
 				if (qr) {

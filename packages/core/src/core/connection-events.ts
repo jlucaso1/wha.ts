@@ -1,13 +1,21 @@
 import type { BinaryNode } from "@wha.ts/binary";
 
+export type ConnectionState =
+	| "connecting"
+	| "open"
+	| "handshaking"
+	| "closing"
+	| "closed"
+	| "authenticating";
+
 export interface StateChangePayload {
-	state: "connecting" | "open" | "handshaking" | "closing" | "closed";
+	state: ConnectionState;
 	error?: Error;
 }
 
 type HandshakeCompletePayload = object;
 
-export interface NodeReceivedPayload {
+export interface NodePayload {
 	node: BinaryNode;
 }
 
@@ -27,7 +35,7 @@ interface WsClosePayload {
 export interface ConnectionManagerEventMap {
 	"state.change": StateChangePayload;
 	"handshake.complete": HandshakeCompletePayload;
-	"node.received": NodeReceivedPayload;
+	"node.received": NodePayload;
 	"node.sent": NodeSentPayload;
 	error: ErrorPayload;
 	"ws.close": WsClosePayload;

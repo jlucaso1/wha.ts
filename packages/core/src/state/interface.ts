@@ -1,40 +1,79 @@
-import type { ADVSignedDeviceIdentity } from "@wha.ts/proto";
-import type { KeyPair, SignalIdentity, SignedKeyPair } from "@wha.ts/utils";
+import { SenderKeyRecordSchema } from "@wha.ts/signal/groups/schemas";
+import { SessionRecordSchema } from "@wha.ts/signal/schemas";
+import {
+	KeyPairSchema,
+	SignedKeyPairSchema,
+	ZodUint8Array,
+} from "@wha.ts/utils/schemas";
+import { z } from "zod/v4";
 
-export type AuthenticationCreds = {
-	noiseKey: KeyPair;
-	pairingEphemeralKeyPair: KeyPair;
-	signedIdentityKey: KeyPair;
-	signedPreKey: SignedKeyPair;
-	registrationId: number;
-	advSecretKey: Uint8Array;
-	me?: { id: string; name?: string };
-	account?: ADVSignedDeviceIdentity;
-	platform?: string;
-	signalIdentities?: SignalIdentity[];
+export const ProcessedMessageKeySchema = z.object({
+	id: z.string(),
+	chat: z.string(),
+});
+export type ProcessedMessageKey = z.infer<typeof ProcessedMessageKeySchema>;
 
-	nextPreKeyId: number;
-	firstUnuploadedPreKeyId: number;
+export const ADVSignedDeviceIdentitySchema = z.object({
+	details: ZodUint8Array,
+	accountSignatureKey: ZodUint8Array,
+	accountSignature: ZodUint8Array,
+	deviceSignature: ZodUint8Array,
+});
 
-	myAppStateKeyId?: string;
-	accountSyncCounter: number;
-	accountSettings: {
-		unarchiveChats: boolean;
-	};
+export const AuthenticationCredsSchema = z.object({
+	noiseKey: KeyPairSchema,
+	pairingEphemeralKeyPair: KeyPairSchema,
+	signedIdentityKey: KeyPairSchema,
+	signedPreKey: SignedKeyPairSchema,
+	registrationId: z.number(),
+	advSecretKey: ZodUint8Array,
+	me: z
+		.object({
+			id: z.string(),
+			name: z.string().optional(),
+		})
+		.optional(),
+	account: ADVSignedDeviceIdentitySchema.optional(),
+	platform: z.string().optional(),
+	signalIdentities: z
+		.array(
+			z.object({
+				identifier: z.object({
+					name: z.string(),
+					deviceId: z.number(),
+				}),
+				identifierKey: ZodUint8Array,
+			}),
+		)
+		.optional(),
+	nextPreKeyId: z.number(),
+	firstUnuploadedPreKeyId: z.number(),
+	myAppStateKeyId: z.string().optional(),
+	accountSyncCounter: z.number(),
+	accountSettings: z.object({
+		unarchiveChats: z.boolean(),
+	}),
+	registered: z.boolean(),
+	pairingCode: z.string().optional(),
+	routingInfo: ZodUint8Array.optional(),
+	processedMessages: z.array(ProcessedMessageKeySchema).optional().default([]),
+});
 
-	registered: boolean;
-	pairingCode?: string;
+export type AuthenticationCreds = z.infer<typeof AuthenticationCredsSchema>;
 
-	routingInfo?: Uint8Array;
+export const SignalDataTypeMapSchemas = {
+	"pre-key": KeyPairSchema,
+	session: SessionRecordSchema,
+	"signed-identity-key": KeyPairSchema,
+	"signed-pre-key": SignedKeyPairSchema,
+	"peer-identity-key": ZodUint8Array,
+	"sender-key": SenderKeyRecordSchema,
 };
 
 export type SignalDataTypeMap = {
-	"pre-key": KeyPair;
-	session: Uint8Array;
-	"signed-identity-key": KeyPair;
-	"signed-pre-key": SignedKeyPair;
-	"peer-identity-key": Uint8Array;
-	"sender-key": Uint8Array;
+	[K in keyof typeof SignalDataTypeMapSchemas]: z.infer<
+		(typeof SignalDataTypeMapSchemas)[K]
+	>;
 };
 
 export type SignalDataSet = {
@@ -43,7 +82,6 @@ export type SignalDataSet = {
 	};
 };
 
-/** Interface for storing/retrieving Signal Protocol data (keys, sessions) */
 export interface ISignalProtocolStore {
 	get<T extends keyof SignalDataTypeMap>(
 		type: T,
@@ -52,19 +90,13 @@ export interface ISignalProtocolStore {
 
 	set(data: SignalDataSet): Promise<void>;
 
-	/**
-	 * Retrieves all session data for all devices of a given user.
-	 * The returned object maps ProtocolAddress strings (user@server_deviceId) to session data.
-	 */
 	getAllSessionsForUser(
 		userId: string,
 	): Promise<{ [address: string]: SignalDataTypeMap["session"] | undefined }>;
 }
 
-/** Interface for the overall authentication state provider */
 export interface IAuthStateProvider {
 	creds: AuthenticationCreds;
 	keys: ISignalProtocolStore;
-	/** Saves the current credentials (noise key, identity key, me, etc.) */
 	saveCreds(): Promise<void>;
 }

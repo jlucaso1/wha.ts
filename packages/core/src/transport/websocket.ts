@@ -1,11 +1,6 @@
 import { bytesToHex } from "@wha.ts/utils";
 import { IWebSocketClient } from "./types";
 
-const CONNECTING = 0;
-const OPEN = 1;
-const CLOSING = 2;
-const CLOSED = 3;
-
 export class NativeWebSocketClient extends IWebSocketClient {
 	private socket: WebSocket | null = null;
 	private connectionPromise: {
@@ -14,39 +9,29 @@ export class NativeWebSocketClient extends IWebSocketClient {
 	} | null = null;
 
 	get isOpen(): boolean {
-		return this.socket?.readyState === OPEN;
+		return this.socket?.readyState === this.socket?.OPEN;
 	}
 	get isClosed(): boolean {
-		return !this.socket || this.socket.readyState === CLOSED;
+		return !this.socket || this.socket.readyState === this.socket?.CLOSED;
 	}
 	get isConnecting(): boolean {
-		return this.socket?.readyState === CONNECTING;
+		return this.socket?.readyState === this.socket?.CONNECTING;
 	}
 	get isClosing(): boolean {
-		return this.socket?.readyState === CLOSING;
-	}
-
-	once(eventName: string, listener: (...args: unknown[]) => void) {
-		const handler = (event: Event | CustomEvent) => {
-			if (event instanceof CustomEvent) {
-				listener(event.detail);
-			} else {
-				listener(event);
-			}
-		};
-		this.addEventListener(eventName, handler, { once: true });
+		return this.socket?.readyState === this.socket?.CLOSING;
 	}
 
 	connect(): Promise<void> {
-		if (this.socket && this.socket.readyState !== CLOSED) {
+		if (this.socket && this.socket.readyState !== this.socket?.CLOSED) {
 			this.config.logger.warn({}, "WebSocket already connecting or open");
 			if (this.isConnecting && this.connectionPromise) {
-				// Always return the same promise if already connecting
 				return new Promise((res, rej) => {
-					this.once("open", () => res());
-					this.once("error", (err) => rej(err));
-					this.once("close", () =>
-						rej(new Error("WebSocket closed during connection attempt")),
+					this.addEventListener("open", () => res(), { once: true });
+					this.addEventListener("error", (err) => rej(err), { once: true });
+					this.addEventListener(
+						"close",
+						() => rej(new Error("WebSocket closed during connection attempt")),
+						{ once: true },
 					);
 				});
 			}
@@ -87,14 +72,9 @@ export class NativeWebSocketClient extends IWebSocketClient {
 			return;
 		}
 
-		this.dispatchEvent(
-			new CustomEvent("debug:websocket:sending_raw", {
-				detail: { data },
-			}),
-		);
-
 		try {
 			this.socket?.send(data);
+			this.dispatchTypedEvent("sent", { data });
 		} catch (error) {
 			this.config.logger.error({ err: error }, "WebSocket send error");
 			throw error;
@@ -111,7 +91,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		}
 
 		return new Promise((resolve) => {
-			this.once("close", () => resolve());
+			this.addEventListener("close", () => resolve(), { once: true });
 			this.socket?.close(code, reason);
 		});
 	}
@@ -119,19 +99,13 @@ export class NativeWebSocketClient extends IWebSocketClient {
 	private handleOpen = (): void => {
 		this.connectionPromise?.resolve();
 		this.connectionPromise = null;
-		this.dispatchEvent(new CustomEvent("open"));
+		this.dispatchTypedEvent("open", null);
 	};
 
 	private handleMessage = (event: MessageEvent<ArrayBuffer>): void => {
 		const data = new Uint8Array(event.data);
 
-		this.dispatchEvent(
-			new CustomEvent("debug:websocket:received_raw", {
-				detail: { data },
-			}),
-		);
-
-		this.dispatchEvent(new CustomEvent("message", { detail: data }));
+		this.dispatchTypedEvent("received", { data });
 	};
 
 	private handleError = (): void => {
@@ -139,7 +113,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		this.config.logger.error({ err: error }, "WebSocket error");
 		this.connectionPromise?.reject(error);
 		this.connectionPromise = null;
-		this.dispatchEvent(new CustomEvent("error", { detail: error }));
+		this.dispatchTypedEvent("error", error);
 	};
 
 	private handleClose = (event: CloseEvent): void => {
@@ -153,7 +127,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		this.connectionPromise = null;
 		this.removeListeners();
 		this.socket = null;
-		this.dispatchEvent(new CustomEvent("close", { detail: { code, reason } }));
+		this.dispatchTypedEvent("close", { code, reason });
 	};
 
 	private removeListeners(): void {
@@ -164,5 +138,3 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		this.socket.removeEventListener("close", this.handleClose);
 	}
 }
-
-Object.setPrototypeOf(NativeWebSocketClient.prototype, EventTarget.prototype);

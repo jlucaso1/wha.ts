@@ -47,13 +47,14 @@ const pkgmsg = {
 test("decrypts a message", async () => {
 	const authStateProvider = await GenericAuthState.init();
 
-	authStateProvider.keys.set({
-		"pre-key": mockedSession.prekeys,
-	});
-
 	Object.assign(authStateProvider.creds, mockedSession.creds);
 
-	const signalStore = new SignalProtocolStoreAdapter(authStateProvider);
+	await authStateProvider.keys.set({ "pre-key": mockedSession.prekeys });
+
+	const signalStore = new SignalProtocolStoreAdapter(
+		authStateProvider,
+		console,
+	);
 	const decodedJid = jidDecode(pkgmsg.jid);
 	if (!decodedJid || !decodedJid.user) {
 		throw new Error("Invalid JID");

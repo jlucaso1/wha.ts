@@ -4,11 +4,11 @@
 	"main": "example.ts",
 	"type": "module",
 	"dependencies": {
-		"@wha.ts/core": "workspace:*",
-		"@wha.ts/debug": "workspace:*",
-		"@wha.ts/storage": "workspace:*",
 		"@wha.ts/binary": "workspace:*",
-		"unstorage": "^1.15.0",
+		"@wha.ts/core": "workspace:*",
+		"@wha.ts/storage": "workspace:*",
+		"pino": "^9.7.0",
+		"pino-pretty": "^13.0.0",
 		"uqr": "^0.1.2"
 	}
 }
