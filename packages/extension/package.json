@@ -9,6 +9,10 @@
 	"files": [
 		"dist"
 	],
+	"scripts": {
+		"build": "vite build",
+		"dev": "vite"
+	},
 	"keywords": [
 		"whatsapp",
 		"typescript",
@@ -24,5 +28,9 @@
 		"@bufbuild/protobuf": "^2.6.2",
 		"@wha.ts/proto": "workspace:*",
 		"@wha.ts/utils": "workspace:*"
+	},
+	"devDependencies": {
+		"vite": "^7.0.6",
+		"vite-plugin-web-extension": "^4.4.5"
 	}
 }

@@ -43,7 +43,7 @@ export class InMemoryCollection<TValue = string>
 }
 
 export class InMemoryStorageDatabase implements IStorageDatabase {
-	private collections = new Map<string, InMemoryCollection<any>>();
+	private collections = new Map<string, InMemoryCollection<unknown>>();
 
 	getCollection<TValue = string>(name: string): ICollection<TValue> {
 		if (!this.collections.has(name)) {

@@ -6,7 +6,6 @@
 	"dependencies": {
 		"@wha.ts/binary": "workspace:*",
 		"@wha.ts/core": "workspace:*",
-		"@wha.ts/debug": "workspace:*",
 		"@wha.ts/storage": "workspace:*",
 		"pino": "^9.7.0",
 		"pino-pretty": "^13.0.0",
