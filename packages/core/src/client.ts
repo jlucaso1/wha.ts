@@ -1,27 +1,19 @@
 import "./client-events";
 import { create, toBinary } from "@bufbuild/protobuf";
 import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
-import { getBinaryNodeChild, jidDecode, S_WHATSAPP_NET } from "@wha.ts/binary";
+import { jidDecode } from "@wha.ts/binary";
 import {
 	Message_ExtendedTextMessageSchema,
 	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
 import type { ClientEventMap, IPlugin, MergePlugins } from "@wha.ts/types";
-import { generateMdTagPrefix, generatePreKeys } from "@wha.ts/types";
+import { generateMdTagPrefix } from "@wha.ts/types";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "@wha.ts/types/generics/typed-event-target";
-import {
-	encodeBigEndian,
-	KEY_BUNDLE_TYPE,
-	padRandomMax16,
-} from "@wha.ts/utils";
-import {
-	formatPreKeyForXMPP,
-	formatSignedPreKeyForXMPP,
-} from "./core/auth-payload-generators";
+import { padRandomMax16 } from "@wha.ts/utils";
 import { Authenticator } from "./core/authenticator";
 import type {
 	ConnectionUpdatePayload,
@@ -29,15 +21,10 @@ import type {
 } from "./core/authenticator-events";
 import { ConnectionManager } from "./core/connection";
 import type { IConnectionActions } from "./core/types";
-import {
-	DEFAULT_BROWSER,
-	DEFAULT_SOCKET_CONFIG,
-	MIN_PREKEY_COUNT,
-	PREKEY_UPLOAD_BATCH_SIZE,
-	WA_VERSION,
-} from "./defaults";
+import { DEFAULT_BROWSER, DEFAULT_SOCKET_CONFIG, WA_VERSION } from "./defaults";
 import { MessageProcessor } from "./messaging/message-processor";
 import { PluginManager } from "./plugins/plugin-manager";
+import { PreKeyManager } from "./prekeys";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";
 import type { IAuthStateProvider } from "./state/interface";
 import type { ILogger, WebSocketConfig } from "./transport/types";
@@ -91,6 +78,7 @@ export class WhaTSClient<
 	private epoch = 0;
 	private pluginManager: PluginManager;
 	public signalStore: SignalProtocolStoreAdapter;
+	private preKeyManager: PreKeyManager;
 
 	constructor(config: ClientConfig<_TStorage, TPlugins>) {
 		super();
@@ -130,7 +118,6 @@ export class WhaTSClient<
 
 		this.signalStore = new SignalProtocolStoreAdapter(this.auth, this.logger);
 
-		// Initialize plugin manager with plugins
 		const allPlugins: IPlugin[] = this.config.plugins
 			? [...this.config.plugins]
 			: [];
@@ -138,11 +125,9 @@ export class WhaTSClient<
 		this.pluginManager = new PluginManager(this, allPlugins);
 		this.pluginManager.installAll();
 
-		// Merge plugin APIs onto client instance
 		const exposedApis = this.pluginManager.getExposedApis();
 		Object.assign(this, exposedApis);
 
-		// Get aggregated pre-decrypt callbacks from plugins
 		const preDecryptCallbacks = this.pluginManager.getPreDecryptTaps();
 		const combinedPreDecryptCallback =
 			preDecryptCallbacks.length > 0
@@ -177,6 +162,12 @@ export class WhaTSClient<
 				this.messageProcessor,
 			);
 
+		this.preKeyManager = new PreKeyManager(
+			this.auth,
+			this.logger,
+			this.connectionManager,
+		);
+
 		const connectionActions: IConnectionActions = {
 			sendNode: (node) => this.connectionManager.sendNode(node),
 			closeConnection: (error) => this.connectionManager.close(error),
@@ -194,7 +185,7 @@ export class WhaTSClient<
 			(event: TypedCustomEvent<ConnectionUpdatePayload>) => {
 				this.dispatchTypedEvent("connection.update", event.detail);
 				if (event.detail.connection === "open") {
-					this.checkAndUploadPreKeys().catch((err) => {
+					this.preKeyManager.checkAndUploadPreKeys().catch((err) => {
 						this.logger.error({ err }, "Initial pre-key check failed");
 					});
 				}
@@ -487,135 +478,6 @@ export class WhaTSClient<
 
 	async reconnect(): Promise<void> {
 		return this.connectionManager.reconnect();
-	}
-
-	private async getServerPreKeyCount(): Promise<number> {
-		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
-		const iq: BinaryNode = {
-			tag: "iq",
-			attrs: {
-				id: msgId,
-				type: "get",
-				xmlns: "encrypt",
-				to: S_WHATSAPP_NET,
-			},
-			content: [{ tag: "count", attrs: {} }],
-		};
-
-		await this.connectionManager.sendNode(iq);
-		const response = await this.waitForRequest(msgId);
-		const countNode = getBinaryNodeChild(response, "count");
-		const count = parseInt(countNode?.attrs.value || "0", 10);
-		return count;
-	}
-
-	public async uploadPreKeys(): Promise<void> {
-		const { creds } = this.auth;
-		const newPreKeys = generatePreKeys(
-			creds.nextPreKeyId,
-			PREKEY_UPLOAD_BATCH_SIZE,
-		);
-		const newPreKeysArray = Object.values(newPreKeys);
-
-		this.logger.info(`Uploading ${newPreKeysArray.length} pre-keys...`);
-
-		const preKeyNodes = Object.entries(newPreKeys).map(([id, keyPair]) =>
-			formatPreKeyForXMPP(keyPair, Number(id)),
-		);
-		const signedPreKeyNode = formatSignedPreKeyForXMPP(creds.signedPreKey);
-
-		const msgId = `${generateMdTagPrefix()}-${this.epoch++}`;
-		const iq: BinaryNode = {
-			tag: "iq",
-			attrs: {
-				id: msgId,
-				type: "set",
-				xmlns: "encrypt",
-				to: S_WHATSAPP_NET,
-			},
-			content: [
-				{
-					tag: "registration",
-					attrs: {},
-					content: encodeBigEndian(creds.registrationId),
-				},
-				{ tag: "type", attrs: {}, content: KEY_BUNDLE_TYPE },
-				{
-					tag: "identity",
-					attrs: {},
-					content: creds.signedIdentityKey.publicKey,
-				},
-				{ tag: "list", attrs: {}, content: preKeyNodes },
-				signedPreKeyNode,
-			],
-		};
-
-		await this.connectionManager.sendNode(iq);
-		await this.waitForRequest(msgId);
-
-		await this.auth.keys.set({ "pre-key": newPreKeys });
-		creds.nextPreKeyId += newPreKeysArray.length;
-		await this.auth.saveCreds();
-
-		this.logger.info(
-			`Successfully uploaded ${newPreKeysArray.length} pre-keys. Next pre-key ID is ${creds.nextPreKeyId}.`,
-		);
-	}
-
-	public async checkAndUploadPreKeys() {
-		try {
-			const count = await this.getServerPreKeyCount();
-			this.logger.info({ count }, "Server pre-key count");
-			if (count <= MIN_PREKEY_COUNT) {
-				this.logger.info(
-					{ count, threshold: MIN_PREKEY_COUNT },
-					"Low pre-key count, uploading more.",
-				);
-				await this.uploadPreKeys();
-			}
-		} catch (err) {
-			this.logger.error({ err }, "Failed to check/upload pre-keys");
-		}
-	}
-
-	private waitForRequest(reqId: string, timeoutMs = 15000) {
-		return new Promise<BinaryNode>((resolve, reject) => {
-			const timeoutId = setTimeout(() => {
-				cleanup();
-				reject(
-					new Error(
-						`Timeout waiting for response to request ${reqId} after ${timeoutMs}ms`,
-					),
-				);
-			}, timeoutMs);
-
-			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
-				const responseNode = event.detail.node;
-				if (responseNode.tag === "iq" && responseNode.attrs.id === reqId) {
-					cleanup();
-					if (responseNode.attrs.type === "error") {
-						reject(
-							new Error(`Request ${reqId} failed with an error response.`),
-						);
-					} else {
-						resolve(responseNode);
-					}
-				}
-			};
-
-			const cleanup = () => {
-				clearTimeout(timeoutId);
-				this.connectionManager.removeEventListener(
-					"node.received",
-					listener as EventListener,
-				);
-			};
-
-			this.connectionManager.addEventListener(
-				"node.received",
-				listener as EventListener,
-			);
-		});
 	}
 }
 

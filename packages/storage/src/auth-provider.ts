@@ -1,13 +1,13 @@
 import {
 	type AuthenticationCreds,
 	AuthenticationCredsSchema,
-	generatePreKeys,
 	type IAuthStateProvider,
 	type ICollection,
 	type ISignalProtocolStore,
 	type IStorageDatabase,
 	initAuthCreds,
 } from "@wha.ts/types";
+import { generatePreKeys } from "@wha.ts/utils";
 import { Mutex } from "@wha.ts/utils/mutex-utils";
 import { CREDS_KEY } from "./constants";
 import { InMemoryStorageDatabase } from "./in-memory";

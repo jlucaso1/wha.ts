@@ -124,7 +124,6 @@ export type {
 } from "./plugins";
 export {
 	generateMdTagPrefix,
-	generatePreKeys,
 	generateRegistrationId,
 	initAuthCreds,
 } from "./utils";
