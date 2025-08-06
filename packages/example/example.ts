@@ -5,7 +5,7 @@ import {
 	InMemoryStorageDatabase,
 } from "@wha.ts/storage";
 import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
-import type { IPlugin, IStorageDatabase } from "@wha.ts/types";
+import type { IPlugin } from "@wha.ts/types";
 import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
 
@@ -51,7 +51,6 @@ const authState = await GenericAuthState.init(storage);
 async function runExample() {
 	const plugins: IPlugin[] = [];
 
-	// Add dumper plugin if CAPTURE environment variable is set
 	if (!IS_BROWSER && process.env.CAPTURE === "true") {
 		const dumperPlugin: IPlugin = {
 			name: "debug-dumper-plugin",
@@ -61,7 +60,6 @@ async function runExample() {
 					dumpDecryptionData(
 						"./decryption-dumps",
 						node,
-						api.getAuthState() as any, // Type assertion since creds parameter is unused
 						storage as FileSystemStorageDatabase,
 					);
 				});

@@ -116,6 +116,7 @@ export interface IStorageDatabase {
 }
 
 export type {
+	ClientEventMap,
 	DeepReadonly,
 	IPlugin,
 	MergePlugins,

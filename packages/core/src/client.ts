@@ -6,14 +6,17 @@ import {
 	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
-import type { IPlugin, MergePlugins } from "@wha.ts/types";
+import type { ClientEventMap, IPlugin, MergePlugins } from "@wha.ts/types";
 import { generateMdTagPrefix, generatePreKeys } from "@wha.ts/types";
+import {
+	type TypedCustomEvent,
+	TypedEventTarget,
+} from "@wha.ts/types/generics/typed-event-target";
 import {
 	encodeBigEndian,
 	KEY_BUNDLE_TYPE,
 	padRandomMax16,
 } from "@wha.ts/utils";
-import type { ClientEventMap } from "./client-events";
 import {
 	formatPreKeyForXMPP,
 	formatSignedPreKeyForXMPP,
@@ -32,10 +35,6 @@ import {
 	PREKEY_UPLOAD_BATCH_SIZE,
 	WA_VERSION,
 } from "./defaults";
-import {
-	type TypedCustomEvent,
-	TypedEventTarget,
-} from "./generics/typed-event-target";
 import { MessageProcessor } from "./messaging/message-processor";
 import { PluginManager } from "./plugins/plugin-manager";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";

@@ -7,11 +7,11 @@ import {
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
 import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
-import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
-} from "../generics/typed-event-target";
+} from "../../../types/src/generics/typed-event-target";
+import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import type { MessageProcessor } from "../messaging/message-processor";
 import type { AuthenticationCreds } from "../state/interface";
 import { FrameHandler } from "../transport/frame-handler";

@@ -12,6 +12,10 @@ import {
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
+import {
+	type TypedCustomEvent,
+	TypedEventTarget,
+} from "@wha.ts/types/generics/typed-event-target";
 import type { KeyPair } from "@wha.ts/utils";
 import {
 	bytesToBase64,
@@ -21,10 +25,6 @@ import {
 	equalBytes,
 	hmacSign,
 } from "@wha.ts/utils";
-import {
-	type TypedCustomEvent,
-	TypedEventTarget,
-} from "../generics/typed-event-target";
 import type {
 	AuthenticationCreds,
 	IAuthStateProvider,

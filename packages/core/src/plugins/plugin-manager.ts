@@ -1,14 +1,13 @@
 import type { BinaryNode } from "@wha.ts/binary";
 import type {
 	AuthenticationCreds,
+	ClientEventMap,
 	DeepReadonly,
 	IPlugin,
 	PluginAPI,
 } from "@wha.ts/types";
-import type { ClientEventMap } from "../client-events";
 import type { ILogger } from "../transport/types";
 
-// Forward reference to avoid circular dependency
 interface WhaTSClientLike {
 	auth: { creds: AuthenticationCreds };
 	logger: ILogger;
@@ -68,8 +67,8 @@ export class PluginManager {
 	/**
 	 * Get aggregated APIs from all plugins to merge with client instance
 	 */
-	public getExposedApis(): Record<string, any> {
-		const aggregatedAPI: Record<string, any> = {};
+	public getExposedApis(): Record<string, unknown> {
+		const aggregatedAPI: Record<string, unknown> = {};
 
 		for (const plugin of this.plugins) {
 			if (plugin.api) {
@@ -92,13 +91,10 @@ export class PluginManager {
 	 */
 	private createSandboxedAPI(): PluginAPI {
 		return {
-			// 1. Data Access (Read-Only)
 			getAuthState: (): DeepReadonly<AuthenticationCreds> => {
-				// Return a deep readonly version of the auth state
 				return this.deepFreeze(this.client.auth.creds);
 			},
 
-			// 2. Core Actions (Write/Perform)
 			actions: {
 				sendTextMessage: (jid: string, text: string) =>
 					this.client.sendTextMessage(jid, text),
@@ -108,7 +104,6 @@ export class PluginManager {
 				) => this.client.sendPresenceUpdate(type, toJid),
 			},
 
-			// 3. Event Bus (Listen)
 			on: <K extends keyof ClientEventMap>(
 				event: K,
 				listener: (data: ClientEventMap[K]) => void,
@@ -116,7 +111,6 @@ export class PluginManager {
 				this.client.addListener(event, listener);
 			},
 
-			// 4. Lifecycle Hooks (Tap-in)
 			hooks: {
 				onPreDecrypt: {
 					tap: (callback: (node: BinaryNode) => void) => {
@@ -125,7 +119,6 @@ export class PluginManager {
 				},
 			},
 
-			// 5. Utilities
 			logger: this.client.logger,
 		};
 	}
@@ -134,10 +127,8 @@ export class PluginManager {
 	 * Deep freeze an object to make it truly readonly
 	 */
 	private deepFreeze<T>(obj: T): DeepReadonly<T> {
-		// Get property names
 		const propNames = Object.getOwnPropertyNames(obj);
 
-		// Freeze properties before freezing self
 		for (const name of propNames) {
 			const value = (obj as any)[name];
 			if (value && typeof value === "object") {

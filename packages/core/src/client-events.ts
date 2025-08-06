@@ -8,23 +8,24 @@ import type {
 } from "./core/authenticator-events";
 import type { NodePayload } from "./core/connection-events";
 
-/**
- * Map of event names to their respective payload types for the public API
- * This only exposes events that are meant to be used by consumers of the library
- */
-export interface ClientEventMap {
-	"connection.update": ConnectionUpdatePayload;
-	"creds.update": CredsUpdatePayload;
-	"message.received": {
-		message: ReturnType<typeof fromBinary<typeof MessageSchema>>;
-		sender: ProtocolAddress;
-		rawNode: BinaryNode;
-	};
-	"message.decryption_error": {
-		error: Error;
-		rawNode: BinaryNode;
-		sender?: ProtocolAddress;
-	};
-	"node.received": NodePayload;
-	"node.sent": NodePayload;
+declare module "@wha.ts/types" {
+	export interface ClientEventMap {
+		"connection.update": ConnectionUpdatePayload;
+		"creds.update": CredsUpdatePayload;
+		"message.received": {
+			message: ReturnType<typeof fromBinary<typeof MessageSchema>>;
+			sender: ProtocolAddress;
+			rawNode: BinaryNode;
+		};
+		"message.decryption_error": {
+			error: Error;
+			rawNode: BinaryNode;
+			sender?: ProtocolAddress;
+		};
+		"node.received": NodePayload;
+		"node.sent": NodePayload;
+	}
 }
+
+// biome-ignore lint/complexity/noUselessEmptyExport: This file needs to be a module
+export {};

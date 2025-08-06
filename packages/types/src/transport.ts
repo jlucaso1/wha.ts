@@ -1,4 +1,4 @@
-import { TypedEventTarget } from "@wha.ts/types/generics/typed-event-target";
+import { TypedEventTarget } from "./generics/typed-event-target";
 
 export interface ILogger {
 	info(obj: unknown, msg?: unknown): void;
