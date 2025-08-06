@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: is difficult to handle dynamic ast types*/
 import { promises as fs } from "node:fs";
 import type { Node } from "acorn";
 import * as acorn from "acorn";

@@ -28,8 +28,8 @@
 				"noExplicitAny": "warn"
 			},
 			"correctness": {
-				"noUnusedImports": "warn",
-				"noUnusedPrivateClassMembers": "warn",
+				"noUnusedImports": "error",
+				"noUnusedPrivateClassMembers": "off",
 				"noUnusedVariables": "warn"
 			}
 		}
