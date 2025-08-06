@@ -1,3 +1,4 @@
+import { SenderKeyRecordSchema } from "@wha.ts/signal/groups/schemas";
 import { SessionRecordSchema } from "@wha.ts/signal/schemas";
 import {
 	KeyPairSchema,
@@ -5,6 +6,12 @@ import {
 	ZodUint8Array,
 } from "@wha.ts/utils/schemas";
 import { z } from "zod/v4";
+
+export const ProcessedMessageKeySchema = z.object({
+	id: z.string(),
+	chat: z.string(),
+});
+export type ProcessedMessageKey = z.infer<typeof ProcessedMessageKeySchema>;
 
 export const ADVSignedDeviceIdentitySchema = z.object({
 	details: ZodUint8Array,
@@ -49,6 +56,7 @@ export const AuthenticationCredsSchema = z.object({
 	registered: z.boolean(),
 	pairingCode: z.string().optional(),
 	routingInfo: ZodUint8Array.optional(),
+	processedMessages: z.array(ProcessedMessageKeySchema).optional().default([]),
 });
 
 export type AuthenticationCreds = z.infer<typeof AuthenticationCredsSchema>;
@@ -59,7 +67,7 @@ export const SignalDataTypeMapSchemas = {
 	"signed-identity-key": KeyPairSchema,
 	"signed-pre-key": SignedKeyPairSchema,
 	"peer-identity-key": ZodUint8Array,
-	"sender-key": ZodUint8Array,
+	"sender-key": SenderKeyRecordSchema,
 };
 
 export type SignalDataTypeMap = {

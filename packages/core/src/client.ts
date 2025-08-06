@@ -140,6 +140,8 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		this.messageProcessor = new MessageProcessor(
 			this.logger,
 			this.signalStore,
+			this.auth.keys,
+			this.auth,
 			onPreDecryptCallback,
 		);
 

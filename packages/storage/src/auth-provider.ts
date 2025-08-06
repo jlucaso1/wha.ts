@@ -5,6 +5,7 @@ import type {
 } from "@wha.ts/core";
 import { generatePreKeys, initAuthCreds } from "@wha.ts/core";
 import { AuthenticationCredsSchema } from "@wha.ts/core/state/interface";
+import { Mutex } from "@wha.ts/utils/mutex-utils";
 import { CREDS_KEY } from "./constants";
 import { InMemoryStorageDatabase } from "./in-memory";
 import { deserialize, serialize } from "./serialization";
@@ -17,6 +18,7 @@ export class GenericAuthState implements IAuthStateProvider {
 
 	private credsCollection: ICollection<string>;
 	private db: IStorageDatabase;
+	private saveMutex: Mutex;
 
 	private constructor(
 		creds: AuthenticationCreds,
@@ -27,6 +29,7 @@ export class GenericAuthState implements IAuthStateProvider {
 		this.keys = keys;
 		this.db = db;
 		this.credsCollection = db.getCollection<string>("auth-creds");
+		this.saveMutex = new Mutex();
 	}
 
 	static async init(
@@ -72,43 +75,47 @@ export class GenericAuthState implements IAuthStateProvider {
 	}
 
 	async saveCreds(): Promise<void> {
-		try {
-			await this.credsCollection.set(CREDS_KEY, serialize(this.creds));
-		} catch (error) {
-			console.error("[GenericAuthState] Error saving credentials:", error);
-			throw error;
-		}
+		return this.saveMutex.runExclusive(async () => {
+			try {
+				await this.credsCollection.set(CREDS_KEY, serialize(this.creds));
+			} catch (error) {
+				console.error("[GenericAuthState] Error saving credentials:", error);
+				throw error;
+			}
+		});
 	}
 
 	async clearData(): Promise<void> {
-		console.warn("[GenericAuthState] Clearing all authentication data!");
-		try {
-			await this.credsCollection.remove(CREDS_KEY);
-			await this.db.getCollection("prekey-store").clear();
-			await this.db.getCollection("session-store").clear();
-			await this.db.getCollection("identity-store").clear();
-			await this.db.getCollection("signed-prekey-store").clear();
-			await this.db.getCollection("senderkey-store").clear();
-			await this.db.getCollection("auth-creds").clear();
+		return this.saveMutex.runExclusive(async () => {
+			console.warn("[GenericAuthState] Clearing all authentication data!");
+			try {
+				await this.credsCollection.remove(CREDS_KEY);
+				await this.db.getCollection("prekey-store").clear();
+				await this.db.getCollection("session-store").clear();
+				await this.db.getCollection("identity-store").clear();
+				await this.db.getCollection("signed-prekey-store").clear();
+				await this.db.getCollection("senderkey-store").clear();
+				await this.db.getCollection("auth-creds").clear();
 
-			// Re-initialize creds and SignalKeyStore
-			this.creds = initAuthCreds();
-			this.keys = new GenericSignalKeyStore(this.db);
+				// Re-initialize creds and SignalKeyStore
+				this.creds = initAuthCreds();
+				this.keys = new GenericSignalKeyStore(this.db);
 
-			const INITIAL_PREKEY_COUNT = 30;
-			const preKeys = generatePreKeys(
-				this.creds.nextPreKeyId,
-				INITIAL_PREKEY_COUNT,
-			);
-			await this.keys.set({ "pre-key": preKeys });
-			this.creds.nextPreKeyId += INITIAL_PREKEY_COUNT;
-			await this.saveCreds();
-		} catch (error) {
-			console.error(
-				"[GenericAuthState] Error clearing authentication data:",
-				error,
-			);
-			throw error;
-		}
+				const INITIAL_PREKEY_COUNT = 30;
+				const preKeys = generatePreKeys(
+					this.creds.nextPreKeyId,
+					INITIAL_PREKEY_COUNT,
+				);
+				await this.keys.set({ "pre-key": preKeys });
+				this.creds.nextPreKeyId += INITIAL_PREKEY_COUNT;
+				await this.saveCreds();
+			} catch (error) {
+				console.error(
+					"[GenericAuthState] Error clearing authentication data:",
+					error,
+				);
+				throw error;
+			}
+		});
 	}
 }

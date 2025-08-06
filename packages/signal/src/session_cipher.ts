@@ -113,11 +113,6 @@ export class SessionCipher {
 				throw new Error("No open session");
 			}
 
-			console.log(
-				"DEBUG: Using session for encryption:",
-				JSON.stringify(session, null, 2),
-			);
-
 			if (!(session.currentRatchet.rootKey instanceof Uint8Array)) {
 				console.error("FATAL: rootKey is NOT a Uint8Array!");
 			}

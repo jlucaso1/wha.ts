@@ -6,6 +6,7 @@ import { jidDecode } from "@wha.ts/binary";
 import { SignalProtocolStoreAdapter } from "@wha.ts/core";
 import { MessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
+import { GroupCipher } from "@wha.ts/signal/groups/cipher";
 import {
 	GenericAuthState,
 	type ICollection,
@@ -84,6 +85,15 @@ describe("Offline Decryption from Dumped Bundles", async () => {
 				plaintext = await cipher.decryptPreKeyWhisperMessage(ciphertext);
 			} else if (payload.type === "msg") {
 				plaintext = await cipher.decryptWhisperMessage(ciphertext);
+			} else if (payload.type === "skmsg") {
+				if (!payload.participant)
+					throw new Error("Dumped SKMSG missing participant");
+				const senderKeyName = `${payload.from}::${payload.participant}`;
+				const cipher = new GroupCipher(authState.keys, senderKeyName);
+
+				// This is still simplified. You'd need to parse the skmsg format properly.
+				const rawProtoBytes = ciphertext.slice(1, -8);
+				plaintext = await cipher.decrypt(rawProtoBytes);
 			} else {
 				throw new Error(`Unsupported message type for test: ${payload.type}`);
 			}
@@ -96,6 +106,8 @@ describe("Offline Decryption from Dumped Bundles", async () => {
 			const message = fromBinary(MessageSchema, unpaddedPlaintext);
 
 			expect(message).toBeDefined();
+
+			console.log(message);
 
 			console.log(`✅ Successfully decrypted ${folderName}`);
 		});

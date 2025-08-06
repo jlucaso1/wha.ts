@@ -32,6 +32,8 @@ export function deserialize<T extends ZodType>(
 		console.error(
 			`[Serialization] Failed to deserialize or validate data: ${errorMessage}`,
 		);
-		throw new Error(`Data validation failed: ${errorMessage}`);
+		throw new Error(
+			`Data validation failed: ${errorMessage} ${schema._zod.toJSONSchema?.()} ${jsonString}`,
+		);
 	}
 }

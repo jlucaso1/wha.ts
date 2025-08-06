@@ -35,6 +35,7 @@ export const initAuthCreds = (): AuthenticationCreds => {
 		registered: false,
 		pairingCode: undefined,
 		routingInfo: undefined,
+		processedMessages: [],
 	};
 };
 
