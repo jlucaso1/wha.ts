@@ -1,3 +1,4 @@
+import "./client-events";
 import { create, toBinary } from "@bufbuild/protobuf";
 import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
 import { getBinaryNodeChild, jidDecode, S_WHATSAPP_NET } from "@wha.ts/binary";
