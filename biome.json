@@ -12,7 +12,8 @@
 			"!node_modules/**",
 			"!example-storage/**",
 			"!**/dist",
-			"!**/extension-storage"
+			"!**/extension-storage",
+			"!decryption-dumps/**"
 		]
 	},
 	"formatter": {

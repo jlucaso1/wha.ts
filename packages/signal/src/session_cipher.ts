@@ -296,7 +296,14 @@ export class SessionCipher {
 				record = new SessionRecord();
 			}
 			const builder = new SessionBuilder(this.storage, this.addr);
-			const preKeyId = await builder.initIncoming(record, preKeyProto);
+
+			// Create a new message object for the builder, treating preKeyId 0 as undefined. I need to check why this
+			const builderMessage = {
+				...preKeyProto,
+				preKeyId: preKeyProto.preKeyId === 0 ? undefined : preKeyProto.preKeyId,
+			};
+
+			const preKeyId = await builder.initIncoming(record, builderMessage);
 			if (preKeyId === undefined && !record.getSession(preKeyProto.baseKey)) {
 				throw new Error(
 					`Session establishment failed for pre-key message, likely due to missing pre-key ${preKeyProto.preKeyId}`,

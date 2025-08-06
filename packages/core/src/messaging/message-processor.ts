@@ -21,14 +21,22 @@ interface MessageProcessorEventMap {
 	};
 }
 
+type PreDecryptCallback = (node: BinaryNode) => void | Promise<void>;
+
 export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap> {
 	private logger: ILogger;
 	private signalStore: SignalProtocolStoreAdapter;
+	private onPreDecrypt?: PreDecryptCallback;
 
-	constructor(logger: ILogger, signalStore: SignalProtocolStoreAdapter) {
+	constructor(
+		logger: ILogger,
+		signalStore: SignalProtocolStoreAdapter,
+		onPreDecrypt?: PreDecryptCallback,
+	) {
 		super();
 		this.logger = logger;
 		this.signalStore = signalStore;
+		this.onPreDecrypt = onPreDecrypt;
 	}
 
 	async processIncomingNode(node: BinaryNode): Promise<void> {
@@ -38,6 +46,14 @@ export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap>
 		const encNode = getBinaryNodeChild(node, "enc");
 		if (!encNode) {
 			return;
+		}
+
+		if (this.onPreDecrypt) {
+			try {
+				await Promise.resolve(this.onPreDecrypt(node));
+			} catch (err) {
+				this.logger.error({ err }, "Pre-decryption callback failed");
+			}
 		}
 
 		const { from: senderJidWithDevice, participant } = node.attrs;

@@ -11,9 +11,7 @@ export class FileSystemCollection implements ICollection<string> {
 
 	constructor(basePath: string, collectionName: string) {
 		this.collectionDirectory = path.resolve(basePath, collectionName);
-		console.log(
-			`[FileSystemCollection] Instance CREATED for '${collectionName}'. Directory: ${this.collectionDirectory}`,
-		);
+
 		fs.mkdir(this.collectionDirectory, { recursive: true }).catch((err) => {
 			console.error(
 				`[FileSystemCollection] Failed to create directory ${this.collectionDirectory}:`,
@@ -145,14 +143,12 @@ export class FileSystemCollection implements ICollection<string> {
 }
 
 export class FileSystemStorageDatabase implements IStorageDatabase {
-	private baseDir: string;
+	baseDir: string;
 	private collections = new Map<string, FileSystemCollection>();
 
 	constructor(directoryPath: string) {
 		this.baseDir = path.resolve(directoryPath);
-		console.log(
-			`[FileSystemStorageDatabase] Instance CREATED. Base directory: ${this.baseDir}`,
-		);
+
 		fs.mkdir(this.baseDir, { recursive: true }).catch((err) => {
 			console.error(
 				`[FileSystemStorageDatabase] Failed to create base directory ${this.baseDir}:`,

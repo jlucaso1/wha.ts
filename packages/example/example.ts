@@ -50,6 +50,11 @@ async function runExample() {
 	const client = createWAClient({
 		auth: authState,
 		logger: logger,
+		dumpDecryptionBundles: {
+			enabled: !IS_BROWSER && process.env.CAPTURE === "true",
+			path: "./decryption-dumps",
+			storage: storage as FileSystemStorageDatabase,
+		},
 	});
 
 	client.addListener("connection.update", (update) => {

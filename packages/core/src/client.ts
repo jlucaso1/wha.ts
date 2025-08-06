@@ -6,6 +6,8 @@ import {
 	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
+import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
+import type { FileSystemStorageDatabase } from "@wha.ts/storage/fs";
 import {
 	encodeBigEndian,
 	KEY_BUNDLE_TYPE,
@@ -56,6 +58,11 @@ interface ClientConfig {
 	version?: number[];
 	browser?: readonly [string, string, string];
 	connectionManager?: ConnectionManager;
+	dumpDecryptionBundles?: {
+		enabled: boolean;
+		path: string;
+		storage: FileSystemStorageDatabase;
+	};
 }
 
 export declare interface WhaTSClient {
@@ -100,9 +107,9 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 				),
 				logger: logger,
 			},
+			dumpDecryptionBundles: config.dumpDecryptionBundles,
 		} satisfies ClientConfig;
 
-		// Listen for connection state changes to send presence update
 		this.addListener("connection.update", (update) => {
 			if (update.connection === "open") {
 				this.sendPresenceUpdate("available").catch((err) => {
@@ -119,7 +126,22 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 
 		this.signalStore = new SignalProtocolStoreAdapter(this.auth, this.logger);
 
-		this.messageProcessor = new MessageProcessor(this.logger, this.signalStore);
+		let onPreDecryptCallback: ((node: BinaryNode) => void) | undefined;
+		if (this.config.dumpDecryptionBundles?.enabled) {
+			const { path: dumpDir, storage } = this.config.dumpDecryptionBundles;
+			onPreDecryptCallback = (node: BinaryNode) => {
+				dumpDecryptionData(dumpDir, node, this.auth.creds, storage);
+			};
+			this.logger.warn(
+				`[DEBUG] Decryption bundle dumping is ENABLED. Saving to: ${dumpDir}`,
+			);
+		}
+
+		this.messageProcessor = new MessageProcessor(
+			this.logger,
+			this.signalStore,
+			onPreDecryptCallback,
+		);
 
 		this.connectionManager =
 			config.connectionManager ??
@@ -203,7 +225,6 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		);
 	}
 
-	// Public method for test sanity check
 	public isConnectionManagerReady(): boolean {
 		return (
 			!!this.connectionManager &&
@@ -276,20 +297,6 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		await this.connectionManager.close(new Error(reason));
 	}
 
-	/**
-	 * Sends a text message to a given JID.
-	 * Handles encryption and session management automatically.
-	 *
-	 * @param jid The recipient's user JID (e.g., "1234567890@s.whatsapp.net").
-	 * @param text The text content of the message.
-	 * @param specificDeviceId Optional specific device ID to target. Defaults to 0 (primary device).
-	 * @returns The unique message ID generated for this message.
-	 * @throws Throws an error if the JID is invalid, encryption fails, or sending fails.
-	 */
-	/**
-	 * Sends a text message to a given JID and waits for server ACK.
-	 * Returns messageId, and either ack or error.
-	 */
 	async sendTextMessage(
 		jid: string,
 		text: string,
@@ -519,7 +526,7 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		};
 
 		await this.connectionManager.sendNode(iq);
-		await this.waitForRequest(msgId); // Wait for the 'result' iq
+		await this.waitForRequest(msgId);
 
 		await this.auth.keys.set({ "pre-key": newPreKeys });
 		creds.nextPreKeyId += newPreKeysArray.length;
