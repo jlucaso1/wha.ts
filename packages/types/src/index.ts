@@ -123,6 +123,12 @@ export type DecryptionDumper<TStorage> = (
 	storage: TStorage,
 ) => void | Promise<void>;
 
+export type {
+	DeepReadonly,
+	IPlugin,
+	MergePlugins,
+	PluginAPI,
+} from "./plugins";
 export {
 	generateMdTagPrefix,
 	generatePreKeys,
