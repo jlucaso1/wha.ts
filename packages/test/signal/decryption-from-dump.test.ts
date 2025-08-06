@@ -7,11 +7,8 @@ import { SignalProtocolStoreAdapter } from "@wha.ts/core";
 import { MessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
 import { GroupCipher } from "@wha.ts/signal/groups/cipher";
-import {
-	GenericAuthState,
-	type ICollection,
-	InMemoryStorageDatabase,
-} from "@wha.ts/storage";
+import { GenericAuthState, InMemoryStorageDatabase } from "@wha.ts/storage";
+import type { ICollection } from "@wha.ts/types";
 import { base64ToBytes, unpadRandomMax16 } from "@wha.ts/utils";
 
 async function loadDumpedStateIntoMemory(
@@ -106,8 +103,6 @@ describe("Offline Decryption from Dumped Bundles", async () => {
 			const message = fromBinary(MessageSchema, unpaddedPlaintext);
 
 			expect(message).toBeDefined();
-
-			console.log(message);
 
 			console.log(`✅ Successfully decrypted ${folderName}`);
 		});

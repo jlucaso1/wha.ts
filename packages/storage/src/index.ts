@@ -8,7 +8,3 @@ export {
 	InMemoryStorageDatabase,
 } from "./in-memory";
 export { GenericSignalKeyStore } from "./signal-store";
-export type {
-	ICollection,
-	IStorageDatabase,
-} from "./types";

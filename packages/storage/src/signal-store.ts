@@ -1,11 +1,12 @@
 import type {
+	ICollection,
 	ISignalProtocolStore,
+	IStorageDatabase,
 	SignalDataSet,
 	SignalDataTypeMap,
-} from "@wha.ts/core";
-import { SignalDataTypeMapSchemas } from "@wha.ts/core/state/interface";
+} from "@wha.ts/types";
+import { SignalDataTypeMapSchemas } from "@wha.ts/types";
 import { deserialize, serialize } from "./serialization";
-import type { ICollection, IStorageDatabase } from "./types";
 
 export class GenericSignalKeyStore implements ISignalProtocolStore {
 	private preKeyStore: ICollection<string>;

@@ -1,4 +1,4 @@
-import type { ICollection, IStorageDatabase } from "./types";
+import type { ICollection, IStorageDatabase } from "@wha.ts/types";
 
 export class InMemoryCollection<TValue = string>
 	implements ICollection<TValue>

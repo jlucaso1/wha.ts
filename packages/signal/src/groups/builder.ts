@@ -1,5 +1,5 @@
-import type { ISignalProtocolStore } from "@wha.ts/core";
 import type { SenderKeyDistributionMessage } from "@wha.ts/proto";
+import type { ISignalProtocolStore } from "@wha.ts/types";
 import type { SenderKeyState } from "./schemas";
 
 const MAX_SENDER_KEY_STATES = 5;

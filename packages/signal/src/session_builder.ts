@@ -217,13 +217,6 @@ export class SessionBuilder {
 		const agreements = [agreement1, agreement2, agreement3];
 
 		if (ourEphemeralKey && theirEphemeralPubKey) {
-			console.trace(
-				"Using ephemeral keys for session establishment",
-				"ourEphemeralKey:",
-				ourEphemeralKey.publicKey,
-				"theirEphemeralPubKey:",
-				theirEphemeralPubKey,
-			);
 			const agreement4 = Curve.sharedKey(
 				ourEphemeralKey.privateKey,
 				theirEphemeralPubKey,

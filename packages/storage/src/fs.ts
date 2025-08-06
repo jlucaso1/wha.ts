@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ICollection, IStorageDatabase } from "./types";
+import type { ICollection, IStorageDatabase } from "@wha.ts/types";
 
 function isNodeError(error: unknown): error is ErrnoException {
 	return error instanceof Error && "code" in error;

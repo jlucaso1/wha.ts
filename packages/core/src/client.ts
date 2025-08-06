@@ -6,8 +6,8 @@ import {
 	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
-import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
-import type { FileSystemStorageDatabase } from "@wha.ts/storage/fs";
+import type { DecryptionDumper } from "@wha.ts/types";
+import { generateMdTagPrefix, generatePreKeys } from "@wha.ts/types";
 import {
 	encodeBigEndian,
 	KEY_BUNDLE_TYPE,
@@ -39,7 +39,6 @@ import {
 import { MessageProcessor } from "./messaging/message-processor";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";
 import type { IAuthStateProvider } from "./state/interface";
-import { generateMdTagPrefix, generatePreKeys } from "./state/utils";
 import type { ILogger, WebSocketConfig } from "./transport/types";
 
 type EnsureSubtype<Source, T extends Source> = T;
@@ -51,17 +50,17 @@ type PresenceState = EnsureSubtype<
 
 type ChatState = EnsureSubtype<SINGLE_BYTE_TOKENS_TYPE, "composing" | "paused">;
 
-interface ClientConfig {
+interface ClientConfig<TStorage> {
 	auth: IAuthStateProvider;
 	logger?: ILogger;
 	wsOptions?: Partial<WebSocketConfig>;
 	version?: number[];
 	browser?: readonly [string, string, string];
 	connectionManager?: ConnectionManager;
-	dumpDecryptionBundles?: {
-		enabled: boolean;
+	dumper?: {
+		func: DecryptionDumper<TStorage>;
 		path: string;
-		storage: FileSystemStorageDatabase;
+		storage: TStorage;
 	};
 }
 
@@ -79,16 +78,17 @@ export declare interface WhaTSClient {
 		listener: (data: ClientEventMap[K]) => void,
 	): void;
 }
-// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: solve later
-export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
-	private config: Omit<ClientConfig, "logger"> & { logger: ILogger };
+export class WhaTSClient<
+	TStorage = unknown,
+> extends TypedEventTarget<ClientEventMap> {
+	private config: Omit<ClientConfig<TStorage>, "logger"> & { logger: ILogger };
 	private messageProcessor: MessageProcessor;
 	protected connectionManager: ConnectionManager;
 	private authenticator: Authenticator;
 	private epoch = 0;
 	public signalStore: SignalProtocolStoreAdapter;
 
-	constructor(config: ClientConfig) {
+	constructor(config: ClientConfig<TStorage>) {
 		super();
 
 		const logger = config.logger || (console as ILogger);
@@ -107,8 +107,8 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 				),
 				logger: logger,
 			},
-			dumpDecryptionBundles: config.dumpDecryptionBundles,
-		} satisfies ClientConfig;
+			dumper: config.dumper,
+		} satisfies ClientConfig<TStorage>;
 
 		this.addListener("connection.update", (update) => {
 			if (update.connection === "open") {
@@ -127,10 +127,10 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 		this.signalStore = new SignalProtocolStoreAdapter(this.auth, this.logger);
 
 		let onPreDecryptCallback: ((node: BinaryNode) => void) | undefined;
-		if (this.config.dumpDecryptionBundles?.enabled) {
-			const { path: dumpDir, storage } = this.config.dumpDecryptionBundles;
+		if (this.config.dumper) {
+			const { func: dumperFunc, path: dumpDir, storage } = this.config.dumper;
 			onPreDecryptCallback = (node: BinaryNode) => {
-				dumpDecryptionData(dumpDir, node, this.auth.creds, storage);
+				dumperFunc(dumpDir, node, this.auth.creds, storage);
 			};
 			this.logger.warn(
 				`[DEBUG] Decryption bundle dumping is ENABLED. Saving to: ${dumpDir}`,
@@ -596,6 +596,8 @@ export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	}
 }
 
-export const createWAClient = (config: ClientConfig): WhaTSClient => {
+export const createWAClient = <TStorage>(
+	config: ClientConfig<TStorage>,
+): WhaTSClient<TStorage> => {
 	return new WhaTSClient(config);
 };

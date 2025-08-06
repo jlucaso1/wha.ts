@@ -21,6 +21,8 @@
 		"noPropertyAccessFromIndexSignature": false,
 		"baseUrl": ".",
 		"paths": {
+			"@wha.ts/types": ["packages/types/src/index.ts"],
+			"@wha.ts/types/*": ["packages/types/src/*"],
 			"@wha.ts/core": ["packages/core/src/index.ts"],
 			"@wha.ts/core/*": ["packages/core/src/*"],
 			"@wha.ts/binary": ["packages/binary/src/index.ts"],

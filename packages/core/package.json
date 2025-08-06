@@ -38,7 +38,8 @@
 		"@bufbuild/protobuf": "^2.2.5",
 		"@wha.ts/binary": "workspace:*",
 		"@wha.ts/proto": "workspace:*",
-		"@wha.ts/utils": "workspace:*",
-		"@wha.ts/signal": "workspace:*"
+		"@wha.ts/signal": "workspace:*",
+		"@wha.ts/types": "workspace:*",
+		"@wha.ts/utils": "workspace:*"
 	}
 }

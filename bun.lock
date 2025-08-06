@@ -30,6 +30,7 @@
         "@wha.ts/binary": "workspace:*",
         "@wha.ts/proto": "workspace:*",
         "@wha.ts/signal": "workspace:*",
+        "@wha.ts/types": "workspace:*",
         "@wha.ts/utils": "workspace:*",
       },
     },
@@ -85,7 +86,7 @@
       "name": "@wha.ts/storage",
       "version": "0.1.0",
       "dependencies": {
-        "@wha.ts/core": "workspace:*",
+        "@wha.ts/types": "workspace:*",
         "@wha.ts/utils": "workspace:*",
       },
       "devDependencies": {
@@ -105,6 +106,18 @@
       },
       "devDependencies": {
         "@types/bun": "^1.2.19",
+      },
+    },
+    "packages/types": {
+      "name": "@wha.ts/types",
+      "version": "0.1.0",
+      "dependencies": {
+        "@wha.ts/signal": "workspace:*",
+        "@wha.ts/utils": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "^8.4.0",
+        "typescript": "^5",
       },
     },
     "packages/utils": {
@@ -308,6 +321,8 @@
     "@wha.ts/storage": ["@wha.ts/storage@workspace:packages/storage"],
 
     "@wha.ts/test": ["@wha.ts/test@workspace:packages/test"],
+
+    "@wha.ts/types": ["@wha.ts/types@workspace:packages/types"],
 
     "@wha.ts/utils": ["@wha.ts/utils@workspace:packages/utils"],
 

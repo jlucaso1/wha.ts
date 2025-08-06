@@ -1,5 +1,5 @@
 {
-	"name": "@wha.ts/storage",
+	"name": "@wha.ts/types",
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
@@ -21,7 +21,7 @@
 		"build": "tsup src/index.ts --format=esm --dts"
 	},
 	"dependencies": {
-		"@wha.ts/types": "workspace:*",
+		"@wha.ts/signal": "workspace:*",
 		"@wha.ts/utils": "workspace:*"
 	},
 	"devDependencies": {

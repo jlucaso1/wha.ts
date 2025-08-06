@@ -1,6 +1,6 @@
 import { fromBinary } from "@bufbuild/protobuf";
-import type { ISignalProtocolStore } from "@wha.ts/core";
 import { SenderKeyMessageSchema } from "@wha.ts/proto";
+import type { ISignalProtocolStore } from "@wha.ts/types";
 import { aesDecrypt, hkdf, hmacSign } from "@wha.ts/utils";
 import type { SenderKeyRecord, SenderKeyState } from "./schemas";
 

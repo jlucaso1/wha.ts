@@ -4,6 +4,8 @@ import {
 	GenericAuthState,
 	InMemoryStorageDatabase,
 } from "@wha.ts/storage";
+import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
+import type { IStorageDatabase } from "@wha.ts/types";
 import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
 
@@ -47,14 +49,19 @@ const logger = pino({ base: undefined }, transport);
 const authState = await GenericAuthState.init(storage);
 
 async function runExample() {
+	const dumperConfig =
+		!IS_BROWSER && process.env.CAPTURE === "true"
+			? {
+					func: dumpDecryptionData,
+					path: "./decryption-dumps",
+					storage: storage as FileSystemStorageDatabase,
+				}
+			: undefined;
+
 	const client = createWAClient({
 		auth: authState,
 		logger: logger,
-		dumpDecryptionBundles: {
-			enabled: !IS_BROWSER && process.env.CAPTURE === "true",
-			path: "./decryption-dumps",
-			storage: storage as FileSystemStorageDatabase,
-		},
+		dumper: dumperConfig,
 	});
 
 	client.addListener("connection.update", (update) => {

@@ -1,16 +1,18 @@
-import type {
-	AuthenticationCreds,
-	IAuthStateProvider,
-	ISignalProtocolStore,
-} from "@wha.ts/core";
-import { generatePreKeys, initAuthCreds } from "@wha.ts/core";
-import { AuthenticationCredsSchema } from "@wha.ts/core/state/interface";
+import {
+	type AuthenticationCreds,
+	AuthenticationCredsSchema,
+	generatePreKeys,
+	type IAuthStateProvider,
+	type ICollection,
+	type ISignalProtocolStore,
+	type IStorageDatabase,
+	initAuthCreds,
+} from "@wha.ts/types";
 import { Mutex } from "@wha.ts/utils/mutex-utils";
 import { CREDS_KEY } from "./constants";
 import { InMemoryStorageDatabase } from "./in-memory";
 import { deserialize, serialize } from "./serialization";
 import { GenericSignalKeyStore } from "./signal-store";
-import type { ICollection, IStorageDatabase } from "./types";
 
 export class GenericAuthState implements IAuthStateProvider {
 	public creds: AuthenticationCreds;
