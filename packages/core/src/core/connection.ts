@@ -407,20 +407,6 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			throw error;
 		}
 	}
-
-	public getDebugStateSnapshot() {
-		return {
-			state: this.state,
-			routingInfo: this.routingInfo ? bytesToHex(this.routingInfo) : undefined,
-			creds: {
-				me: this.creds.me,
-				routingInfo: this.creds.routingInfo
-					? bytesToHex(this.creds.routingInfo)
-					: undefined,
-			},
-			wsConfig: this.config,
-		};
-	}
 }
 
 export { ConnectionManager };

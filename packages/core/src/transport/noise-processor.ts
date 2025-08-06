@@ -269,12 +269,6 @@ export class NoiseProcessor extends EventTarget {
 		return encryptedLocalStaticPublic;
 	}
 
-	getDebugStateSnapshot(): Readonly<NoiseState> {
-		// Exclude logger from the snapshot to avoid serialization errors
-		const { logger: _, ...rest } = this.state;
-		return rest as Readonly<NoiseState>;
-	}
-
 	private verifyCertificateChain(
 		certChain: CertChain,
 		decryptedServerStatic: Uint8Array,

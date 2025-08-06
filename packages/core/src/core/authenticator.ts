@@ -522,23 +522,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 				this.logger.error({ err }, "Failed to trigger connection close"),
 			);
 	}
-
-	public getDebugStateSnapshot(): {
-		internalState: AuthState;
-		qrRetryCount: number;
-		credsSummary: Partial<AuthenticationCreds>;
-	} {
-		return {
-			internalState: this.state,
-			qrRetryCount: this.qrRetryCount,
-			credsSummary: {
-				me: this.authStateProvider.creds.me,
-				platform: this.authStateProvider.creds.platform,
-				registered: this.authStateProvider.creds.registered,
-				signalIdentities: this.authStateProvider.creds.signalIdentities,
-			},
-		};
-	}
 }
 
 export { Authenticator };
