@@ -17,14 +17,7 @@ import {
 	TypedEventTarget,
 } from "@wha.ts/types/generics/typed-event-target";
 import type { KeyPair } from "@wha.ts/utils";
-import {
-	bytesToBase64,
-	bytesToUtf8,
-	Curve,
-	concatBytes,
-	equalBytes,
-	hmacSign,
-} from "@wha.ts/utils";
+import { Curve, concatBytes, equalBytes, hmacSign } from "@wha.ts/utils";
 import type {
 	AuthenticationCreds,
 	IAuthStateProvider,
@@ -32,6 +25,7 @@ import type {
 import type { ILogger } from "../transport/types";
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { ConnectionManager } from "./connection";
+import { QRCodeGenerator } from "./qrcode";
 import type { ErrorWithStatusCode, IConnectionActions } from "./types";
 
 enum AuthState {
@@ -47,8 +41,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private authStateProvider: IAuthStateProvider;
 	private logger: ILogger;
 	private connectionActions: IConnectionActions;
-	private qrTimeout?: ReturnType<typeof setTimeout>;
-	private qrRetryCount = 0;
+	private qrCodeGenerator: QRCodeGenerator;
 	private state: AuthState = AuthState.IDLE;
 
 	private setState(newState: AuthState): void {
@@ -56,9 +49,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			this.state = newState;
 		}
 	}
-
-	private initialQrTimeoutMs = 60_000;
-	private subsequentQrTimeoutMs = 20_000;
 
 	constructor(
 		connectionManager: ConnectionManager,
@@ -71,6 +61,30 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.authStateProvider = authStateProvider;
 		this.logger = logger;
 		this.connectionActions = connectionActions;
+		this.qrCodeGenerator = new QRCodeGenerator(authStateProvider, logger);
+
+		this.qrCodeGenerator.addEventListener(
+			"qr",
+			(event: TypedCustomEvent<{ qr: string }>) => {
+				this.dispatchTypedEvent("connection.update", { qr: event.detail.qr });
+			},
+		);
+
+		this.qrCodeGenerator.addEventListener(
+			"error",
+			(event: TypedCustomEvent<{ error: Error }>) => {
+				const { error } = event.detail;
+				this.dispatchTypedEvent("connection.update", {
+					connection: "close",
+					error,
+				});
+				this.connectionActions
+					.closeConnection(error)
+					.catch((err) =>
+						this.logger.error({ err }, "Failed to trigger connection close"),
+					);
+			},
+		);
 
 		this.connectionManager.addEventListener(
 			"node.received",
@@ -84,7 +98,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			(event: TypedCustomEvent<{ error: ErrorWithStatusCode }>) => {
 				const error = event.detail.error;
 				this.logger.error({ err: error }, "Connection error");
-				this.clearQrTimeout();
+				this.qrCodeGenerator.stop();
 				this.setState(AuthState.FAILED);
 				this.dispatchTypedEvent("connection.update", {
 					connection: "close",
@@ -95,16 +109,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		);
 
 		this.connectionManager.addEventListener("ws.close", () => {
-			this.clearQrTimeout();
+			this.qrCodeGenerator.stop();
 			this.setState(AuthState.IDLE);
 		});
-	}
-
-	private clearQrTimeout(): void {
-		if (this.qrTimeout) {
-			clearTimeout(this.qrTimeout);
-			this.qrTimeout = undefined;
-		}
 	}
 
 	private handleNodeReceived = (node: BinaryNode): void => {
@@ -167,62 +174,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		const refNodes = getBinaryNodeChildren(pairDeviceNode, "ref");
 
-		this.qrRetryCount = 0;
-		this.generateAndEmitQR(refNodes);
-	}
-
-	private generateAndEmitQR(refNodes: BinaryNode[]): void {
-		this.clearQrTimeout();
-
-		const refNode = refNodes[this.qrRetryCount];
-		if (!refNode?.content) {
-			this.logger.error(
-				{ refsAvailable: refNodes.length, count: this.qrRetryCount },
-				"No more QR refs available, pairing timed out/failed",
-			);
-			const error = new Error("QR code generation failed (no refs left)");
-			this.dispatchTypedEvent("connection.update", {
-				connection: "close",
-				error,
-			});
-			this.connectionActions
-				.closeConnection(error)
-				.catch((err) =>
-					this.logger.error({ err }, "Failed to trigger connection close"),
-				);
-			return;
-		}
-
-		if (!(refNode.content instanceof Uint8Array)) {
-			throw new Error("Invalid reference node content");
-		}
-
-		const ref = bytesToUtf8(refNode.content);
-		const noiseKeyB64 = bytesToBase64(
-			this.authStateProvider.creds.noiseKey.publicKey,
-		);
-		const identityKeyB64 = bytesToBase64(
-			this.authStateProvider.creds.signedIdentityKey.publicKey,
-		);
-		const advSecretB64 = bytesToBase64(
-			this.authStateProvider.creds.advSecretKey,
-		);
-
-		const qr = [ref, noiseKeyB64, identityKeyB64, advSecretB64].join(",");
-
-		this.dispatchTypedEvent("connection.update", { qr });
-
-		const timeoutMs =
-			this.qrRetryCount === 0
-				? this.initialQrTimeoutMs
-				: this.subsequentQrTimeoutMs;
-		this.qrTimeout = setTimeout(() => {
-			this.qrRetryCount += 1;
-			this.logger.info(
-				`QR timeout, generating new QR (retry ${this.qrRetryCount})`,
-			);
-			this.generateAndEmitQR(refNodes);
-		}, timeoutMs);
+		this.qrCodeGenerator.start(refNodes);
 	}
 
 	private _createSignalIdentity(
@@ -396,7 +348,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			return;
 		}
 		this.setState(AuthState.PROCESSING_PAIR_SUCCESS);
-		this.clearQrTimeout();
+		this.qrCodeGenerator.stop();
 
 		try {
 			const msgId = node.attrs.id;
@@ -468,7 +420,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	}
 
 	private handleLoginSuccess(node: BinaryNode): void {
-		this.clearQrTimeout();
+		this.qrCodeGenerator.stop();
 		this.state = AuthState.AUTHENTICATED;
 
 		const platform = node.attrs.platform;
@@ -510,7 +462,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		this.logger.error({ code, attrs: node.attrs }, "Login failed");
 		const error = new Error(`Login failed: ${reason}`);
 
-		this.clearQrTimeout();
+		this.qrCodeGenerator.stop();
 		this.state = AuthState.FAILED;
 		this.dispatchTypedEvent("connection.update", {
 			connection: "close",
