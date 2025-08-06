@@ -1,5 +1,4 @@
-import type { AuthenticationCreds } from "@wha.ts/core";
-import { SignedKeyPairSchema, ZodUint8Array } from "@wha.ts/utils/schemas";
+import { ZodUint8Array } from "@wha.ts/utils/schemas";
 import { z } from "zod/v4";
 import { BaseKeyType } from "./base_key_type";
 import { ChainType } from "./chain_type";
@@ -24,38 +23,6 @@ export const SignalIdentitySchema = z.object({
 	identifier: ProtocolAddressSchema,
 	identifierKey: ZodUint8Array,
 });
-
-export const AuthenticationCredsSchema: z.ZodType<AuthenticationCreds> =
-	z.object({
-		noiseKey: KeyPairSchema,
-		pairingEphemeralKeyPair: KeyPairSchema,
-		signedIdentityKey: KeyPairSchema,
-		signedPreKey: SignedKeyPairSchema,
-		registrationId: z.number(),
-		advSecretKey: ZodUint8Array,
-		me: z
-			.object({
-				id: z.string(),
-				name: z.string().optional(),
-			})
-			.optional(),
-		// The `account` field holds a protobuf-generated object.
-		// Using z.any() is the most robust way to handle this without creating a brittle Zod schema
-		// that needs to be updated every time the proto definition changes.
-		account: z.any().optional(),
-		platform: z.string().optional(),
-		signalIdentities: z.array(SignalIdentitySchema).optional(),
-		nextPreKeyId: z.number(),
-		firstUnuploadedPreKeyId: z.number(),
-		myAppStateKeyId: z.string().optional(),
-		accountSyncCounter: z.number(),
-		accountSettings: z.object({
-			unarchiveChats: z.boolean(),
-		}),
-		registered: z.boolean(),
-		pairingCode: z.string().optional(),
-		routingInfo: ZodUint8Array.optional(),
-	});
 
 export const ChainKeySchema = z.object({
 	counter: z.number(),

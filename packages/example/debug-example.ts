@@ -6,10 +6,7 @@ import {
 	startDebugREPL,
 	type WhaTsCoreModules,
 } from "@wha.ts/debug";
-import {
-	FileSystemSimpleKeyValueStore,
-	GenericAuthState,
-} from "@wha.ts/storage";
+import { FileSystemStorageDatabase, GenericAuthState } from "@wha.ts/storage";
 import { renderUnicodeCompact } from "uqr";
 
 const IS_NODE =
@@ -21,8 +18,8 @@ async function main() {
 	console.log("Starting Wha.ts Debug Example...");
 
 	const storageDir = "./debug-example-storage";
-	const fileStore = new FileSystemSimpleKeyValueStore(storageDir);
-	const authState = await GenericAuthState.init(fileStore);
+	const storage = new FileSystemStorageDatabase(storageDir);
+	const authState = await GenericAuthState.init(storage);
 
 	console.log(
 		`Authentication state initialized. Registered: ${
@@ -164,8 +161,6 @@ async function main() {
 		);
 	});
 
-	client.addListener("node.received", ({ node }) => {});
-
 	client.addListener("message.received", async (messageData) => {
 		const messageContent = messageData.message;
 		const senderAddress = messageData.sender;
@@ -240,7 +235,11 @@ async function main() {
 				if (result.ack) console.error("Error ACK details:", result.ack.attrs);
 			} else if (result.ack) {
 				console.log(
-					`Message sent (ID: ${result.messageId}) and acknowledged by server. Ack details: ${JSON.stringify(result.ack.attrs)}`,
+					`Message sent (ID: ${
+						result.messageId
+					}) and acknowledged by server. Ack details: ${JSON.stringify(
+						result.ack.attrs,
+					)}`,
 				);
 			} else {
 				console.log(

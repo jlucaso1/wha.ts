@@ -8,7 +8,10 @@ import {
 } from "@wha.ts/proto";
 import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
-import { TypedEventTarget } from "../generics/typed-event-target";
+import {
+	type TypedCustomEvent,
+	TypedEventTarget,
+} from "../generics/typed-event-target";
 import type { MessageProcessor } from "../messaging/message-processor";
 import type { AuthenticationCreds } from "../state/interface";
 import { FrameHandler } from "../transport/frame-handler";
@@ -43,17 +46,19 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private closingError?: Error;
 
 	private handleWsOpenEvent = () => this.handleWsOpen();
-	private handleWsMessageEvent = (event: Event) => {
-		if (event instanceof CustomEvent) this.handleWsMessage(event.detail);
+	private handleWsMessageEvent = (
+		event: TypedCustomEvent<{ data: Uint8Array }>,
+	) => {
+		this.handleWsMessage(event.detail.data);
 	};
-	private handleWsErrorEvent = (event: Event) => {
-		if (event instanceof CustomEvent) this.handleWsError(event.detail);
+	private handleWsErrorEvent = (event: TypedCustomEvent<Error>) => {
+		this.handleWsError(event.detail);
 	};
-	private handleWsCloseEvent = (event: Event) => {
-		if (event instanceof CustomEvent) {
-			const { code, reason } = event.detail;
-			this.handleWsClose(code, reason);
-		}
+	private handleWsCloseEvent = (
+		event: TypedCustomEvent<{ code: number; reason: string }>,
+	) => {
+		const { code, reason } = event.detail;
+		this.handleWsClose(code, utf8ToBytes(reason));
 	};
 
 	constructor(
@@ -114,7 +119,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private setupWsListeners(): void {
 		this.ws.addEventListener("open", this.handleWsOpenEvent);
 		this.ws.addEventListener(
-			"message",
+			"received",
 			this.handleWsMessageEvent as EventListener,
 		);
 		this.ws.addEventListener("error", this.handleWsErrorEvent as EventListener);
@@ -124,7 +129,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private removeWsListeners(): void {
 		this.ws.removeEventListener("open", this.handleWsOpenEvent);
 		this.ws.removeEventListener(
-			"message",
+			"received",
 			this.handleWsMessageEvent as EventListener,
 		);
 		this.ws.removeEventListener(
@@ -401,6 +406,20 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 			this.logger.error({ err: error }, "Reconnect attempt failed");
 			throw error;
 		}
+	}
+
+	public getDebugStateSnapshot() {
+		return {
+			state: this.state,
+			routingInfo: this.routingInfo ? bytesToHex(this.routingInfo) : undefined,
+			creds: {
+				me: this.creds.me,
+				routingInfo: this.creds.routingInfo
+					? bytesToHex(this.creds.routingInfo)
+					: undefined,
+			},
+			wsConfig: this.config,
+		};
 	}
 }
 

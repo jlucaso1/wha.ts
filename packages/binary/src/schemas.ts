@@ -12,5 +12,3 @@ export const BinaryNodeSchema = z.object({
 			.optional();
 	},
 });
-
-export type BinaryNode = z.infer<typeof BinaryNodeSchema>;

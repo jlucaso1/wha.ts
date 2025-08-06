@@ -1,9 +1,19 @@
+import { TypedEventTarget } from "../generics/typed-event-target";
+
 export interface ILogger {
 	info(obj: unknown, msg?: string): void;
 	error(obj: unknown, msg?: string): void;
 	warn(obj: unknown, msg?: string): void;
 	debug(...data: unknown[]): void;
 	trace(...data: unknown[]): void;
+}
+
+export interface WebSocketClientEventMap {
+	open: null;
+	received: { data: Uint8Array };
+	error: Error;
+	close: { code: number; reason: string };
+	sent: { data: Uint8Array };
 }
 
 export interface WebSocketConfig {
@@ -14,7 +24,7 @@ export interface WebSocketConfig {
 	headers?: { [key: string]: string };
 }
 
-export abstract class IWebSocketClient extends EventTarget {
+export abstract class IWebSocketClient extends TypedEventTarget<WebSocketClientEventMap> {
 	abstract get isOpen(): boolean;
 	abstract get isClosed(): boolean;
 	abstract get isConnecting(): boolean;

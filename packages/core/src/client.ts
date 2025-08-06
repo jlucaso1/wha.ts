@@ -58,7 +58,7 @@ interface ClientConfig {
 	connectionManager?: ConnectionManager;
 }
 
-declare interface WhaTSClient {
+export declare interface WhaTSClient {
 	ws: ConnectionManager["ws"];
 	auth: IAuthStateProvider;
 	logger: ILogger;
@@ -73,7 +73,7 @@ declare interface WhaTSClient {
 	): void;
 }
 // biome-ignore lint/suspicious/noUnsafeDeclarationMerging: solve later
-class WhaTSClient extends TypedEventTarget<ClientEventMap> {
+export class WhaTSClient extends TypedEventTarget<ClientEventMap> {
 	private config: Omit<ClientConfig, "logger"> & { logger: ILogger };
 	private messageProcessor: MessageProcessor;
 	protected connectionManager: ConnectionManager;

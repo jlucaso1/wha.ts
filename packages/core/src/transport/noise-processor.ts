@@ -20,7 +20,7 @@ import {
 import { NOISE_MODE, WHATSAPP_ROOT_CA_PUBLIC_KEY } from "../defaults";
 import type { ILogger } from "./types";
 
-interface NoiseState {
+export interface NoiseState {
 	handshakeHash: Uint8Array;
 	salt: Uint8Array;
 	encryptionKey: Uint8Array;
@@ -131,12 +131,6 @@ export class NoiseProcessor extends EventTarget {
 			readCounter: 0n,
 			writeCounter: 0n,
 		};
-
-		this.dispatchEvent(
-			new CustomEvent("debug:noiseprocessor:state_update", {
-				detail: { stateSnapshot: this.getDebugStateSnapshot() },
-			}),
-		);
 	}
 
 	encryptMessage(plaintext: Uint8Array) {
@@ -153,14 +147,6 @@ export class NoiseProcessor extends EventTarget {
 		};
 		this.mixIntoHandshakeHash(ciphertext);
 
-		this.dispatchEvent(
-			new CustomEvent("debug:noiseprocessor:payload_encrypted", {
-				detail: {
-					plaintext,
-					ciphertext,
-				},
-			}),
-		);
 		return ciphertext;
 	}
 
@@ -185,15 +171,7 @@ export class NoiseProcessor extends EventTarget {
 				: this.state.writeCounter + 1n,
 		};
 		this.mixIntoHandshakeHash(ciphertext);
-		// Emit debug event after decryption
-		this.dispatchEvent(
-			new CustomEvent("debug:noiseprocessor:payload_decrypted", {
-				detail: {
-					ciphertext,
-					plaintext,
-				},
-			}),
-		);
+
 		return plaintext;
 	}
 
@@ -215,12 +193,6 @@ export class NoiseProcessor extends EventTarget {
 			writeCounter: 0n,
 			isHandshakeFinished: true,
 		};
-
-		this.dispatchEvent(
-			new CustomEvent("debug:noiseprocessor:state_update", {
-				detail: { stateSnapshot: this.getDebugStateSnapshot() },
-			}),
-		);
 	}
 
 	processHandshake(

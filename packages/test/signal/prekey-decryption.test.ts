@@ -4,7 +4,7 @@ import { jidDecode } from "@wha.ts/binary";
 import { SignalProtocolStoreAdapter } from "@wha.ts/core";
 import { PreKeySignalMessageSchema } from "@wha.ts/proto";
 import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
-import { GenericAuthState, InMemorySimpleKeyValueStore } from "@wha.ts/storage";
+import { GenericAuthState, InMemoryStorageDatabase } from "@wha.ts/storage";
 import { Curve, concatBytes } from "@wha.ts/utils";
 
 function encodeTupleByte(number1: number, number2: number): number {
@@ -28,7 +28,7 @@ const incomingPkMsgWithPreKeyId0 = {
 };
 
 test("should throw when trying to decrypt a pkmsg with a non-existent preKeyId", async () => {
-	const storage = new InMemorySimpleKeyValueStore();
+	const storage = new InMemoryStorageDatabase();
 	const authStateProvider = await GenericAuthState.init(storage);
 
 	await authStateProvider.keys.set({ "pre-key": { "0": null } });

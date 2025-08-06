@@ -1,8 +1,8 @@
 import { createWAClient } from "@wha.ts/core";
 import {
-	FileSystemSimpleKeyValueStore,
+	FileSystemStorageDatabase,
 	GenericAuthState,
-	InMemorySimpleKeyValueStore,
+	InMemoryStorageDatabase,
 } from "@wha.ts/storage";
 import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
@@ -10,8 +10,8 @@ import { renderUnicodeCompact } from "uqr";
 const IS_BROWSER = typeof window !== "undefined";
 
 const storage = IS_BROWSER
-	? new InMemorySimpleKeyValueStore()
-	: new FileSystemSimpleKeyValueStore("./example-storage");
+	? new InMemoryStorageDatabase()
+	: new FileSystemStorageDatabase("./example-storage");
 
 const transport = IS_BROWSER
 	? pino.transport({
@@ -45,6 +45,7 @@ const transport = IS_BROWSER
 const logger = pino({ base: undefined }, transport);
 
 const authState = await GenericAuthState.init(storage);
+
 async function runExample() {
 	const client = createWAClient({
 		auth: authState,

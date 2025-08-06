@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-// MCP Imports
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -19,7 +18,6 @@ interface DebugAPIServerOptions {
 	controller: DebugController;
 }
 
-// Store for active transports and their associated McpServer instances
 interface ActiveSession {
 	server: McpServer;
 	transport: StreamableHTTPServerTransport | SSEServerTransport;
@@ -27,7 +25,6 @@ interface ActiveSession {
 }
 const activeSessions: Record<string, ActiveSession> = {};
 
-// Helper to create and configure a new McpServer instance for a session
 function createSessionMcpServer(
 	controller: DebugController,
 	port: number,
@@ -48,7 +45,6 @@ export function startDebugAPIServer(options: DebugAPIServerOptions) {
 	app.use(express.json());
 	registerDebugRoutes(app, options.controller);
 
-	// --- Streamable HTTP Endpoint (`/mcp`) ---
 	app.all(
 		MCP_STREAMABLE_PATH,
 		async (req: express.Request, res: express.Response) => {
@@ -69,7 +65,6 @@ export function startDebugAPIServer(options: DebugAPIServerOptions) {
 				!sessionId &&
 				isInitializeRequest(req.body)
 			) {
-				// New Streamable HTTP session initialization
 				const newSessionId = randomUUID();
 				const mcpServerForSession = createSessionMcpServer(
 					options.controller,
@@ -132,7 +127,6 @@ export function startDebugAPIServer(options: DebugAPIServerOptions) {
 				return;
 			}
 
-			// Existing session or newly created one, handle the request
 			try {
 				await (
 					session.transport as StreamableHTTPServerTransport
@@ -149,7 +143,6 @@ export function startDebugAPIServer(options: DebugAPIServerOptions) {
 		},
 	);
 
-	// --- Legacy SSE Initialization Endpoint (`/sse`) ---
 	app.get(
 		MCP_SSE_INIT_PATH,
 		async (_req: express.Request, res: express.Response) => {
@@ -195,7 +188,6 @@ export function startDebugAPIServer(options: DebugAPIServerOptions) {
 		},
 	);
 
-	// --- Legacy SSE Message Endpoint (`/messages`) ---
 	app.post(
 		MCP_SSE_MESSAGE_PATH,
 		async (req: express.Request, res: express.Response) => {
@@ -245,7 +237,6 @@ export function startDebugAPIServer(options: DebugAPIServerOptions) {
 	const shutdown = (signal: string) => {
 		console.log(`[DebugAPI] Received ${signal}, shutting down...`);
 
-		// Close all active MCP sessions
 		for (const sessionId in activeSessions) {
 			const session = activeSessions[sessionId];
 			if (session) {

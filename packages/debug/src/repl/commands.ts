@@ -3,7 +3,7 @@ import { sanitizeObjectForJSON } from "../api/sanitize";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
 
-function formatDataForDisplay(data: any): string {
+function formatDataForDisplay(data: unknown): string {
 	if (typeof data === "undefined") return "undefined";
 	if (data === null) return "null";
 	if (typeof data === "string") return data;

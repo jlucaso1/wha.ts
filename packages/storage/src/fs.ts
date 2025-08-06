@@ -1,86 +1,78 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ISimpleKeyValueStore } from "./types";
+import type { ICollection, IStorageDatabase } from "./types";
 
-export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
-	private baseDir: string;
+export class FileSystemCollection implements ICollection<string> {
+	private collectionDirectory: string;
 
-	constructor(directoryPath: string) {
-		this.baseDir = path.resolve(directoryPath);
+	constructor(basePath: string, collectionName: string) {
+		this.collectionDirectory = path.resolve(basePath, collectionName);
 		console.log(
-			`[FileSystemSimpleKeyValueStore] Instance CREATED. Base directory: ${this.baseDir}`,
+			`[FileSystemCollection] Instance CREATED for '${collectionName}'. Directory: ${this.collectionDirectory}`,
 		);
-		import("node:fs/promises").then((fsModule) => {
-			fsModule.mkdir(this.baseDir, { recursive: true }).catch((err) => {
-				console.error(
-					`[FileSystemSimpleKeyValueStore] Failed to create base directory ${this.baseDir}:`,
-					err,
-				);
-				throw err;
-			});
+		fs.mkdir(this.collectionDirectory, { recursive: true }).catch((err) => {
+			console.error(
+				`[FileSystemCollection] Failed to create directory ${this.collectionDirectory}:`,
+				err,
+			);
 		});
 	}
 
-	private keyToRelativeFilePath(key: string): string {
-		const sanitizeSegment = (segment: string): string => {
-			return segment.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-		};
+	private sanitizeSegment(segment: string): string {
+		return segment.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+	}
 
+	private keyToRelativeFilePath(key: string): string {
 		const parts = key.split(":");
 		if (parts.length === 1) {
-			return `${sanitizeSegment(parts[0] ?? "")}.json`;
+			return `${this.sanitizeSegment(parts[0] ?? "")}.json`;
 		}
-		const dirParts = parts.slice(0, -1).map(sanitizeSegment);
-		const fileName = `${sanitizeSegment(parts[parts.length - 1] ?? "")}.json`;
+		const dirParts = parts.slice(0, -1).map(this.sanitizeSegment);
+		const fileName = `${this.sanitizeSegment(
+			parts[parts.length - 1] ?? "",
+		)}.json`;
 		return path.join(...dirParts, fileName);
 	}
 
-	private relativeFilePathToKey(relPath: string): string | null {
-		if (!relPath.endsWith(".json")) return null;
-		const noExtension = relPath.slice(0, -5);
-		const parts = noExtension.split(path.sep);
-		return parts.join(":");
-	}
-
 	private getFullFilePath(key: string): string {
-		return path.join(this.baseDir, this.keyToRelativeFilePath(key));
+		return path.join(this.collectionDirectory, this.keyToRelativeFilePath(key));
 	}
 
-	async getItem(key: string): Promise<string | null> {
+	async get(key: string): Promise<string | null> {
 		const filePath = this.getFullFilePath(key);
 		try {
 			const data = await fs.readFile(filePath, "utf-8");
-			return data ? data : null;
+			return data || null;
 		} catch (error: any) {
 			if (error.code === "ENOENT") {
 				return null;
 			}
 			console.error(
-				`[FileSystemStore.getItem] Error reading key "${key}" from ${filePath}:`,
+				`[FileSystemCollection.get] Error reading key "${key}" from ${filePath}:`,
 				error,
 			);
 			throw error;
 		}
 	}
 
-	async setItem(key: string, value: string | null): Promise<void> {
+	async set(key: string, value: string | null): Promise<void> {
 		const filePath = this.getFullFilePath(key);
 		try {
 			await fs.mkdir(path.dirname(filePath), { recursive: true });
 			if (value === null) {
-				return await this.removeItem(key);
+				return await this.remove(key);
 			}
 			await fs.writeFile(filePath, value, "utf-8");
 		} catch (error) {
 			console.error(
-				`[FileSystemStore.setItem] Error writing key "${key}" to ${filePath}:`,
+				`[FileSystemCollection.set] Error writing key "${key}" to ${filePath}:`,
 				error,
 			);
 			throw error;
 		}
 	}
 
-	async removeItem(key: string): Promise<void> {
+	async remove(key: string): Promise<void> {
 		const filePath = this.getFullFilePath(key);
 		try {
 			await fs.unlink(filePath);
@@ -89,30 +81,21 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 				return;
 			}
 			console.error(
-				`[FileSystemStore.removeItem] Error removing key "${key}" from ${filePath}:`,
+				`[FileSystemCollection.remove] Error removing key "${key}" from ${filePath}:`,
 				error,
 			);
 			throw error;
 		}
 	}
 
-	async getKeys(prefix?: string): Promise<string[]> {
-		const reconstructKeyFromFullPath = (fullPath: string): string | null => {
-			if (!fullPath.startsWith(this.baseDir) || !fullPath.endsWith(".json")) {
-				return null;
-			}
-			const relPath = path.relative(this.baseDir, fullPath);
-			return this.relativeFilePathToKey(relPath);
-		};
-
-		const filesToScan: string[] = [this.baseDir];
+	async keys(prefix?: string): Promise<string[]> {
 		const allFilePaths: string[] = [];
+		const filesToScan: string[] = [this.collectionDirectory];
 
 		while (filesToScan.length > 0) {
 			const currentScanDir = filesToScan.pop();
-			if (!currentScanDir) {
-				break;
-			}
+			if (!currentScanDir) break;
+
 			try {
 				const entries = await fs.readdir(currentScanDir, {
 					withFileTypes: true,
@@ -128,7 +111,7 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 			} catch (error: any) {
 				if (error.code !== "ENOENT") {
 					console.error(
-						`[FileSystemStore.getKeys] Error during directory scan of ${currentScanDir}:`,
+						`[FileSystemCollection.keys] Error scanning directory ${currentScanDir}:`,
 						error,
 					);
 				}
@@ -136,7 +119,12 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 		}
 
 		const keys = allFilePaths
-			.map(reconstructKeyFromFullPath)
+			.map((fullPath) => {
+				const relPath = path.relative(this.collectionDirectory, fullPath);
+				if (!relPath.endsWith(".json")) return null;
+				const noExtension = relPath.slice(0, -5);
+				return noExtension.split(path.sep).join(":");
+			})
 			.filter((k) => k !== null) as string[];
 
 		if (prefix) {
@@ -146,30 +134,32 @@ export class FileSystemSimpleKeyValueStore implements ISimpleKeyValueStore {
 	}
 
 	async clear(prefix?: string): Promise<void> {
-		const keysToRemove = await this.getKeys(prefix);
-		for (const key of keysToRemove) {
-			await this.removeItem(key);
+		const keysToRemove = await this.keys(prefix);
+		await Promise.all(keysToRemove.map((key) => this.remove(key)));
+	}
+}
+
+export class FileSystemStorageDatabase implements IStorageDatabase {
+	private baseDir: string;
+	private collections = new Map<string, FileSystemCollection>();
+
+	constructor(directoryPath: string) {
+		this.baseDir = path.resolve(directoryPath);
+		console.log(
+			`[FileSystemStorageDatabase] Instance CREATED. Base directory: ${this.baseDir}`,
+		);
+		fs.mkdir(this.baseDir, { recursive: true }).catch((err) => {
+			console.error(
+				`[FileSystemStorageDatabase] Failed to create base directory ${this.baseDir}:`,
+				err,
+			);
+		});
+	}
+
+	getCollection<TValue = string>(name: string): ICollection<TValue> {
+		if (!this.collections.has(name)) {
+			this.collections.set(name, new FileSystemCollection(this.baseDir, name));
 		}
-	}
-
-	async getItems(
-		keys: string[],
-	): Promise<{ key: string; value: string | null }[]> {
-		return Promise.all(
-			keys.map(async (key) => ({ key, value: await this.getItem(key) })),
-		);
-	}
-
-	async setItems(
-		items: { key: string; value: string | null }[],
-	): Promise<void> {
-		await Promise.all(
-			items.map((item) => {
-				if (item.value === null) {
-					return this.removeItem(item.key);
-				}
-				return this.setItem(item.key, item.value);
-			}),
-		);
+		return this.collections.get(name) as ICollection<TValue>;
 	}
 }

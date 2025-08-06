@@ -1,15 +1,22 @@
 import type { decodeBinaryNode } from "@wha.ts/binary";
+import type { WhaTSClient } from "@wha.ts/core/client";
 import type { ClientEventMap } from "@wha.ts/core/client-events";
+import type { Authenticator } from "@wha.ts/core/core/authenticator";
+import type { ConnectionManager } from "@wha.ts/core/core/connection";
+import type { MessageProcessor } from "@wha.ts/core/messaging/message-processor";
+import type { FrameHandler } from "@wha.ts/core/transport/frame-handler";
+import type { NoiseProcessor } from "@wha.ts/core/transport/noise-processor";
+import type { NativeWebSocketClient } from "@wha.ts/core/transport/websocket";
 import type { DebugController } from "./controller";
 
 export interface WhaTsCoreModules {
-	wsClient?: any;
-	frameHandler?: any;
-	noiseProcessor?: any;
-	connectionManager?: any;
-	authenticator?: any;
-	client?: any;
-	messageProcessor?: any;
+	wsClient?: NativeWebSocketClient;
+	frameHandler?: FrameHandler;
+	noiseProcessor?: NoiseProcessor;
+	connectionManager?: ConnectionManager;
+	authenticator?: Authenticator;
+	client?: WhaTSClient;
+	messageProcessor?: MessageProcessor;
 	decodeBinaryNode?: typeof decodeBinaryNode;
 }
 
@@ -18,28 +25,22 @@ export function attachHooks(
 	core: WhaTsCoreModules,
 ): void {
 	if (core.wsClient) {
-		core.wsClient.addEventListener(
-			"debug:websocket:sending_raw",
-			(event: any) => {
-				controller.recordNetworkEvent({
-					direction: "send",
-					layer: "websocket_raw",
-					data: event.detail.data,
-					length: event.detail.data.length,
-				});
-			},
-		);
-		core.wsClient.addEventListener(
-			"debug:websocket:received_raw",
-			(event: any) => {
-				controller.recordNetworkEvent({
-					direction: "receive",
-					layer: "websocket_raw",
-					data: event.detail.data,
-					length: event.detail.data.length,
-				});
-			},
-		);
+		core.wsClient.addEventListener("sent", (event) => {
+			controller.recordNetworkEvent({
+				direction: "send",
+				layer: "websocket_raw",
+				data: event.detail.data,
+				length: event.detail.data.length,
+			});
+		});
+		core.wsClient.addEventListener("received", (event) => {
+			controller.recordNetworkEvent({
+				direction: "receive",
+				layer: "websocket_raw",
+				data: event.detail.data,
+				length: event.detail.data.length,
+			});
+		});
 	}
 
 	if (core.frameHandler) {
@@ -122,18 +123,15 @@ export function attachHooks(
 	}
 
 	if (core.connectionManager) {
-		core.connectionManager.addEventListener(
-			"debug:connectionmanager:sending_node",
-			(event: any) => {
-				controller.recordNetworkEvent({
-					direction: "send",
-					layer: "xmpp_node",
-					data: event.detail.node,
-					length: JSON.stringify(event.detail.node).length,
-				});
-			},
-		);
-		core.connectionManager.addEventListener("node.received", (event: any) => {
+		core.connectionManager.addEventListener("node.sent", (event) => {
+			controller.recordNetworkEvent({
+				direction: "send",
+				layer: "xmpp_node",
+				data: event.detail.node,
+				length: JSON.stringify(event.detail.node).length,
+			});
+		});
+		core.connectionManager.addEventListener("node.received", (event) => {
 			controller.recordNetworkEvent({
 				direction: "receive",
 				layer: "xmpp_node",
@@ -141,7 +139,7 @@ export function attachHooks(
 				length: JSON.stringify(event.detail.node).length,
 			});
 		});
-		core.connectionManager.addEventListener("state.change", (event: any) => {
+		core.connectionManager.addEventListener("state.change", (event) => {
 			controller.recordClientEvent(
 				"connection_manager.state.change",
 				event.detail,
@@ -149,47 +147,31 @@ export function attachHooks(
 			);
 			controller.recordComponentState("connectionManager", event.detail.state);
 		});
-		if (typeof core.connectionManager.getDebugStateSnapshot === "function") {
-			controller.recordComponentState(
-				"connectionManager",
-				core.connectionManager.getDebugStateSnapshot(),
-			);
-		}
+		controller.recordComponentState(
+			"connectionManager",
+			core.connectionManager.getDebugStateSnapshot(),
+		);
 	}
 
 	if (core.authenticator) {
-		core.authenticator.addEventListener(
-			"debug:authenticator:state_change",
-			(event: any) => {
-				controller.recordComponentState("authenticator", {
-					state: event.detail.state,
-					snapshot:
-						typeof core.authenticator.getDebugStateSnapshot === "function"
-							? core.authenticator.getDebugStateSnapshot()
-							: undefined,
-				});
-			},
-		);
-		core.authenticator.addEventListener("connection.update", (event: any) => {
+		core.authenticator.addEventListener("connection.update", (event) => {
 			controller.recordClientEvent(
 				"authenticator.connection.update",
 				event.detail,
 				"Authenticator",
 			);
 		});
-		core.authenticator.addEventListener("creds.update", (event: any) => {
+		core.authenticator.addEventListener("creds.update", (event) => {
 			controller.recordClientEvent(
 				"authenticator.creds.update",
 				event.detail,
 				"Authenticator",
 			);
 		});
-		if (typeof core.authenticator.getDebugStateSnapshot === "function") {
-			controller.recordComponentState(
-				"authenticator",
-				core.authenticator.getDebugStateSnapshot(),
-			);
-		}
+		controller.recordComponentState(
+			"authenticator",
+			core.authenticator.getDebugStateSnapshot(),
+		);
 	}
 
 	if (core.client) {
@@ -209,28 +191,26 @@ export function attachHooks(
 			"node.sent",
 		];
 		for (const eventName of clientEventsToLog) {
-			(core.client as any).addEventListener(eventName, clientListener);
+			core.client.addEventListener(eventName, clientListener);
 		}
+
 		(core.client as any)._debugListener = clientListener;
 	}
 
 	if (core.messageProcessor) {
-		core.messageProcessor.addEventListener(
-			"message.decrypted",
-			(event: any) => {
-				controller.recordClientEvent(
-					"message_processor.message.decrypted",
-					{
-						sender: event.detail.sender?.toString(),
-						messageType: event.detail.message?.$typeName,
-					},
-					"MessageProcessor",
-				);
-			},
-		);
+		core.messageProcessor.addEventListener("message.decrypted", (event) => {
+			controller.recordClientEvent(
+				"message_processor.message.decrypted",
+				{
+					sender: event.detail.sender?.toString(),
+					messageType: event.detail.message?.$typeName,
+				},
+				"MessageProcessor",
+			);
+		});
 		core.messageProcessor.addEventListener(
 			"message.decryption_error",
-			(event: any) => {
+			(event) => {
 				controller.recordClientEvent(
 					"message_processor.message.decryption_error",
 					{
@@ -257,9 +237,9 @@ export function detachHooks(core: WhaTsCoreModules): void {
 			"message.received",
 			"message.decryption_error",
 			"node.received",
-		];
+		] as const;
 		for (const eventName of clientEventsToLog) {
-			(core.client as any).removeEventListener(
+			core.client.removeEventListener(
 				eventName,
 				(core.client as any)._debugListener,
 			);

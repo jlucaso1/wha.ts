@@ -1,5 +1,5 @@
-import { bytesToBase64, parseOptionalInt } from "@wha.ts/utils";
-import type { Request, Response } from "express";
+import { parseOptionalInt } from "@wha.ts/utils";
+import type { Express, Request, Response } from "express";
 import type { DebugController } from "../controller";
 import type { NetworkEvent } from "../types";
 import {
@@ -19,8 +19,7 @@ const sanitizeNetworkEventForJSON = (
 	data: sanitizeObjectForJSON(event.data),
 });
 
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-export function registerDebugRoutes(app: any, controller: DebugController) {
+export function registerDebugRoutes(app: Express, controller: DebugController) {
 	app.get("/logs/network", (req: Request, res: Response) => {
 		const count = parseOptionalInt(req.query.count as string, {
 			default: 20,
@@ -69,6 +68,7 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 		res.json(controller.listMonitoredComponents());
 	});
 
+	// @ts-ignore
 	app.get("/state/:componentId", (req: Request, res: Response) => {
 		const { componentId } = req.params;
 		if (!componentId) {
@@ -81,6 +81,7 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 		return res.json(sanitizedState);
 	});
 
+	// @ts-ignore
 	app.get("/statehist/:componentId", (req: Request, res: Response) => {
 		const { componentId } = req.params;
 		if (!componentId) {
@@ -101,6 +102,7 @@ export function registerDebugRoutes(app: any, controller: DebugController) {
 		return res.status(404).json({ error: "Component state history not found" });
 	});
 
+	// @ts-ignore
 	app.post("/clear", (req: Request, res: Response) => {
 		const logType = req.body.type as
 			| "network"

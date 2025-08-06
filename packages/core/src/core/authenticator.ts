@@ -54,11 +54,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private setState(newState: AuthState): void {
 		if (this.state !== newState) {
 			this.state = newState;
-			this.dispatchEvent(
-				new CustomEvent("debug:authenticator:state_change", {
-					detail: { state: newState },
-				}),
-			);
 		}
 	}
 
