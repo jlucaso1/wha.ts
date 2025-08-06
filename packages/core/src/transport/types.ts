@@ -1,9 +1,9 @@
 import { TypedEventTarget } from "../generics/typed-event-target";
 
 export interface ILogger {
-	info(obj: unknown, msg?: string): void;
-	error(obj: unknown, msg?: string): void;
-	warn(obj: unknown, msg?: string): void;
+	info(obj: unknown, msg?: unknown): void;
+	error(obj: unknown, msg?: unknown): void;
+	warn(obj: unknown, msg?: unknown): void;
 	debug(...data: unknown[]): void;
 	trace(...data: unknown[]): void;
 }

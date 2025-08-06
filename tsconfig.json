@@ -40,6 +40,6 @@
 		"node_modules",
 		"**/dist",
 		"**/example-storage",
-		"**/debug-example-storage"
+		"**/extension-storage"
 	]
 }

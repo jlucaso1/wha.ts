@@ -2,6 +2,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ICollection, IStorageDatabase } from "./types";
 
+function isNodeError(error: unknown): error is ErrnoException {
+	return error instanceof Error && "code" in error;
+}
+
 export class FileSystemCollection implements ICollection<string> {
 	private collectionDirectory: string;
 
@@ -43,8 +47,8 @@ export class FileSystemCollection implements ICollection<string> {
 		try {
 			const data = await fs.readFile(filePath, "utf-8");
 			return data || null;
-		} catch (error: any) {
-			if (error.code === "ENOENT") {
+		} catch (error) {
+			if (isNodeError(error) && error.code === "ENOENT") {
 				return null;
 			}
 			console.error(
@@ -76,8 +80,8 @@ export class FileSystemCollection implements ICollection<string> {
 		const filePath = this.getFullFilePath(key);
 		try {
 			await fs.unlink(filePath);
-		} catch (error: any) {
-			if (error.code === "ENOENT") {
+		} catch (error) {
+			if (isNodeError(error) && error.code === "ENOENT") {
 				return;
 			}
 			console.error(
@@ -108,13 +112,14 @@ export class FileSystemCollection implements ICollection<string> {
 						allFilePaths.push(entryPath);
 					}
 				}
-			} catch (error: any) {
-				if (error.code !== "ENOENT") {
-					console.error(
-						`[FileSystemCollection.keys] Error scanning directory ${currentScanDir}:`,
-						error,
-					);
+			} catch (error) {
+				if (isNodeError(error) && error.code === "ENOENT") {
+					return [];
 				}
+				console.error(
+					`[FileSystemCollection.keys] Error scanning directory ${currentScanDir}:`,
+					error,
+				);
 			}
 		}
 

@@ -9,7 +9,7 @@
 		{
 			"matches": ["https://web.whatsapp.com/*"],
 			"js": ["src/main.ts"],
-			"run_at": "document_start",
+			"run_at": "document_idle",
 			"world": "MAIN"
 		}
 	]
