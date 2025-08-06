@@ -38,3 +38,4 @@ example-storage
 extension-storage
 *.txt
 decryption-dumps
+.vscode
