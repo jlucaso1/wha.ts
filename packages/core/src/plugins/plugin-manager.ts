@@ -25,10 +25,6 @@ interface WhaTSClientLike {
 	): void;
 }
 
-/**
- * Internal class responsible for managing plugins.
- * This class should NOT be exported from the package's public API.
- */
 export class PluginManager {
 	private plugins: readonly IPlugin[];
 	private client: WhaTSClientLike;
@@ -86,9 +82,6 @@ export class PluginManager {
 		return [...this.preDecryptCallbacks];
 	}
 
-	/**
-	 * Create a sandboxed API handle for a plugin
-	 */
 	private createSandboxedAPI(): PluginAPI {
 		return {
 			getAuthState: (): DeepReadonly<AuthenticationCreds> => {
@@ -123,14 +116,11 @@ export class PluginManager {
 		};
 	}
 
-	/**
-	 * Deep freeze an object to make it truly readonly
-	 */
 	private deepFreeze<T>(obj: T): DeepReadonly<T> {
 		const propNames = Object.getOwnPropertyNames(obj);
 
 		for (const name of propNames) {
-			const value = (obj as any)[name];
+			const value = (obj as Record<string, unknown>)[name];
 			if (value && typeof value === "object") {
 				this.deepFreeze(value);
 			}

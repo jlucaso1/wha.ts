@@ -2,10 +2,7 @@ export interface TypedCustomEvent<TDetail> extends CustomEvent {
 	readonly detail: TDetail;
 }
 
-export class TypedEventTarget<
-	// biome-ignore lint/suspicious/noExplicitAny: This is a generic type for event mapping.
-	TEventMap extends Record<string, any>,
-> extends EventTarget {
+export class TypedEventTarget<TEventMap extends object> extends EventTarget {
 	// @ts-expect-error
 	public addEventListener<K extends keyof TEventMap>(
 		type: K,

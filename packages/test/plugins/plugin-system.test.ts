@@ -66,6 +66,7 @@ describe("Plugin System", () => {
 		expect(typeof client.logout).toBe("function");
 		expect(typeof client.sendTextMessage).toBe("function");
 
+		// biome-ignore lint/suspicious/noExplicitAny: This is expected as we are testing the absence of plugins
 		expect((client as any).getStats).toBeUndefined();
 
 		console.log("✅ Client without plugins works correctly");
