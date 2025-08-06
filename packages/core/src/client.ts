@@ -6,7 +6,7 @@ import {
 	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
-import type { DecryptionDumper, IPlugin, MergePlugins } from "@wha.ts/types";
+import type { IPlugin, MergePlugins } from "@wha.ts/types";
 import { generateMdTagPrefix, generatePreKeys } from "@wha.ts/types";
 import {
 	encodeBigEndian,
@@ -52,7 +52,7 @@ type PresenceState = EnsureSubtype<
 type ChatState = EnsureSubtype<SINGLE_BYTE_TOKENS_TYPE, "composing" | "paused">;
 
 interface ClientConfig<
-	TStorage,
+	_TStorage,
 	TPlugins extends readonly IPlugin[] = readonly [],
 > {
 	auth: IAuthStateProvider;
@@ -62,11 +62,6 @@ interface ClientConfig<
 	browser?: readonly [string, string, string];
 	connectionManager?: ConnectionManager;
 	plugins?: TPlugins;
-	dumper?: {
-		func: DecryptionDumper<TStorage>;
-		path: string;
-		storage: TStorage;
-	};
 }
 
 export declare interface WhaTSClient {
@@ -84,10 +79,10 @@ export declare interface WhaTSClient {
 	): void;
 }
 export class WhaTSClient<
-	TStorage = unknown,
+	_TStorage = unknown,
 	TPlugins extends readonly IPlugin[] = readonly [],
 > extends TypedEventTarget<ClientEventMap> {
-	private config: Omit<ClientConfig<TStorage, TPlugins>, "logger"> & {
+	private config: Omit<ClientConfig<_TStorage, TPlugins>, "logger"> & {
 		logger: ILogger;
 	};
 	private messageProcessor: MessageProcessor;
@@ -97,7 +92,7 @@ export class WhaTSClient<
 	private pluginManager: PluginManager;
 	public signalStore: SignalProtocolStoreAdapter;
 
-	constructor(config: ClientConfig<TStorage, TPlugins>) {
+	constructor(config: ClientConfig<_TStorage, TPlugins>) {
 		super();
 
 		const logger = config.logger || (console as ILogger);
@@ -116,9 +111,8 @@ export class WhaTSClient<
 				),
 				logger: logger,
 			},
-			dumper: config.dumper,
 			plugins: config.plugins,
-		} satisfies ClientConfig<TStorage, TPlugins>;
+		} satisfies ClientConfig<_TStorage, TPlugins>;
 
 		this.addListener("connection.update", (update) => {
 			if (update.connection === "open") {
@@ -136,28 +130,10 @@ export class WhaTSClient<
 
 		this.signalStore = new SignalProtocolStoreAdapter(this.auth, this.logger);
 
-		// Initialize plugin manager with plugins and backward compatibility for dumper
+		// Initialize plugin manager with plugins
 		const allPlugins: IPlugin[] = this.config.plugins
 			? [...this.config.plugins]
 			: [];
-
-		// Backward compatibility: If dumper config exists, create internal dumper plugin
-		if (this.config.dumper) {
-			const { func: dumperFunc, path: dumpDir, storage } = this.config.dumper;
-			const dumperPlugin: IPlugin = {
-				name: "@wha.ts/internal-dumper",
-				version: "1.0.0",
-				install: (api) => {
-					api.hooks.onPreDecrypt.tap((node: BinaryNode) => {
-						dumperFunc(dumpDir, node, this.auth.creds, storage);
-					});
-				},
-			};
-			allPlugins.push(dumperPlugin);
-			this.logger.warn(
-				`[DEBUG] Decryption bundle dumping is ENABLED. Saving to: ${dumpDir}`,
-			);
-		}
 
 		this.pluginManager = new PluginManager(this, allPlugins);
 		this.pluginManager.installAll();
@@ -644,11 +620,11 @@ export class WhaTSClient<
 }
 
 export const createWAClient = <
-	TStorage = unknown,
+	_TStorage = unknown,
 	const TPlugins extends readonly IPlugin[] = readonly [],
 >(
-	config: ClientConfig<TStorage, TPlugins>,
-): WhaTSClient<TStorage, TPlugins> & MergePlugins<TPlugins> => {
-	return new WhaTSClient(config) as WhaTSClient<TStorage, TPlugins> &
+	config: ClientConfig<_TStorage, TPlugins>,
+): WhaTSClient<_TStorage, TPlugins> & MergePlugins<TPlugins> => {
+	return new WhaTSClient(config) as WhaTSClient<_TStorage, TPlugins> &
 		MergePlugins<TPlugins>;
 };

@@ -5,7 +5,7 @@ import {
 	InMemoryStorageDatabase,
 } from "@wha.ts/storage";
 import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
-import type { IStorageDatabase } from "@wha.ts/types";
+import type { IPlugin, IStorageDatabase } from "@wha.ts/types";
 import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
 
@@ -49,19 +49,34 @@ const logger = pino({ base: undefined }, transport);
 const authState = await GenericAuthState.init(storage);
 
 async function runExample() {
-	const dumperConfig =
-		!IS_BROWSER && process.env.CAPTURE === "true"
-			? {
-					func: dumpDecryptionData,
-					path: "./decryption-dumps",
-					storage: storage as FileSystemStorageDatabase,
-				}
-			: undefined;
+	const plugins: IPlugin[] = [];
+
+	// Add dumper plugin if CAPTURE environment variable is set
+	if (!IS_BROWSER && process.env.CAPTURE === "true") {
+		const dumperPlugin: IPlugin = {
+			name: "debug-dumper-plugin",
+			version: "1.0.0",
+			install: (api) => {
+				api.hooks.onPreDecrypt.tap((node) => {
+					dumpDecryptionData(
+						"./decryption-dumps",
+						node,
+						api.getAuthState() as any, // Type assertion since creds parameter is unused
+						storage as FileSystemStorageDatabase,
+					);
+				});
+				api.logger.warn(
+					"[DEBUG] Decryption bundle dumping is ENABLED. Saving to: ./decryption-dumps",
+				);
+			},
+		};
+		plugins.push(dumperPlugin);
+	}
 
 	const client = createWAClient({
 		auth: authState,
 		logger: logger,
-		dumper: dumperConfig,
+		plugins: plugins,
 	});
 
 	client.addListener("connection.update", (update) => {
