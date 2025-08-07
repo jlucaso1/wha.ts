@@ -25,17 +25,19 @@ export class GenericAuthState implements IAuthStateProvider {
 		creds: AuthenticationCreds,
 		keys: ISignalProtocolStore,
 		db: IStorageDatabase,
+		mutex: Mutex,
 	) {
 		this.creds = creds;
 		this.keys = keys;
 		this.db = db;
 		this.credsCollection = db.getCollection<string>("auth-creds");
-		this.saveMutex = new Mutex();
+		this.saveMutex = mutex;
 	}
 
 	static async init(
 		db: IStorageDatabase = new InMemoryStorageDatabase(),
 	): Promise<GenericAuthState> {
+		const saveMutex = new Mutex();
 		let creds: AuthenticationCreds;
 		const credsCollection = db.getCollection<string>("auth-creds");
 
@@ -58,8 +60,8 @@ export class GenericAuthState implements IAuthStateProvider {
 			creds = initAuthCreds();
 		}
 
-		const keyStore = new GenericSignalKeyStore(db);
-		const authState = new GenericAuthState(creds, keyStore, db);
+		const keyStore = new GenericSignalKeyStore(db, saveMutex);
+		const authState = new GenericAuthState(creds, keyStore, db, saveMutex);
 
 		return authState;
 	}
@@ -89,7 +91,7 @@ export class GenericAuthState implements IAuthStateProvider {
 
 				// Re-initialize creds and SignalKeyStore
 				this.creds = initAuthCreds();
-				this.keys = new GenericSignalKeyStore(this.db);
+				this.keys = new GenericSignalKeyStore(this.db, this.saveMutex);
 
 				await this.saveCreds();
 			} catch (error) {

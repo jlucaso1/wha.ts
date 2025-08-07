@@ -5,6 +5,7 @@ import {
 	InMemoryStorageDatabase,
 } from "@wha.ts/storage";
 import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
+import { serialize } from "@wha.ts/storage/serialization";
 import type { IPlugin } from "@wha.ts/types";
 import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
@@ -118,6 +119,7 @@ async function runExample() {
 			{
 				tag: node.tag,
 				attrs: node.attrs,
+				content: serialize(node.content),
 			},
 			"[NODE RECEIVED]",
 		);

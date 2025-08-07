@@ -6,6 +6,7 @@ import type {
 	SignalDataTypeMap,
 } from "@wha.ts/types";
 import { SignalDataTypeMapSchemas } from "@wha.ts/types";
+import type { Mutex } from "@wha.ts/utils/mutex-utils";
 import { deserialize, serialize } from "./serialization";
 
 export class GenericSignalKeyStore implements ISignalProtocolStore {
@@ -15,7 +16,10 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 	private signedPreKeyStore: ICollection<string>;
 	private senderKeyStore: ICollection<string>;
 
-	constructor(db: IStorageDatabase) {
+	constructor(
+		db: IStorageDatabase,
+		private readonly mutex: Mutex,
+	) {
 		this.preKeyStore = db.getCollection<string>("prekey-store");
 		this.sessionStore = db.getCollection<string>("session-store");
 		this.identityStore = db.getCollection<string>("identity-store");
@@ -47,73 +51,78 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 		type: T,
 		ids: string[],
 	): Promise<{ [id: string]: SignalDataTypeMap[T] | undefined }> {
-		if (!ids || ids.length === 0) {
-			return {};
-		}
-
-		const collection = this.getCollectionForType(type);
-		const finalResults: { [id: string]: SignalDataTypeMap[T] | undefined } = {};
-		const schema = SignalDataTypeMapSchemas[type];
-
-		const promises = ids.map(async (id) => {
-			const rawValue = await collection.get(id);
-			if (rawValue !== null && rawValue !== undefined) {
-				try {
-					finalResults[id] = deserialize(
-						rawValue,
-						schema,
-					) as SignalDataTypeMap[T];
-				} catch (error) {
-					console.error(
-						`[GenericSignalKeyStore] Zod validation failed for key '${id}' (type: ${String(
-							type,
-						)}):`,
-						error,
-					);
-				}
+		return this.mutex.runExclusive(async () => {
+			if (!ids || ids.length === 0) {
+				return {};
 			}
-		});
-		await Promise.all(promises);
-		return finalResults;
-	}
-
-	async set(data: SignalDataSet): Promise<void> {
-		const promises: Promise<void>[] = [];
-
-		for (const typeStr in data) {
-			const type = typeStr as keyof SignalDataTypeMap;
-			const dataOfType = data[type];
-			if (!dataOfType) continue;
 
 			const collection = this.getCollectionForType(type);
+			const finalResults: { [id: string]: SignalDataTypeMap[T] | undefined } =
+				{};
+			const schema = SignalDataTypeMapSchemas[type];
 
-			for (const id in dataOfType) {
-				const value = dataOfType[id];
-
-				if (value === null || value === undefined) {
-					const result = collection.remove(id);
-					promises.push(
-						result instanceof Promise ? result : Promise.resolve(result),
-					);
-				} else {
+			const promises = ids.map(async (id) => {
+				const rawValue = await collection.get(id);
+				if (rawValue !== null && rawValue !== undefined) {
 					try {
-						const serializedValue = serialize(value);
-						const result = collection.set(id, serializedValue);
-						promises.push(
-							result instanceof Promise ? result : Promise.resolve(result),
-						);
+						finalResults[id] = deserialize(
+							rawValue,
+							schema,
+						) as SignalDataTypeMap[T];
 					} catch (error) {
 						console.error(
-							`[GenericSignalKeyStore] Error serializing value for id '${id}' (type: ${String(
+							`[GenericSignalKeyStore] Zod validation failed for key '${id}' (type: ${String(
 								type,
 							)}):`,
 							error,
 						);
 					}
 				}
+			});
+			await Promise.all(promises);
+			return finalResults;
+		});
+	}
+
+	async set(data: SignalDataSet): Promise<void> {
+		return this.mutex.runExclusive(async () => {
+			const promises: Promise<void>[] = [];
+
+			for (const typeStr in data) {
+				const type = typeStr as keyof SignalDataTypeMap;
+				const dataOfType = data[type];
+				if (!dataOfType) continue;
+
+				const collection = this.getCollectionForType(type);
+
+				for (const id in dataOfType) {
+					const value = dataOfType[id];
+
+					if (value === null || value === undefined) {
+						const result = collection.remove(id);
+						promises.push(
+							result instanceof Promise ? result : Promise.resolve(result),
+						);
+					} else {
+						try {
+							const serializedValue = serialize(value);
+							const result = collection.set(id, serializedValue);
+							promises.push(
+								result instanceof Promise ? result : Promise.resolve(result),
+							);
+						} catch (error) {
+							console.error(
+								`[GenericSignalKeyStore] Error serializing value for id '${id}' (type: ${String(
+									type,
+								)}):`,
+								error,
+							);
+						}
+					}
+				}
 			}
-		}
-		await Promise.all(promises);
+			await Promise.all(promises);
+		});
 	}
 
 	/**
@@ -123,41 +132,43 @@ export class GenericSignalKeyStore implements ISignalProtocolStore {
 	async getAllSessionsForUser(
 		userId: string,
 	): Promise<{ [address: string]: SignalDataTypeMap["session"] | undefined }> {
-		const userNumber = userId.split("@")[0];
-		if (!userNumber) return {};
+		return this.mutex.runExclusive(async () => {
+			const userNumber = userId.split("@")[0];
+			if (!userNumber) return {};
 
-		const allSessionKeys: string[] = await this.sessionStore.keys();
+			const allSessionKeys: string[] = await this.sessionStore.keys();
 
-		const userSessionKeys = allSessionKeys.filter((key) => {
-			const keyUserPart = key.split(".")[0];
-			return keyUserPart === userNumber;
-		});
+			const userSessionKeys = allSessionKeys.filter((key) => {
+				const keyUserPart = key.split(".")[0];
+				return keyUserPart === userNumber;
+			});
 
-		if (!userSessionKeys.length) return {};
+			if (!userSessionKeys.length) return {};
 
-		const schema = SignalDataTypeMapSchemas.session;
-		const result: {
-			[address: string]: SignalDataTypeMap["session"] | undefined;
-		} = {};
+			const schema = SignalDataTypeMapSchemas.session;
+			const result: {
+				[address: string]: SignalDataTypeMap["session"] | undefined;
+			} = {};
 
-		for (const key of userSessionKeys) {
-			const rawValue = await this.sessionStore.get(key);
-			if (rawValue !== null && rawValue !== undefined) {
-				try {
-					const record = deserialize(
-						rawValue,
-						schema,
-					) as SignalDataTypeMap["session"];
-					const address = key; // You may want to parse this into ProtocolAddress if available
-					result[address] = record;
-				} catch (err: unknown) {
-					console.error(
-						`[GenericSignalKeyStore] Error deserializing session for key '${key}': ${err}`,
-						err,
-					);
+			for (const key of userSessionKeys) {
+				const rawValue = await this.sessionStore.get(key);
+				if (rawValue !== null && rawValue !== undefined) {
+					try {
+						const record = deserialize(
+							rawValue,
+							schema,
+						) as SignalDataTypeMap["session"];
+						const address = key; // You may want to parse this into ProtocolAddress if available
+						result[address] = record;
+					} catch (err: unknown) {
+						console.error(
+							`[GenericSignalKeyStore] Error deserializing session for key '${key}': ${err}`,
+							err,
+						);
+					}
 				}
 			}
-		}
-		return result;
+			return result;
+		});
 	}
 }

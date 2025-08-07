@@ -418,7 +418,6 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 	private handleLoginSuccess(node: BinaryNode): void {
 		this.qrCodeGenerator.stop();
-		console.log("Login successful", node);
 		this.state = AuthState.AUTHENTICATED;
 
 		const platform = node.attrs.platform;
