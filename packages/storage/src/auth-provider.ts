@@ -16,9 +16,9 @@ import { GenericSignalKeyStore } from "./signal-store";
 export class GenericAuthState implements IAuthStateProvider {
 	public creds: AuthenticationCreds;
 	public keys: ISignalProtocolStore;
+	public db: IStorageDatabase;
 
 	private credsCollection: ICollection<string>;
-	private db: IStorageDatabase;
 	private saveMutex: Mutex;
 
 	private constructor(

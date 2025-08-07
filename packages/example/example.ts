@@ -5,10 +5,19 @@ import {
 	InMemoryStorageDatabase,
 } from "@wha.ts/storage";
 import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
-import { serialize } from "@wha.ts/storage/serialization";
 import type { IPlugin } from "@wha.ts/types";
 import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
+
+function replacer(_key: string, value: unknown): unknown {
+	if (value instanceof Uint8Array) {
+		return `bytes(length: ${value.length})`;
+	}
+	if (typeof value === "bigint") {
+		return value.toString();
+	}
+	return value;
+}
 
 const IS_BROWSER = typeof window !== "undefined";
 
@@ -119,7 +128,7 @@ async function runExample() {
 			{
 				tag: node.tag,
 				attrs: node.attrs,
-				content: serialize(node.content),
+				content: JSON.stringify(node.content, replacer),
 			},
 			"[NODE RECEIVED]",
 		);
@@ -130,6 +139,7 @@ async function runExample() {
 			{
 				tag: node.tag,
 				attrs: node.attrs,
+				content: JSON.stringify(node.content, replacer),
 			},
 			"[NODE SENT]",
 		);

@@ -1,9 +1,22 @@
 import { ZodUint8Array } from "@wha.ts/utils/schemas";
 import { z } from "zod/v4";
-import { NON_STANDARD_TAGS, SINGLE_BYTE_TOKENS } from "./constants";
+import {
+	DOUBLE_BYTE_TOKENS,
+	NON_STANDARD_TAGS,
+	SINGLE_BYTE_TOKENS,
+} from "./constants";
 
 export const BinaryNodeSchema = z.object({
-	tag: z.enum(SINGLE_BYTE_TOKENS).or(z.enum(NON_STANDARD_TAGS)),
+	tag: z
+		.enum(SINGLE_BYTE_TOKENS)
+		.or(
+			z
+				.enum(DOUBLE_BYTE_TOKENS[0])
+				.or(z.enum(DOUBLE_BYTE_TOKENS[1]))
+				.or(z.enum(DOUBLE_BYTE_TOKENS[2]))
+				.or(z.enum(DOUBLE_BYTE_TOKENS[3])),
+		)
+		.or(z.enum(NON_STANDARD_TAGS)),
 	attrs: z.record(z.string(), z.string()),
 
 	get content() {

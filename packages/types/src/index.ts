@@ -99,6 +99,7 @@ export interface ISignalProtocolStore {
 export interface IAuthStateProvider {
 	creds: AuthenticationCreds;
 	keys: ISignalProtocolStore;
+	db?: IStorageDatabase;
 	saveCreds(): Promise<void>;
 }
 
