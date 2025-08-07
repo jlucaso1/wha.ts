@@ -6,6 +6,7 @@ import {
 	ClientPayloadSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
+import type { AuthenticationCreds } from "@wha.ts/types";
 import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
 import {
 	type TypedCustomEvent,
@@ -13,7 +14,6 @@ import {
 } from "../../../types/src/generics/typed-event-target";
 import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import type { MessageProcessor } from "../messaging/message-processor";
-import type { AuthenticationCreds } from "../state/interface";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";
 import type { ILogger, WebSocketConfig } from "../transport/types";

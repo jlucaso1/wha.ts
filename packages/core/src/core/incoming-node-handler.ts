@@ -1,8 +1,8 @@
 import type { BinaryNode } from "@wha.ts/binary";
 import { getBinaryNodeChild, S_WHATSAPP_NET } from "@wha.ts/binary";
+import { generateMdTagPrefix } from "@wha.ts/utils/generic";
 import { DisconnectReason } from "../defaults";
 import type { MessageProcessor } from "../messaging/message-processor";
-import { generateMdTagPrefix } from "../state/utils";
 import type { ILogger } from "../transport/types";
 import type { ConnectionState } from "./connection-events";
 import { ErrorWithStatusCode } from "./types";

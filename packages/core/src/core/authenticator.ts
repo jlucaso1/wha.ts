@@ -12,16 +12,13 @@ import {
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
 } from "@wha.ts/proto";
+import type { AuthenticationCreds, IAuthStateProvider } from "@wha.ts/types";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "@wha.ts/types/generics/typed-event-target";
 import type { KeyPair } from "@wha.ts/utils";
 import { Curve, concatBytes, equalBytes, hmacSign } from "@wha.ts/utils";
-import type {
-	AuthenticationCreds,
-	IAuthStateProvider,
-} from "../state/interface";
 import type { ILogger } from "../transport/types";
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { ConnectionManager } from "./connection";
@@ -421,10 +418,13 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 	private handleLoginSuccess(node: BinaryNode): void {
 		this.qrCodeGenerator.stop();
+		console.log("Login successful", node);
 		this.state = AuthState.AUTHENTICATED;
 
 		const platform = node.attrs.platform;
 		const pushname = node.attrs.pushname;
+		const lid = node.attrs.lid;
+
 		const updates: Partial<AuthenticationCreds> = {};
 		if (platform && this.authStateProvider.creds.platform !== platform) {
 			updates.platform = platform;
@@ -436,6 +436,14 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		) {
 			updates.me = { ...this.authStateProvider.creds.me, name: pushname };
 		}
+
+		if (lid) {
+			updates.me = {
+				...this.authStateProvider.creds.me,
+				lid,
+			} as AuthenticationCreds["me"];
+		}
+
 		if (!this.authStateProvider.creds.registered) {
 			updates.registered = true;
 		}

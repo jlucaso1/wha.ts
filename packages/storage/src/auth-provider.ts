@@ -5,8 +5,8 @@ import {
 	type ICollection,
 	type ISignalProtocolStore,
 	type IStorageDatabase,
-	initAuthCreds,
 } from "@wha.ts/types";
+import { initAuthCreds } from "@wha.ts/utils/generic";
 import { Mutex } from "@wha.ts/utils/mutex-utils";
 import { CREDS_KEY } from "./constants";
 import { InMemoryStorageDatabase } from "./in-memory";

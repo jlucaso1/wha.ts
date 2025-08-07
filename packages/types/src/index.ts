@@ -30,6 +30,7 @@ export const AuthenticationCredsSchema = z.object({
 	me: z
 		.object({
 			id: z.string(),
+			lid: z.string().optional(),
 			name: z.string().optional(),
 		})
 		.optional(),
@@ -122,8 +123,3 @@ export type {
 	MergePlugins,
 	PluginAPI,
 } from "./plugins";
-export {
-	generateMdTagPrefix,
-	generateRegistrationId,
-	initAuthCreds,
-} from "./utils";

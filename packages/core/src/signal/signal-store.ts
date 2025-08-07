@@ -4,13 +4,13 @@ import {
 	type SignalSessionStorage,
 } from "@wha.ts/signal";
 import type { ChainType } from "@wha.ts/signal/chain_type";
+import type { IAuthStateProvider } from "@wha.ts/types";
 import {
 	concatBytes,
 	KEY_BUNDLE_TYPE,
 	type KeyPair,
 	type SignedKeyPair,
 } from "@wha.ts/utils";
-import type { IAuthStateProvider } from "../state/interface";
 import type { ILogger } from "../transport/types";
 
 export class SignalProtocolStoreAdapter implements SignalSessionStorage {

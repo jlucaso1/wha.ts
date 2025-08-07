@@ -1,19 +1,23 @@
 import "./client-events";
 import { create, toBinary } from "@bufbuild/protobuf";
-import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import { jidDecode } from "@wha.ts/binary";
 import {
 	Message_ExtendedTextMessageSchema,
 	MessageSchema,
 } from "@wha.ts/proto";
 import { SessionCipher } from "@wha.ts/signal";
-import type { ClientEventMap, IPlugin, MergePlugins } from "@wha.ts/types";
-import { generateMdTagPrefix } from "@wha.ts/types";
+import type {
+	ClientEventMap,
+	IAuthStateProvider,
+	IPlugin,
+	MergePlugins,
+} from "@wha.ts/types";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "@wha.ts/types/generics/typed-event-target";
-import { padRandomMax16 } from "@wha.ts/utils";
+import { generateMdTagPrefix, padRandomMax16 } from "@wha.ts/utils";
 import { Authenticator } from "./core/authenticator";
 import type {
 	ConnectionUpdatePayload,
@@ -25,18 +29,9 @@ import { DEFAULT_BROWSER, DEFAULT_SOCKET_CONFIG, WA_VERSION } from "./defaults";
 import { MessageProcessor } from "./messaging/message-processor";
 import { PluginManager } from "./plugins/plugin-manager";
 import { PreKeyManager } from "./prekeys";
+import { PresenceManager } from "./presence";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";
-import type { IAuthStateProvider } from "./state/interface";
 import type { ILogger, WebSocketConfig } from "./transport/types";
-
-type EnsureSubtype<Source, T extends Source> = T;
-
-type PresenceState = EnsureSubtype<
-	SINGLE_BYTE_TOKENS_TYPE,
-	"available" | "unavailable"
->;
-
-type ChatState = EnsureSubtype<SINGLE_BYTE_TOKENS_TYPE, "composing" | "paused">;
 
 interface ClientConfig<
 	_TStorage,
@@ -79,6 +74,7 @@ export class WhaTSClient<
 	private pluginManager: PluginManager;
 	public signalStore: SignalProtocolStoreAdapter;
 	private preKeyManager: PreKeyManager;
+	private presenceManager: PresenceManager;
 
 	constructor(config: ClientConfig<_TStorage, TPlugins>) {
 		super();
@@ -101,17 +97,6 @@ export class WhaTSClient<
 			},
 			plugins: config.plugins,
 		} satisfies ClientConfig<_TStorage, TPlugins>;
-
-		this.addListener("connection.update", (update) => {
-			if (update.connection === "open") {
-				this.sendPresenceUpdate("available").catch((err) => {
-					this.logger.error(
-						{ err },
-						"Failed to send 'available' presence update on connection open",
-					);
-				});
-			}
-		});
 
 		this.auth = this.config.auth;
 		this.logger = this.config.logger;
@@ -161,6 +146,12 @@ export class WhaTSClient<
 				this.auth.creds,
 				this.messageProcessor,
 			);
+
+		this.presenceManager = new PresenceManager(
+			this.connectionManager,
+			this.auth,
+			this.logger,
+		);
 
 		this.preKeyManager = new PreKeyManager(
 			this.auth,
@@ -256,48 +247,6 @@ export class WhaTSClient<
 		this.addEventListener(event, ((e: TypedCustomEvent<ClientEventMap[K]>) => {
 			listener(e.detail);
 		}) as EventListener);
-	}
-
-	async sendPresenceUpdate(
-		type: PresenceState | ChatState,
-		toJid?: string,
-	): Promise<void> {
-		const me = this.auth.creds.me;
-		if (!me) {
-			throw new Error(
-				"Cannot send presence update without being authenticated",
-			);
-		}
-
-		let node: BinaryNode;
-		if (type === "available" || type === "unavailable") {
-			if (!me.name) {
-				this.logger.warn("No client name set, skipping presence update");
-				return;
-			}
-			node = {
-				tag: "presence",
-				attrs: {
-					name: me.name,
-					type,
-				},
-			};
-		} else {
-			if (!toJid) {
-				throw new Error("`toJid` is required for composing/recording presence");
-			}
-			node = {
-				tag: "chatstate",
-				attrs: {
-					from: me.id,
-					to: toJid,
-				},
-				content: [{ tag: type, attrs: {} }],
-			};
-		}
-
-		this.logger.debug({ to: toJid, type }, "sending presence update");
-		await this.connectionManager.sendNode(node);
 	}
 
 	async connect(): Promise<void> {
@@ -478,6 +427,12 @@ export class WhaTSClient<
 
 	async reconnect(): Promise<void> {
 		return this.connectionManager.reconnect();
+	}
+
+	public async sendPresenceUpdate(
+		...args: Parameters<PresenceManager["sendUpdate"]>
+	): Promise<void> {
+		return this.presenceManager.sendUpdate(...args);
 	}
 }
 

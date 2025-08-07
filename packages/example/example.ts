@@ -114,17 +114,23 @@ async function runExample() {
 	});
 
 	client.addListener("node.received", ({ node }) => {
-		logger.info("[NODE RECEIVED]", {
-			tag: node.tag,
-			attrs: node.attrs,
-		});
+		logger.info(
+			{
+				tag: node.tag,
+				attrs: node.attrs,
+			},
+			"[NODE RECEIVED]",
+		);
 	});
 
 	client.addListener("node.sent", ({ node }) => {
-		logger.info("[NODE SENT]", {
-			tag: node.tag,
-			attrs: node.attrs,
-		});
+		logger.info(
+			{
+				tag: node.tag,
+				attrs: node.attrs,
+			},
+			"[NODE SENT]",
+		);
 	});
 
 	client.addListener("message.received", async (messageData) => {

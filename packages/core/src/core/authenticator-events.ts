@@ -1,6 +1,6 @@
 import type { BinaryNode } from "@wha.ts/binary";
+import type { AuthenticationCreds } from "@wha.ts/types";
 import type { DisconnectReason } from "../defaults";
-import type { AuthenticationCreds } from "../state/interface";
 
 /**
  * Payload for connection.update events

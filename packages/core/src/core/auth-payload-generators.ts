@@ -14,6 +14,7 @@ import {
 	DeviceProps_PlatformType,
 	DevicePropsSchema,
 } from "@wha.ts/proto";
+import type { AuthenticationCreds } from "@wha.ts/types";
 import type { KeyPair, SignedKeyPair } from "@wha.ts/utils";
 import {
 	encodeBigEndian,
@@ -22,7 +23,6 @@ import {
 	utf8ToBytes,
 } from "@wha.ts/utils";
 import { DEFAULT_BROWSER, WA_VERSION } from "../defaults";
-import type { AuthenticationCreds } from "../state/interface";
 
 const getPlatformType = (platform: string): DeviceProps_PlatformType => {
 	const platformUpper = platform.toUpperCase();

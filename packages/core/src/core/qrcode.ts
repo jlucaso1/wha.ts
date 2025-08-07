@@ -1,7 +1,7 @@
 import type { BinaryNode } from "@wha.ts/binary";
+import type { IAuthStateProvider } from "@wha.ts/types";
 import { TypedEventTarget } from "@wha.ts/types/generics/typed-event-target";
 import { bytesToBase64, bytesToUtf8 } from "@wha.ts/utils";
-import type { IAuthStateProvider } from "../state/interface";
 import type { ILogger } from "../transport/types";
 
 export interface QRCodeGeneratorEventMap {
