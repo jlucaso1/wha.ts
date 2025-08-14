@@ -1,6 +1,6 @@
+import type { ILogger } from "@wha.ts/types/transport";
 import { concatBytes, Mutex } from "@wha.ts/utils";
 import type { NoiseProcessor } from "./noise-processor";
-import type { ILogger } from "./types";
 
 export class FrameHandler extends EventTarget {
 	private chunks: Uint8Array[] = [];
@@ -46,8 +46,8 @@ export class FrameHandler extends EventTarget {
 			this.logger.error(
 				{
 					bufferedBytes: this.bufferedBytes,
-					requested: count,
 					copied: bytesCopied,
+					requested: count,
 				},
 				"Internal error: Mismatch peeking bytes, buffer state likely corrupt.",
 			);
@@ -95,9 +95,9 @@ export class FrameHandler extends EventTarget {
 		if (bytesCopied !== count) {
 			this.logger.error(
 				{
-					requested: count,
 					copied: bytesCopied,
 					finalBuffered: this.bufferedBytes,
+					requested: count,
 				},
 				"Internal error: Mismatch consuming bytes, buffer state likely corrupt.",
 			);

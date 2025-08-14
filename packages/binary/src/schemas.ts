@@ -7,6 +7,13 @@ import {
 } from "./constants";
 
 export const BinaryNodeSchema = z.object({
+	attrs: z.record(z.string(), z.string()),
+
+	get content() {
+		return z
+			.union([z.array(BinaryNodeSchema), z.string(), ZodUint8Array])
+			.optional();
+	},
 	tag: z
 		.enum(SINGLE_BYTE_TOKENS)
 		.or(
@@ -17,11 +24,4 @@ export const BinaryNodeSchema = z.object({
 				.or(z.enum(DOUBLE_BYTE_TOKENS[3])),
 		)
 		.or(z.enum(NON_STANDARD_TAGS)),
-	attrs: z.record(z.string(), z.string()),
-
-	get content() {
-		return z
-			.union([z.array(BinaryNodeSchema), z.string(), ZodUint8Array])
-			.optional();
-	},
 });

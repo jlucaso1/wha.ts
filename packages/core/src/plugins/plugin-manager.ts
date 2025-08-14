@@ -6,7 +6,7 @@ import type {
 	IPlugin,
 	PluginAPI,
 } from "@wha.ts/types";
-import type { ILogger } from "../transport/types";
+import type { ILogger } from "@wha.ts/types/transport";
 
 interface WhaTSClientLike {
 	auth: { creds: AuthenticationCreds };
@@ -84,24 +84,16 @@ export class PluginManager {
 
 	private createSandboxedAPI(): PluginAPI {
 		return {
-			getAuthState: (): DeepReadonly<AuthenticationCreds> => {
-				return this.deepFreeze(this.client.auth.creds);
-			},
-
 			actions: {
-				sendTextMessage: (jid: string, text: string) =>
-					this.client.sendTextMessage(jid, text),
 				sendPresenceUpdate: (
 					type: "available" | "unavailable" | "composing" | "paused",
 					toJid?: string,
 				) => this.client.sendPresenceUpdate(type, toJid),
+				sendTextMessage: (jid: string, text: string) =>
+					this.client.sendTextMessage(jid, text),
 			},
-
-			on: <K extends keyof ClientEventMap>(
-				event: K,
-				listener: (data: ClientEventMap[K]) => void,
-			) => {
-				this.client.addListener(event, listener);
+			getAuthState: (): DeepReadonly<AuthenticationCreds> => {
+				return this.deepFreeze(this.client.auth.creds);
 			},
 
 			hooks: {
@@ -113,6 +105,13 @@ export class PluginManager {
 			},
 
 			logger: this.client.logger,
+
+			on: <K extends keyof ClientEventMap>(
+				event: K,
+				listener: (data: ClientEventMap[K]) => void,
+			) => {
+				this.client.addListener(event, listener);
+			},
 		};
 	}
 

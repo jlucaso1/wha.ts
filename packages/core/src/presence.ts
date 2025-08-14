@@ -1,7 +1,7 @@
 import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
 import type { IAuthStateProvider } from "@wha.ts/types";
+import type { ILogger } from "@wha.ts/types/transport";
 import type { ConnectionManager } from "./core/connection";
-import type { ILogger } from "./transport/types";
 
 type EnsureSubtype<Source, T extends Source> = T;
 
@@ -51,23 +51,23 @@ export class PresenceManager {
 				return;
 			}
 			node = {
-				tag: "presence",
 				attrs: {
 					name: me.name,
 					type,
 				},
+				tag: "presence",
 			};
 		} else {
 			if (!toJid) {
 				throw new Error("`toJid` is required for composing/paused presence");
 			}
 			node = {
-				tag: "chatstate",
 				attrs: {
 					from: me.id,
 					to: toJid,
 				},
-				content: [{ tag: type, attrs: {} }],
+				content: [{ attrs: {}, tag: type }],
+				tag: "chatstate",
 			};
 		}
 

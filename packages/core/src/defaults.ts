@@ -14,10 +14,10 @@ export const NOISE_MODE = "Noise_XX_25519_AESGCM_SHA256\0\0\0\0";
 export const NOISE_WA_HEADER = new Uint8Array([87, 65, 6, 3]);
 
 export const DEFAULT_SOCKET_CONFIG = {
-	waWebSocketUrl: "wss://web.whatsapp.com/ws/chat",
 	connectTimeoutMs: 20_000,
 	defaultQueryTimeoutMs: 60_000,
 	origin: DEFAULT_ORIGIN,
+	waWebSocketUrl: "wss://web.whatsapp.com/ws/chat",
 };
 
 export const MIN_PREKEY_COUNT = 10; // Minimum pre-keys to maintain on server

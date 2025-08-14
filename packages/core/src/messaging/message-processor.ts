@@ -6,9 +6,9 @@ import { ProtocolAddress, SessionCipher } from "@wha.ts/signal";
 import { GroupCipher } from "@wha.ts/signal/groups/cipher";
 import type { IAuthStateProvider, ISignalProtocolStore } from "@wha.ts/types";
 import { TypedEventTarget } from "@wha.ts/types/generics/typed-event-target";
+import type { ILogger } from "@wha.ts/types/transport";
 import { unpadRandomMax16 } from "@wha.ts/utils";
 import type { SignalProtocolStoreAdapter } from "../signal/signal-store";
-import type { ILogger } from "../transport/types";
 
 interface MessageProcessorEventMap {
 	"message.decrypted": {
@@ -163,7 +163,7 @@ export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap>
 				plaintextBuffer = await groupCipher.decrypt(rawProtoBytes);
 			} else {
 				this.logger.warn(
-					{ type, from: senderAddress.toString() },
+					{ from: senderAddress.toString(), type },
 					"[MessageProcessor] Received encrypted node with unknown type",
 				);
 				this.dispatchTypedEvent("message.decryption_error", {
@@ -187,8 +187,8 @@ export class MessageProcessor extends TypedEventTarget<MessageProcessorEventMap>
 
 			this.dispatchTypedEvent("message.decrypted", {
 				message,
-				sender: senderAddress,
 				rawNode: node,
+				sender: senderAddress,
 			});
 		} catch (error) {
 			if (messageId && chatJid) {

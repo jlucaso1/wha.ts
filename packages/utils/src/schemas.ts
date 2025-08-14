@@ -15,20 +15,20 @@ export const ZodBigInt = z.preprocess((val) => {
 }, z.bigint());
 
 export const KeyPairSchema = z.object({
-	publicKey: ZodUint8Array,
 	privateKey: ZodUint8Array,
+	publicKey: ZodUint8Array,
 });
 
 export const SignedKeyPairSchema = z.object({
+	keyId: z.number(),
 	keyPair: KeyPairSchema,
 	signature: ZodUint8Array,
-	keyId: z.number(),
 });
 
 export const SignalIdentitySchema = z.object({
 	identifier: z.object({
-		name: z.string(),
 		deviceId: z.number(),
+		name: z.string(),
 	}),
 	identifierKey: ZodUint8Array,
 });

@@ -60,14 +60,14 @@ interface ModuleIndentationMap {
 
 async function findAppModules(): Promise<any[]> {
 	const headers = {
-		"User-Agent":
-			"Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0",
+		Accept: "*/*",
+		"Accept-Language": "en-US,en;q=0.5",
+		Referer: "https://web.whatsapp.com/",
 		"Sec-Fetch-Dest": "script",
 		"Sec-Fetch-Mode": "no-cors",
 		"Sec-Fetch-Site": "same-origin",
-		Referer: "https://web.whatsapp.com/",
-		Accept: "*/*",
-		"Accept-Language": "en-US,en;q=0.5",
+		"User-Agent":
+			"Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0",
 	};
 	const baseURL = "https://web.whatsapp.com";
 	const serviceworkerResp = await fetch(`${baseURL}/sw.js`, { headers });
@@ -204,16 +204,16 @@ export const generateProto = async () => {
 					fatherNode?.right?.properties.length
 				) {
 					const values = fatherNode?.right?.properties.map((p: any) => ({
-						name: p.key.name,
 						id: p.value.value,
+						name: p.key.name,
 					}));
 					const nameAlias = fatherNode?.left?.name;
 					enumAliases[nameAlias] = values;
 				} else if (node?.key?.name && fatherNode.arguments?.length > 0) {
 					const values = fatherNode.arguments?.[0]?.properties.map(
 						(p: any) => ({
-							name: p.key.name,
 							id: p.value.value,
+							name: p.key.name,
 						}),
 					);
 					const nameAlias = fatherFather?.left?.name || fatherFather.id.name;
@@ -376,7 +376,7 @@ export const generateProto = async () => {
 								}
 							}
 
-							return { name, id: elements[0].value, type, flags };
+							return { flags, id: elements[0].value, name, type };
 						},
 					);
 
@@ -399,8 +399,6 @@ export const generateProto = async () => {
 									key: { name: string };
 									value: { elements: Array<{ value: string }> };
 								}) => ({
-									name: p.key.name,
-									type: "__oneof__",
 									members: p.value.elements.map((e: { value: string }) => {
 										const idx = members.findIndex(
 											(m: { name: string }) => m.name === e.value,
@@ -409,6 +407,8 @@ export const generateProto = async () => {
 										members.splice(idx, 1);
 										return member;
 									}),
+									name: p.key.name,
+									type: "__oneof__",
 								}),
 							);
 							members.push(...newOneOfs);

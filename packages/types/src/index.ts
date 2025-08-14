@@ -8,25 +8,26 @@ import {
 import { z } from "zod/v4";
 
 export const ProcessedMessageKeySchema = z.object({
-	id: z.string(),
 	chat: z.string(),
+	id: z.string(),
 });
 export type ProcessedMessageKey = z.infer<typeof ProcessedMessageKeySchema>;
 
 export const ADVSignedDeviceIdentitySchema = z.object({
-	details: ZodUint8Array,
-	accountSignatureKey: ZodUint8Array,
 	accountSignature: ZodUint8Array,
+	accountSignatureKey: ZodUint8Array,
+	details: ZodUint8Array,
 	deviceSignature: ZodUint8Array,
 });
 
 export const AuthenticationCredsSchema = z.object({
-	noiseKey: KeyPairSchema,
-	pairingEphemeralKeyPair: KeyPairSchema,
-	signedIdentityKey: KeyPairSchema,
-	signedPreKey: SignedKeyPairSchema,
-	registrationId: z.number(),
+	account: ADVSignedDeviceIdentitySchema.optional(),
+	accountSettings: z.object({
+		unarchiveChats: z.boolean(),
+	}),
+	accountSyncCounter: z.number(),
 	advSecretKey: ZodUint8Array,
+	firstUnuploadedPreKeyId: z.number(),
 	me: z
 		.object({
 			id: z.string(),
@@ -34,41 +35,40 @@ export const AuthenticationCredsSchema = z.object({
 			name: z.string().optional(),
 		})
 		.optional(),
-	account: ADVSignedDeviceIdentitySchema.optional(),
+	myAppStateKeyId: z.string().optional(),
+	nextPreKeyId: z.number(),
+	noiseKey: KeyPairSchema,
+	pairingCode: z.string().optional(),
+	pairingEphemeralKeyPair: KeyPairSchema,
 	platform: z.string().optional(),
+	processedMessages: z.array(ProcessedMessageKeySchema).optional().default([]),
+	registered: z.boolean(),
+	registrationId: z.number(),
+	routingInfo: ZodUint8Array.optional(),
 	signalIdentities: z
 		.array(
 			z.object({
 				identifier: z.object({
-					name: z.string(),
 					deviceId: z.number(),
+					name: z.string(),
 				}),
 				identifierKey: ZodUint8Array,
 			}),
 		)
 		.optional(),
-	nextPreKeyId: z.number(),
-	firstUnuploadedPreKeyId: z.number(),
-	myAppStateKeyId: z.string().optional(),
-	accountSyncCounter: z.number(),
-	accountSettings: z.object({
-		unarchiveChats: z.boolean(),
-	}),
-	registered: z.boolean(),
-	pairingCode: z.string().optional(),
-	routingInfo: ZodUint8Array.optional(),
-	processedMessages: z.array(ProcessedMessageKeySchema).optional().default([]),
+	signedIdentityKey: KeyPairSchema,
+	signedPreKey: SignedKeyPairSchema,
 });
 
 export type AuthenticationCreds = z.infer<typeof AuthenticationCredsSchema>;
 
 export const SignalDataTypeMapSchemas = {
+	"peer-identity-key": ZodUint8Array,
 	"pre-key": KeyPairSchema,
+	"sender-key": SenderKeyRecordSchema,
 	session: SessionRecordSchema,
 	"signed-identity-key": KeyPairSchema,
 	"signed-pre-key": SignedKeyPairSchema,
-	"peer-identity-key": ZodUint8Array,
-	"sender-key": SenderKeyRecordSchema,
 };
 
 export type SignalDataTypeMap = {

@@ -39,7 +39,7 @@ export class NativeWebSocketClient extends IWebSocketClient {
 		}
 
 		return new Promise<void>((resolve, reject) => {
-			this.connectionPromise = { resolve, reject };
+			this.connectionPromise = { reject, resolve };
 
 			try {
 				this.socket = new WebSocket(this.url.toString());

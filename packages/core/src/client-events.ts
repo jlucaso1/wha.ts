@@ -6,7 +6,10 @@ import type {
 	ConnectionUpdatePayload,
 	CredsUpdatePayload,
 } from "./core/authenticator-events";
-import type { NodePayload } from "./core/connection-events";
+import type {
+	NodePayload,
+	SyncReceivedPayload,
+} from "./core/connection-events";
 
 declare module "@wha.ts/types" {
 	export interface ClientEventMap {
@@ -24,6 +27,7 @@ declare module "@wha.ts/types" {
 		};
 		"node.received": NodePayload;
 		"node.sent": NodePayload;
+		"sync.received": SyncReceivedPayload;
 	}
 }
 

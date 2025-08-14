@@ -1,37 +1,37 @@
 {
-	"name": "@wha.ts/extension",
-	"version": "0.1.1",
-	"description": "Browser extension for WhatsApp communication",
-	"type": "module",
-	"main": "./dist/main.js",
-	"module": "./dist/main.js",
-	"types": "./dist/main.d.ts",
-	"files": [
-		"dist"
-	],
-	"scripts": {
-		"build": "vite build",
-		"dev": "vite"
-	},
-	"keywords": [
-		"whatsapp",
-		"typescript",
-		"api"
-	],
 	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/jlucaso1/wha.ts.git"
-	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.6.2",
 		"@wha.ts/proto": "workspace:*",
 		"@wha.ts/utils": "workspace:*"
 	},
+	"description": "Browser extension for WhatsApp communication",
 	"devDependencies": {
 		"vite": "^7.0.6",
 		"vite-plugin-web-extension": "^4.4.5",
 		"vite-tsconfig-paths": "^5.1.4"
-	}
+	},
+	"files": [
+		"dist"
+	],
+	"keywords": [
+		"whatsapp",
+		"typescript",
+		"api"
+	],
+	"license": "MIT",
+	"main": "./dist/main.js",
+	"module": "./dist/main.js",
+	"name": "@wha.ts/extension",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jlucaso1/wha.ts.git"
+	},
+	"scripts": {
+		"build": "vite build",
+		"dev": "vite"
+	},
+	"type": "module",
+	"types": "./dist/main.d.ts",
+	"version": "0.1.1"
 }

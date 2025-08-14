@@ -41,17 +41,6 @@ export const Curve = {
 	sign: (privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array => {
 		return sign(privateKey, publicKey, undefined);
 	},
-	verify: (
-		publicKey: Uint8Array,
-		message: Uint8Array,
-		signature: Uint8Array,
-	): boolean => {
-		try {
-			return verify(publicKey, message, signature);
-		} catch {
-			return false;
-		}
-	},
 
 	signedKeyPair: (
 		identityKeyPair: KeyPair,
@@ -64,6 +53,17 @@ export const Curve = {
 			concatBytes(KEY_BUNDLE_TYPE, preKey.publicKey),
 		);
 
-		return { keyPair: preKey, signature, keyId };
+		return { keyId, keyPair: preKey, signature };
+	},
+	verify: (
+		publicKey: Uint8Array,
+		message: Uint8Array,
+		signature: Uint8Array,
+	): boolean => {
+		try {
+			return verify(publicKey, message, signature);
+		} catch {
+			return false;
+		}
 	},
 };

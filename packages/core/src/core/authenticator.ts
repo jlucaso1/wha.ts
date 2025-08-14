@@ -7,19 +7,22 @@ import {
 } from "@wha.ts/binary";
 import {
 	ADVDeviceIdentitySchema,
+	ADVKeyIndexListSchema,
 	type ADVSignedDeviceIdentity,
 	type ADVSignedDeviceIdentityHMAC,
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
+	Message_AppStateSyncKeyShareSchema,
 } from "@wha.ts/proto";
+import { serialize } from "@wha.ts/storage/serialization";
 import type { AuthenticationCreds, IAuthStateProvider } from "@wha.ts/types";
 import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "@wha.ts/types/generics/typed-event-target";
+import type { ILogger } from "@wha.ts/types/transport";
 import type { KeyPair } from "@wha.ts/utils";
 import { Curve, concatBytes, equalBytes, hmacSign } from "@wha.ts/utils";
-import type { ILogger } from "../transport/types";
 import type { AuthenticatorEventMap } from "./authenticator-events";
 import type { ConnectionManager } from "./connection";
 import { QRCodeGenerator } from "./qrcode";
@@ -121,6 +124,11 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			} else if (getBinaryNodeChild(node, "pair-success")) {
 				this.handlePairSuccessIQ(node);
 			}
+
+			const keysNode = getBinaryNodeChild(node, "keys");
+			if (keysNode && node.attrs.type === "set") {
+				this.handleKeysIQ(keysNode);
+			}
 		} else if (node.tag === "success") {
 			this.handleLoginSuccess(node);
 		} else if (node.tag === "fail") {
@@ -129,13 +137,135 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			const offlinePreviewNode = getBinaryNodeChild(node, "offline_preview");
 			if (offlinePreviewNode) {
 				this.connectionActions.sendNode({
-					tag: "ib",
 					attrs: {},
-					content: [{ tag: "offline_batch", attrs: { count: "30" } }],
+					content: [{ attrs: { count: "30" }, tag: "offline_batch" }],
+					tag: "ib",
 				});
 			}
+		} else if (
+			node.tag === "notification" &&
+			node.attrs.type === "account_sync"
+		) {
+			this.handleAccountSyncNotification(node);
 		}
 	};
+
+	private handleAccountSyncNotification(node: BinaryNode): void {
+		this.logger.info(
+			"Processing account_sync notification to fetch app state keys...",
+		);
+		const devicesNode = getBinaryNodeChild(node, "devices");
+		const keyIndexListNode = getBinaryNodeChild(devicesNode, "key-index-list");
+
+		if (
+			!keyIndexListNode?.content ||
+			!(keyIndexListNode.content instanceof Uint8Array)
+		) {
+			this.logger.warn(
+				"account_sync notification did not contain a valid key-index-list",
+			);
+			return;
+		}
+
+		try {
+			const keyIndexList = fromBinary(
+				ADVKeyIndexListSchema,
+				keyIndexListNode.content,
+			);
+			if (!keyIndexList.rawId) {
+				this.logger.info("key-index-list was empty, no keys to fetch.");
+				return;
+			}
+
+			this.logger.info(
+				`Found ${keyIndexList.rawId} key IDs in account_sync, requesting full key data...`,
+			);
+
+			const keyRequestIQ: BinaryNode = {
+				attrs: {
+					to: S_WHATSAPP_NET,
+					type: "get",
+					xmlns: "encrypt",
+				},
+				content: [
+					{
+						attrs: {},
+						content: keyIndexList.validIndexes.map((id) => ({
+							attrs: {},
+							content: id.toString(),
+							tag: "id",
+						})),
+						tag: "key",
+					},
+				],
+				tag: "iq",
+			};
+
+			this.connectionActions
+				.sendNode(keyRequestIQ)
+				.catch((err) =>
+					this.logger.error({ err }, "Failed to send key request IQ"),
+				);
+		} catch (error) {
+			this.logger.error(
+				{ err: error },
+				"Failed to decode KeyIndexList from account_sync notification",
+			);
+		}
+	}
+
+	private handleKeysIQ(keysNode: BinaryNode): void {
+		const keyShareNode = getBinaryNodeChild(keysNode, "key");
+		if (
+			!keyShareNode?.content ||
+			!(keyShareNode.content instanceof Uint8Array)
+		) {
+			this.logger.warn("Received keys IQ but found no valid key content");
+			return;
+		}
+
+		try {
+			const keyShare = fromBinary(
+				Message_AppStateSyncKeyShareSchema,
+				keyShareNode.content,
+			);
+			const keyCollection =
+				this.authStateProvider.db?.getCollection("app-state-keys");
+
+			if (!keyCollection) {
+				this.logger.error(
+					"app-state-keys collection is not available in the database.",
+				);
+				return;
+			}
+
+			this.logger.info(
+				`Received ${keyShare.keys.length} app state sync keys. Storing them...`,
+			);
+
+			const promises = keyShare.keys.map(async (key) => {
+				const keyId = key.keyId?.keyId;
+				if (keyId) {
+					const keyIdB64 = Buffer.from(keyId).toString("base64");
+					// We store the whole key data object, serialized as JSON
+					await keyCollection.set(keyIdB64, serialize(key.keyData));
+					this.logger.debug({ keyId: keyIdB64 }, "Stored app state key");
+				}
+			});
+
+			Promise.all(promises).catch((err) => {
+				this.logger.error(
+					{ err },
+					"Failed to store one or more app state keys",
+				);
+			});
+		} catch (error) {
+			this.logger.error(
+				{ err: error },
+				"Failed to decode AppStateSyncKeyShare",
+			);
+		}
+	}
 
 	private handlePairDeviceIQ(node: BinaryNode): void {
 		this.setState(AuthState.AWAITING_QR);
@@ -149,12 +279,12 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		}
 
 		const ackNode: BinaryNode = {
-			tag: "iq",
 			attrs: {
+				id: node.attrs.id,
 				to: node.attrs.from,
 				type: "result",
-				id: node.attrs.id,
 			},
+			tag: "iq",
 		};
 
 		this.connectionActions
@@ -182,7 +312,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		identifierKey: Uint8Array;
 	} {
 		return {
-			identifier: { name: jid, deviceId: 0 },
+			identifier: { deviceId: 0, name: jid },
 			identifierKey: publicKey,
 		};
 	}
@@ -227,9 +357,9 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 
 		return {
 			account,
-			platformName: platformNode?.attrs.name,
-			deviceJid: deviceNode.attrs.jid,
 			businessName: businessNode?.attrs.name,
+			deviceJid: deviceNode.attrs.jid,
+			platformName: platformNode?.attrs.name,
 		};
 	}
 
@@ -248,14 +378,14 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		);
 
 		return {
-			me: { id: verifiedData.deviceJid, name: verifiedData.businessName },
 			account: toJson(
 				ADVSignedDeviceIdentitySchema,
 				verifiedData.account,
 			) as unknown as ADVSignedDeviceIdentity,
-			signalIdentities: [...(creds.signalIdentities || []), identity],
-			platform: verifiedData.platformName,
+			me: { id: verifiedData.deviceJid, name: verifiedData.businessName },
 			pairingCode: undefined,
+			platform: verifiedData.platformName,
+			signalIdentities: [...(creds.signalIdentities || []), identity],
 		};
 	}
 
@@ -317,25 +447,25 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 			updatedAccount.details,
 		);
 		return {
-			tag: "iq",
 			attrs: {
+				id: msgId,
 				to: S_WHATSAPP_NET,
 				type: "result",
-				id: msgId,
 			},
 			content: [
 				{
-					tag: "pair-device-sign" as SINGLE_BYTE_TOKENS_TYPE,
 					attrs: {},
 					content: [
 						{
-							tag: "device-identity" as SINGLE_BYTE_TOKENS_TYPE,
 							attrs: { "key-index": (deviceIdentity.keyIndex || 0).toString() },
 							content: accountEnc,
+							tag: "device-identity" as SINGLE_BYTE_TOKENS_TYPE,
 						},
 					],
+					tag: "pair-device-sign" as SINGLE_BYTE_TOKENS_TYPE,
 				},
 			],
+			tag: "iq",
 		};
 	}
 
@@ -466,7 +596,7 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 	private handleLoginFailure(node: BinaryNode): void {
 		const reason = node.attrs.reason || "unknown";
 		const code = Number.parseInt(reason, 10) || 401;
-		this.logger.error({ code, attrs: node.attrs }, "Login failed");
+		this.logger.error({ attrs: node.attrs, code }, "Login failed");
 		const error = new Error(`Login failed: ${reason}`);
 
 		this.qrCodeGenerator.stop();

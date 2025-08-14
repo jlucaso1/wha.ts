@@ -1,19 +1,26 @@
 import type { BinaryNode } from "@wha.ts/binary";
-import { getBinaryNodeChild, S_WHATSAPP_NET } from "@wha.ts/binary";
+import {
+	getBinaryNodeChild,
+	getBinaryNodeChildren,
+	S_WHATSAPP_NET,
+} from "@wha.ts/binary";
+import type { ILogger } from "@wha.ts/types/transport";
 import { generateMdTagPrefix } from "@wha.ts/utils/generic";
 import { DisconnectReason } from "../defaults";
 import type { MessageProcessor } from "../messaging/message-processor";
-import type { ILogger } from "../transport/types";
-import type { ConnectionState } from "./connection-events";
+import type {
+	ConnectionManagerEventMap,
+	ConnectionState,
+} from "./connection-events";
 import { ErrorWithStatusCode } from "./types";
 
 interface IConnectionManagerActions {
 	setState(newState: ConnectionState, error?: Error): void;
 	sendNode(node: BinaryNode): Promise<void>;
 	close(error?: Error): Promise<void>;
-	dispatchTypedEvent(
-		type: "node.received",
-		payload: { node: BinaryNode },
+	dispatchTypedEvent<K extends keyof ConnectionManagerEventMap>(
+		type: K,
+		payload: ConnectionManagerEventMap[K],
 	): void;
 }
 
@@ -45,10 +52,30 @@ export class IncomingNodeHandler {
 			return;
 		}
 
+		if (node.tag === "notification") {
+			const notificationType = node.attrs.type;
+			if (notificationType === "server_sync") {
+				this.logger.info(
+					"Received `server_sync` notification, dispatching sync event.",
+				);
+				const collections = getBinaryNodeChildren(node, "collection");
+				for (const collectionNode of collections) {
+					const name = collectionNode.attrs.name;
+					if (name) {
+						this.logger.info(
+							`Dispatching sync event for collection '${name}'.`,
+						);
+						this.connection.dispatchTypedEvent("sync.received", { name });
+					}
+				}
+				return;
+			}
+		}
+
 		if (getBinaryNodeChild(node, "enc")) {
 			this.messageProcessor.processIncomingNode(node).catch((err) => {
 				this.logger.error(
-					{ err, nodeTag: node.tag, from: node.attrs.from },
+					{ err, from: node.attrs.from, nodeTag: node.tag },
 					"Error processing encrypted node in MessageProcessor",
 				);
 			});
@@ -90,13 +117,13 @@ export class IncomingNodeHandler {
 
 		this.logger.debug({ id: node.attrs.id }, "Responding to ping");
 		const pongNode: BinaryNode = {
-			tag: "iq",
 			attrs: {
+				id: `${generateMdTagPrefix()}-${this.epoch++}`,
 				to: node.attrs.from,
 				type: "result",
 				xmlns: "w:p",
-				id: `${generateMdTagPrefix()}-${this.epoch++}`,
 			},
+			tag: "iq",
 		};
 		this.connection.sendNode(pongNode).catch((err) => {
 			this.logger.warn(

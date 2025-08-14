@@ -2,7 +2,7 @@ import { bytesToBase64 } from "@wha.ts/utils";
 import type z from "zod";
 import type { ZodType } from "zod";
 
-function replacer(_key: string, value: unknown): unknown {
+export function replacer(_key: string, value: unknown): unknown {
 	if (value instanceof Uint8Array) {
 		return bytesToBase64(value);
 	}

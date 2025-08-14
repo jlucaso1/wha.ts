@@ -10,13 +10,13 @@ export const ZodBigInt = z.preprocess((val) => {
 }, z.bigint());
 
 export const KeyPairSchema = z.object({
-	publicKey: ZodUint8Array,
 	privateKey: ZodUint8Array,
+	publicKey: ZodUint8Array,
 });
 
 export const ProtocolAddressSchema = z.object({
-	name: z.string(),
 	deviceId: z.number(),
+	name: z.string(),
 });
 
 export const SignalIdentitySchema = z.object({
@@ -39,19 +39,19 @@ export const IndexInfoSchema = z.object({
 	baseKey: ZodUint8Array,
 	baseKeyType: z.enum(BaseKeyType),
 	closed: ZodBigInt,
-	used: ZodBigInt,
 	created: ZodBigInt,
 	remoteIdentityKey: ZodUint8Array,
+	used: ZodBigInt,
 });
 
 export const PendingPreKeySchema = z.object({
-	signedKeyId: z.number(),
 	baseKey: ZodUint8Array,
 	preKeyId: z.number().optional(),
+	signedKeyId: z.number(),
 });
 
 export const SessionEntrySchema = z.object({
-	registrationId: z.number().optional(),
+	chains: z.record(z.string(), ChainSchema),
 	currentRatchet: z.object({
 		ephemeralKeyPair: KeyPairSchema,
 		lastRemoteEphemeralKey: ZodUint8Array,
@@ -60,7 +60,7 @@ export const SessionEntrySchema = z.object({
 	}),
 	indexInfo: IndexInfoSchema,
 	pendingPreKey: PendingPreKeySchema.optional(),
-	chains: z.record(z.string(), ChainSchema),
+	registrationId: z.number().optional(),
 });
 
 const PlainSessionRecordSchema = z.object({

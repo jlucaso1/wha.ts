@@ -106,8 +106,8 @@ export class GroupCipher {
 		// The Rust code derived 48 bytes, but AES-CBC only needs 32 for key + 16 for IV
 		const derived = hkdf(seed, 48, { info: KDF_INFO });
 		return {
-			iv: derived.slice(0, 16),
 			cipherKey: derived.slice(16, 48), // Assuming AES-256-CBC
+			iv: derived.slice(0, 16),
 		};
 	}
 }

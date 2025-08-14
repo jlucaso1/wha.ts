@@ -2,8 +2,8 @@ import { fromBinary, type JsonValue, toJson } from "@bufbuild/protobuf";
 import { type BinaryNode, decodeBinaryNode } from "@wha.ts/binary";
 import { FrameHandler } from "@wha.ts/core/transport/frame-handler";
 import type { NoiseProcessor } from "@wha.ts/core/transport/noise-processor";
-import type { ILogger } from "@wha.ts/core/transport/types";
 import { ClientPayloadSchema, HandshakeMessageSchema } from "@wha.ts/proto";
+import type { ILogger } from "@wha.ts/types/transport";
 import { base64ToBytes, bytesToHex, hexToBytes } from "@wha.ts/utils";
 
 declare global {
@@ -32,17 +32,17 @@ const PROTO_SCHEMAS = [HandshakeMessageSchema, ClientPayloadSchema];
 console.log("[Wha.ts Console POC] Content script injected.");
 
 const consoleLogger: ILogger = {
-	info: (obj: unknown, msg?: unknown) => console.log("[INFO]", msg, obj),
-	error: (obj: unknown, msg?: unknown) => console.error("[ERROR]", msg, obj),
-	warn: (obj: unknown, msg?: unknown) => console.warn("[WARN]", msg, obj),
 	debug: (...data: unknown[]) => console.debug("[DEBUG]", ...data),
+	error: (obj: unknown, msg?: unknown) => console.error("[ERROR]", msg, obj),
+	info: (obj: unknown, msg?: unknown) => console.log("[INFO]", msg, obj),
 	trace: (...data: unknown[]) => console.trace("[TRACE]", ...data),
+	warn: (obj: unknown, msg?: unknown) => console.warn("[WARN]", msg, obj),
 };
 
 const passThroughNoiseProcessor = {
-	isHandshakeFinished: true,
-	encryptMessage: (plaintext: Uint8Array) => plaintext,
 	decryptMessage: (ciphertext: Uint8Array) => ciphertext,
+	encryptMessage: (plaintext: Uint8Array) => plaintext,
+	isHandshakeFinished: true,
 };
 
 async function logExtractedPayload(payloadBytes: Uint8Array): Promise<void> {
@@ -277,10 +277,10 @@ try {
 		}
 
 		Object.defineProperty(originalWebSocket.prototype, "_whaTsPatched", {
-			value: true,
-			writable: false,
 			configurable: true,
 			enumerable: false,
+			value: true,
+			writable: false,
 		});
 
 		console.log("[Wha.ts Console POC] WebSocket patching complete.");

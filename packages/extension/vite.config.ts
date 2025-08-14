@@ -3,31 +3,31 @@ import webExtension from "vite-plugin-web-extension";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+	build: {
+		emptyOutDir: true,
+		minify: false,
+		outDir: "dist",
+		sourcemap: true,
+	},
 	plugins: [
 		tsconfigPaths(),
 		webExtension({
 			manifest: "manifest.json",
 
 			webExtConfig: {
-				startUrl: "https://web.whatsapp.com/",
-				target: "chromium",
-				profileCreateIfMissing: true,
 				chromiumProfile: "./extension-storage",
 				keepProfileChanges: true,
+				profileCreateIfMissing: true,
+				startUrl: "https://web.whatsapp.com/",
+				target: "chromium",
 			},
 		}),
 	],
-	build: {
-		outDir: "dist",
-		emptyOutDir: true,
-		minify: false,
-		sourcemap: true,
-	},
 	server: {
-		port: 5173,
-		strictPort: true,
 		hmr: {
 			port: 5173,
 		},
+		port: 5173,
+		strictPort: true,
 	},
 });

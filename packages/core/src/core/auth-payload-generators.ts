@@ -55,20 +55,20 @@ const getUserAgent = (
 	browser: readonly [string, string, string] = DEFAULT_BROWSER,
 ): ClientPayload["userAgent"] => {
 	return create(ClientPayload_UserAgentSchema, {
-		platform: ClientPayload_UserAgent_Platform.WEB,
 		appVersion: {
 			primary: version[0],
 			secondary: version[1],
 			tertiary: version[2],
 		},
+		device: browser[1] || "Desktop",
+		localeCountryIso31661Alpha2: "US",
+		localeLanguageIso6391: "en",
 		mcc: "000",
 		mnc: "000",
-		osVersion: browser[2] || "0.1",
-		device: browser[1] || "Desktop",
 		osBuildNumber: "0.1",
+		osVersion: browser[2] || "0.1",
+		platform: ClientPayload_UserAgent_Platform.WEB,
 		releaseChannel: ClientPayload_UserAgent_ReleaseChannel.RELEASE,
-		localeLanguageIso6391: "en",
-		localeCountryIso31661Alpha2: "US",
 	});
 };
 
@@ -111,10 +111,10 @@ export const generateLoginPayload = (
 		...(getBaseClientPayload(version, browser) as ClientPayload),
 		connectReason: ClientPayload_ConnectReason.USER_ACTIVATED,
 		connectType: ClientPayload_ConnectType.WIFI_UNKNOWN,
-		username: BigInt(user || "0"),
 		device: device || 0,
-		pull: true,
 		passive: false,
+		pull: true,
+		username: BigInt(user || "0"),
 	});
 };
 
@@ -134,19 +134,19 @@ export const generateRegisterPayload = (
 		...(getBaseClientPayload(version, browser) as ClientPayload),
 		connectReason: ClientPayload_ConnectReason.USER_ACTIVATED,
 		connectType: ClientPayload_ConnectType.WIFI_UNKNOWN,
-		passive: false,
-		pull: false,
 		devicePairingData: {
 			$typeName: "ClientPayload.DevicePairingRegistrationData",
 			buildHash: appVersionBuf,
 			deviceProps: devicePropsBytes,
-			eRegid: encodeBigEndian(creds.registrationId),
-			eKeytype: KEY_BUNDLE_TYPE,
 			eIdent: creds.signedIdentityKey.publicKey,
+			eKeytype: KEY_BUNDLE_TYPE,
+			eRegid: encodeBigEndian(creds.registrationId),
 			eSkeyId: encodeBigEndian(creds.signedPreKey.keyId, 3),
-			eSkeyVal: creds.signedPreKey.keyPair.publicKey,
 			eSkeySig: creds.signedPreKey.signature,
+			eSkeyVal: creds.signedPreKey.keyPair.publicKey,
 		},
+		passive: false,
+		pull: false,
 	});
 };
 
@@ -154,22 +154,22 @@ export const formatPreKeyForXMPP = (
 	keyPair: KeyPair,
 	id: number,
 ): BinaryNode => ({
-	tag: "key",
 	attrs: {},
 	content: [
-		{ tag: "id", attrs: {}, content: encodeBigEndian(id, 3) },
-		{ tag: "value", attrs: {}, content: keyPair.publicKey },
+		{ attrs: {}, content: encodeBigEndian(id, 3), tag: "id" },
+		{ attrs: {}, content: keyPair.publicKey, tag: "value" },
 	],
+	tag: "key",
 });
 
 export const formatSignedPreKeyForXMPP = (
 	signedKeyPair: SignedKeyPair,
 ): BinaryNode => ({
-	tag: "skey",
 	attrs: {},
 	content: [
-		{ tag: "id", attrs: {}, content: encodeBigEndian(signedKeyPair.keyId, 3) },
-		{ tag: "value", attrs: {}, content: signedKeyPair.keyPair.publicKey },
-		{ tag: "signature", attrs: {}, content: signedKeyPair.signature },
+		{ attrs: {}, content: encodeBigEndian(signedKeyPair.keyId, 3), tag: "id" },
+		{ attrs: {}, content: signedKeyPair.keyPair.publicKey, tag: "value" },
+		{ attrs: {}, content: signedKeyPair.signature, tag: "signature" },
 	],
+	tag: "skey",
 });

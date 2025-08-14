@@ -32,6 +32,10 @@ interface WsClosePayload {
 	reason: string;
 }
 
+export interface SyncReceivedPayload {
+	name: string;
+}
+
 export interface ConnectionManagerEventMap {
 	"state.change": StateChangePayload;
 	"handshake.complete": HandshakeCompletePayload;
@@ -39,4 +43,5 @@ export interface ConnectionManagerEventMap {
 	"node.sent": NodeSentPayload;
 	error: ErrorPayload;
 	"ws.close": WsClosePayload;
+	"sync.received": SyncReceivedPayload;
 }

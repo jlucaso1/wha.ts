@@ -1,12 +1,5 @@
 import { TypedEventTarget } from "@wha.ts/types/generics/typed-event-target";
-
-export interface ILogger {
-	info(obj: unknown, msg?: unknown): void;
-	error(obj: unknown, msg?: unknown): void;
-	warn(obj: unknown, msg?: unknown): void;
-	debug(...data: unknown[]): void;
-	trace(...data: unknown[]): void;
-}
+import type { ILogger } from "@wha.ts/types/transport";
 
 export interface WebSocketClientEventMap {
 	open: null;

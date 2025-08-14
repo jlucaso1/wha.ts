@@ -163,10 +163,10 @@ export class SessionCipher {
 			delete chain.messageKeys[keyIndex];
 
 			const msg = create(SignalMessageSchema, {
-				ratchetKey: publicKey,
+				ciphertext: aesEncrypt(data, cipherKey, ivPrefix.slice(0, 16)),
 				counter: chain.chainKey.counter,
 				previousCounter: session.currentRatchet.previousCounter,
-				ciphertext: aesEncrypt(data, cipherKey, ivPrefix.slice(0, 16)),
+				ratchetKey: publicKey,
 			});
 
 			const msgBuf = toBinary(SignalMessageSchema, msg);
@@ -190,12 +190,12 @@ export class SessionCipher {
 			if (session.pendingPreKey) {
 				type = 3;
 				const preKeyMsg = create(PreKeySignalMessageSchema, {
-					identityKey: ourIdentityKey.publicKey,
-					registrationId: await this.storage.getOurRegistrationId(),
 					baseKey: session.pendingPreKey.baseKey,
-					signedPreKeyId: session.pendingPreKey.signedKeyId,
+					identityKey: ourIdentityKey.publicKey,
 					message,
 					preKeyId: session.pendingPreKey.preKeyId,
+					registrationId: await this.storage.getOurRegistrationId(),
+					signedPreKeyId: session.pendingPreKey.signedKeyId,
 				});
 				const preKeyMsgBuf = toBinary(PreKeySignalMessageSchema, preKeyMsg);
 				body = concatBytes(
@@ -210,9 +210,9 @@ export class SessionCipher {
 				throw new Error("Session registrationId is undefined");
 			}
 			return {
-				type,
 				body,
 				registrationId: session.registrationId,
+				type,
 			};
 		});
 	}
@@ -230,7 +230,7 @@ export class SessionCipher {
 				const plaintext = await this.doDecryptWhisperMessage(data, session);
 				if (!session.indexInfo) throw new Error("Session missing indexInfo");
 				session.indexInfo.used = BigInt(Date.now());
-				return { session, plaintext };
+				return { plaintext, session };
 			} catch (e) {
 				errs.push(e as Error);
 			}
@@ -468,12 +468,12 @@ export class SessionCipher {
 			? ratchet.ephemeralKeyPair.publicKey
 			: remoteKey;
 		session.chains[bytesToBase64(chainKeyBytes)] = {
-			messageKeys: {},
 			chainKey: {
 				counter: -1,
 				key: newChainKey,
 			},
 			chainType: sending ? ChainType.SENDING : ChainType.RECEIVING,
+			messageKeys: {},
 		};
 		ratchet.rootKey = newRootKey;
 	}

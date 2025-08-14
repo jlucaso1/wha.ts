@@ -96,9 +96,9 @@ export class SessionBuilder {
 				device.registrationId,
 			);
 			session.pendingPreKey = {
-				signedKeyId: device.signedPreKey.keyId,
 				baseKey: baseKey.publicKey,
 				preKeyId: device.preKey?.keyId,
+				signedKeyId: device.signedPreKey.keyId,
 			};
 			let record = await this.storage.loadSession(fqAddr);
 			if (!record) {
@@ -252,24 +252,24 @@ export class SessionBuilder {
 		);
 
 		const session: ISessionEntry = {
-			registrationId,
+			chains: {},
 			currentRatchet: {
-				rootKey: masterKey[0],
 				ephemeralKeyPair: isInitiator
 					? Curve.generateKeyPair()
 					: localOurSignedKey,
 				lastRemoteEphemeralKey: effectiveTheirSignedPubKey,
 				previousCounter: 0,
+				rootKey: masterKey[0],
 			},
 			indexInfo: {
-				created: BigInt(Date.now()),
-				used: BigInt(Date.now()),
-				remoteIdentityKey: theirIdentityPubKey,
 				baseKey: baseKeyForSession,
 				baseKeyType: isInitiator ? BaseKeyType.OURS : BaseKeyType.THEIRS,
 				closed: -1n,
+				created: BigInt(Date.now()),
+				remoteIdentityKey: theirIdentityPubKey,
+				used: BigInt(Date.now()),
 			},
-			chains: {},
+			registrationId,
 		};
 
 		if (isInitiator && effectiveTheirSignedPubKey) {
@@ -299,9 +299,9 @@ export class SessionBuilder {
 		);
 
 		session.chains[bytesToBase64(ephemeralKeyPair.publicKey)] = {
-			messageKeys: {},
 			chainKey: { counter: -1, key: newChainKey },
 			chainType: ChainType.SENDING,
+			messageKeys: {},
 		};
 		session.currentRatchet.rootKey = newRootKey;
 	}

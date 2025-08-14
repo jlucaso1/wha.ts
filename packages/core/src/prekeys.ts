@@ -2,6 +2,7 @@ import type { BinaryNode } from "@wha.ts/binary";
 import { getBinaryNodeChild, S_WHATSAPP_NET } from "@wha.ts/binary";
 import type { IAuthStateProvider } from "@wha.ts/types";
 import type { TypedCustomEvent } from "@wha.ts/types/generics/typed-event-target";
+import type { ILogger } from "@wha.ts/types/transport";
 import {
 	encodeBigEndian,
 	generatePreKeys,
@@ -10,30 +11,29 @@ import {
 	type SignedKeyPair,
 } from "@wha.ts/utils";
 import type { ConnectionManager } from "./core/connection";
-import type { ILogger } from "./transport/types";
 
 export const MIN_PREKEY_COUNT = 10;
 export const PREKEY_UPLOAD_BATCH_SIZE = 30;
 
 const formatPreKeyForXMPP = (keyPair: KeyPair, id: number): BinaryNode => ({
-	tag: "key",
 	attrs: {},
 	content: [
-		{ tag: "id", attrs: {}, content: encodeBigEndian(id, 3) },
-		{ tag: "value", attrs: {}, content: keyPair.publicKey },
+		{ attrs: {}, content: encodeBigEndian(id, 3), tag: "id" },
+		{ attrs: {}, content: keyPair.publicKey, tag: "value" },
 	],
+	tag: "key",
 });
 
 const formatSignedPreKeyForXMPP = (
 	signedKeyPair: SignedKeyPair,
 ): BinaryNode => ({
-	tag: "skey",
 	attrs: {},
 	content: [
-		{ tag: "id", attrs: {}, content: encodeBigEndian(signedKeyPair.keyId, 3) },
-		{ tag: "value", attrs: {}, content: signedKeyPair.keyPair.publicKey },
-		{ tag: "signature", attrs: {}, content: signedKeyPair.signature },
+		{ attrs: {}, content: encodeBigEndian(signedKeyPair.keyId, 3), tag: "id" },
+		{ attrs: {}, content: signedKeyPair.keyPair.publicKey, tag: "value" },
+		{ attrs: {}, content: signedKeyPair.signature, tag: "signature" },
 	],
+	tag: "skey",
 });
 
 export class PreKeyManager {
@@ -64,14 +64,14 @@ export class PreKeyManager {
 	private async getServerPreKeyCount(): Promise<number> {
 		const msgId = this.generateTag();
 		const iq: BinaryNode = {
-			tag: "iq",
 			attrs: {
 				id: msgId,
+				to: S_WHATSAPP_NET,
 				type: "get",
 				xmlns: "encrypt",
-				to: S_WHATSAPP_NET,
 			},
-			content: [{ tag: "count", attrs: {} }],
+			content: [{ attrs: {}, tag: "count" }],
+			tag: "iq",
 		};
 
 		await this.connectionManager.sendNode(iq);
@@ -98,28 +98,28 @@ export class PreKeyManager {
 
 		const msgId = this.generateTag();
 		const iq: BinaryNode = {
-			tag: "iq",
 			attrs: {
 				id: msgId,
+				to: S_WHATSAPP_NET,
 				type: "set",
 				xmlns: "encrypt",
-				to: S_WHATSAPP_NET,
 			},
 			content: [
 				{
-					tag: "registration",
 					attrs: {},
 					content: encodeBigEndian(creds.registrationId),
+					tag: "registration",
 				},
-				{ tag: "type", attrs: {}, content: KEY_BUNDLE_TYPE },
+				{ attrs: {}, content: KEY_BUNDLE_TYPE, tag: "type" },
 				{
-					tag: "identity",
 					attrs: {},
 					content: creds.signedIdentityKey.publicKey,
+					tag: "identity",
 				},
-				{ tag: "list", attrs: {}, content: preKeyNodes },
+				{ attrs: {}, content: preKeyNodes, tag: "list" },
 				signedPreKeyNode,
 			],
+			tag: "iq",
 		};
 
 		await this.connectionManager.sendNode(iq);

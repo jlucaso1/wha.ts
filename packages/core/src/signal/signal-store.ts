@@ -5,13 +5,13 @@ import {
 } from "@wha.ts/signal";
 import type { ChainType } from "@wha.ts/signal/chain_type";
 import type { IAuthStateProvider } from "@wha.ts/types";
+import type { ILogger } from "@wha.ts/types/transport";
 import {
 	concatBytes,
 	KEY_BUNDLE_TYPE,
 	type KeyPair,
 	type SignedKeyPair,
 } from "@wha.ts/utils";
-import type { ILogger } from "../transport/types";
 
 export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 	constructor(
@@ -146,7 +146,7 @@ export class SignalProtocolStoreAdapter implements SignalSessionStorage {
 				results.push({ address, record });
 			} catch (err) {
 				this.logger.error(
-					{ err, address: addressStr },
+					{ address: addressStr, err },
 					"Failed to process session record for device",
 				);
 			}

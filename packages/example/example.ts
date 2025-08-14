@@ -4,7 +4,10 @@ import {
 	GenericAuthState,
 	InMemoryStorageDatabase,
 } from "@wha.ts/storage";
-import { dumpDecryptionData } from "@wha.ts/storage/debug-dumper";
+import {
+	dumpAppStateSyncData,
+	dumpDecryptionData,
+} from "@wha.ts/storage/debug-dumper";
 import type { IPlugin } from "@wha.ts/types";
 import { pino } from "pino";
 import { renderUnicodeCompact } from "uqr";
@@ -27,29 +30,29 @@ const storage = IS_BROWSER
 
 const transport = IS_BROWSER
 	? pino.transport({
-			target: "pino-pretty",
 			level: "debug",
 			options: {
 				colorize: true,
 				ignore: "pid,hostname",
 			},
+			target: "pino-pretty",
 		})
 	: pino.transport({
 			targets: [
 				{
-					target: "pino-pretty",
 					options: {
 						colorize: true,
 						ignore: "pid,hostname",
 					},
+					target: "pino-pretty",
 				},
 				{
 					level: "debug",
-					target: "pino/file",
 					options: {
 						destination: "./example-log.txt",
 						mkdir: true,
 					},
+					target: "pino/file",
 				},
 			],
 		});
@@ -63,9 +66,9 @@ async function runExample() {
 
 	if (!IS_BROWSER && process.env.CAPTURE === "true") {
 		const dumperPlugin: IPlugin = {
-			name: "debug-dumper-plugin",
-			version: "1.0.0",
 			install: (api) => {
+				const appStateSyncRequestIds = new Set<string>();
+
 				api.hooks.onPreDecrypt.tap((node) => {
 					dumpDecryptionData(
 						"./decryption-dumps",
@@ -73,10 +76,42 @@ async function runExample() {
 						storage as FileSystemStorageDatabase,
 					);
 				});
+
+				api.on("node.sent", ({ node }) => {
+					if (
+						node.tag === "iq" &&
+						node.attrs.xmlns === "w:sync:app:state" &&
+						node.attrs.type === "set" &&
+						node.attrs.id
+					) {
+						appStateSyncRequestIds.add(node.attrs.id);
+						api.logger.info(
+							`[AppStateDumper] Watching for response to sync request ID: ${node.attrs.id}`,
+						);
+					}
+				});
+
+				api.on("node.received", ({ node }) => {
+					if (
+						node.tag === "iq" &&
+						node.attrs.type === "result" &&
+						node.attrs.id &&
+						appStateSyncRequestIds.has(node.attrs.id)
+					) {
+						api.logger.info(
+							`[AppStateDumper] Capturing sync response for ID: ${node.attrs.id}`,
+						);
+						dumpAppStateSyncData("./decryption-dumps", node);
+						appStateSyncRequestIds.delete(node.attrs.id);
+					}
+				});
+
 				api.logger.warn(
 					"[DEBUG] Decryption bundle dumping is ENABLED. Saving to: ./decryption-dumps",
 				);
 			},
+			name: "debug-dumper-plugin",
+			version: "1.0.0",
 		};
 		plugins.push(dumperPlugin);
 	}
@@ -126,9 +161,9 @@ async function runExample() {
 	client.addListener("node.received", ({ node }) => {
 		logger.info(
 			{
-				tag: node.tag,
 				attrs: node.attrs,
 				content: JSON.stringify(node.content, replacer),
+				tag: node.tag,
 			},
 			"[NODE RECEIVED]",
 		);
@@ -137,9 +172,9 @@ async function runExample() {
 	client.addListener("node.sent", ({ node }) => {
 		logger.info(
 			{
-				tag: node.tag,
 				attrs: node.attrs,
 				content: JSON.stringify(node.content, replacer),
+				tag: node.tag,
 			},
 			"[NODE SENT]",
 		);

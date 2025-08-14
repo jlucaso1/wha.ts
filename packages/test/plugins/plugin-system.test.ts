@@ -10,8 +10,6 @@ describe("Plugin System", () => {
 		}
 
 		const statisticsPlugin: IPlugin<StatsAPI> = {
-			name: "statistics-plugin",
-			version: "1.0.0",
 			api: {
 				getStats: () => ({
 					incoming: statsCounter.incoming,
@@ -29,6 +27,8 @@ describe("Plugin System", () => {
 
 				api.logger.info("Statistics plugin installed successfully");
 			},
+			name: "statistics-plugin",
+			version: "1.0.0",
 		};
 
 		const statsCounter = { incoming: 0, outgoing: 0 };
@@ -74,25 +74,25 @@ describe("Plugin System", () => {
 
 	test("should support multiple plugins", async () => {
 		const plugin1: IPlugin<{ feature1: () => string }> = {
-			name: "plugin1",
-			version: "1.0.0",
 			api: {
 				feature1: () => "plugin1-result",
 			},
 			install: (api) => {
 				api.logger.info("Plugin 1 installed");
 			},
+			name: "plugin1",
+			version: "1.0.0",
 		};
 
 		const plugin2: IPlugin<{ feature2: () => string }> = {
-			name: "plugin2",
-			version: "1.0.0",
 			api: {
 				feature2: () => "plugin2-result",
 			},
 			install: (api) => {
 				api.logger.info("Plugin 2 installed");
 			},
+			name: "plugin2",
+			version: "1.0.0",
 		};
 
 		const storage = new InMemoryStorageDatabase();

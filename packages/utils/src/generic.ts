@@ -20,22 +20,22 @@ export const initAuthCreds = (): AuthenticationCreds => {
 	const identityKey = Curve.generateKeyPair();
 
 	return {
-		noiseKey: Curve.generateKeyPair(),
-		pairingEphemeralKeyPair: Curve.generateKeyPair(),
-		signedIdentityKey: identityKey,
-		signedPreKey: Curve.signedKeyPair(identityKey, 1),
-		registrationId: generateRegistrationId(),
-		advSecretKey: randomBytes(32),
-		nextPreKeyId: 1,
-		firstUnuploadedPreKeyId: 1,
-		accountSyncCounter: 0,
 		accountSettings: {
 			unarchiveChats: false,
 		},
-		registered: false,
+		accountSyncCounter: 0,
+		advSecretKey: randomBytes(32),
+		firstUnuploadedPreKeyId: 1,
+		nextPreKeyId: 1,
+		noiseKey: Curve.generateKeyPair(),
 		pairingCode: undefined,
-		routingInfo: undefined,
+		pairingEphemeralKeyPair: Curve.generateKeyPair(),
 		processedMessages: [],
+		registered: false,
+		registrationId: generateRegistrationId(),
+		routingInfo: undefined,
+		signedIdentityKey: identityKey,
+		signedPreKey: Curve.signedKeyPair(identityKey, 1),
 	};
 };
 

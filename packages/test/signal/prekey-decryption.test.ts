@@ -16,14 +16,14 @@ const SIGNAL_MESSAGE_VERSION = 3;
 const incomingPkMsgWithPreKeyId0 = {
 	jid: "1234567890@s.whatsapp.net",
 	preKeySignalMessage: {
-		preKeyId: 0,
-		signedPreKeyId: 1,
 		baseKey: Curve.generateKeyPair().publicKey,
 		identityKey: Curve.generateKeyPair().publicKey,
 		message: new Uint8Array([
 			0x08, 0x01, 0x12, 0x05, 0x0a, 0x03, 0x61, 0x62, 0x63,
 		]),
+		preKeyId: 0,
 		registrationId: 1234,
+		signedPreKeyId: 1,
 	},
 };
 

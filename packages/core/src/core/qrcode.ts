@@ -1,8 +1,8 @@
 import type { BinaryNode } from "@wha.ts/binary";
 import type { IAuthStateProvider } from "@wha.ts/types";
 import { TypedEventTarget } from "@wha.ts/types/generics/typed-event-target";
+import type { ILogger } from "@wha.ts/types/transport";
 import { bytesToBase64, bytesToUtf8 } from "@wha.ts/utils";
-import type { ILogger } from "../transport/types";
 
 export interface QRCodeGeneratorEventMap {
 	qr: { qr: string };
@@ -44,7 +44,7 @@ export class QRCodeGenerator extends TypedEventTarget<QRCodeGeneratorEventMap> {
 		const refNode = this.refNodes[this.qrRetryCount];
 		if (!refNode?.content) {
 			this.logger.error(
-				{ refsAvailable: this.refNodes.length, count: this.qrRetryCount },
+				{ count: this.qrRetryCount, refsAvailable: this.refNodes.length },
 				"No more QR refs available, pairing timed out/failed",
 			);
 			const error = new Error("QR code generation failed (no refs left)");

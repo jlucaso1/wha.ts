@@ -12,15 +12,15 @@ export const SenderMessageKeySchema = z.object({
 });
 
 export const SenderSigningKeySchema = z.object({
-	public: ZodUint8Array,
 	private: ZodUint8Array.optional(),
+	public: ZodUint8Array,
 });
 
 export const SenderKeyStateSchema = z.object({
-	senderKeyId: z.number(),
 	senderChainKey: SenderChainKeySchema,
-	senderSigningKey: SenderSigningKeySchema,
+	senderKeyId: z.number(),
 	senderMessageKeys: z.array(SenderMessageKeySchema).default([]),
+	senderSigningKey: SenderSigningKeySchema,
 });
 export type SenderKeyState = z.infer<typeof SenderKeyStateSchema>;
 

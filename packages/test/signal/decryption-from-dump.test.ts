@@ -51,7 +51,9 @@ const DUMPS_DIR = "./decryption-dumps";
 describe("Offline Decryption from Dumped Bundles", async () => {
 	const dumpFolders = await fs.readdir(DUMPS_DIR);
 
-	for (const folderName of dumpFolders) {
+	for (const folderName of dumpFolders.filter((name) =>
+		/^\d{13}-[a-zA-Z0-9]+$/.test(name),
+	)) {
 		test(`should correctly decrypt bundle: ${folderName}`, async () => {
 			const bundlePath = path.join(DUMPS_DIR, folderName);
 

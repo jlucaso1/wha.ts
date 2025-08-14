@@ -1,45 +1,51 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.1.3/schema.json",
-	"vcs": {
-		"enabled": false,
-		"clientKind": "git",
-		"useIgnoreFile": false
+	"$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on",
+				"useSortedKeys": "on",
+				"useSortedProperties": "on"
+			}
+		}
 	},
 	"files": {
 		"ignoreUnknown": false,
 		"includes": [
 			"**",
-			"!node_modules/**",
-			"!example-storage/**",
+			"!node_modules",
+			"!example-storage",
 			"!**/dist",
 			"!**/extension-storage",
-			"!decryption-dumps/**"
+			"!decryption-dumps"
 		]
 	},
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab"
 	},
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"recommended": true,
-			"suspicious": {
-				"noExplicitAny": "warn"
-			},
-			"correctness": {
-				"noUnusedImports": "error",
-				"noUnusedPrivateClassMembers": "off",
-				"noUnusedVariables": "warn"
-			}
-		}
-	},
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"
 		}
 	},
-	"assist": {
-		"actions": { "source": { "organizeImports": "on" } }
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"correctness": {
+				"noUnusedImports": "error",
+				"noUnusedPrivateClassMembers": "off",
+				"noUnusedVariables": "warn"
+			},
+			"recommended": true,
+			"suspicious": {
+				"noExplicitAny": "warn"
+			}
+		}
+	},
+	"vcs": {
+		"clientKind": "git",
+		"enabled": false,
+		"useIgnoreFile": false
 	}
 }

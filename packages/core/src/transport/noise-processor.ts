@@ -5,6 +5,7 @@ import {
 	CertChainSchema,
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
+import type { ILogger } from "@wha.ts/types/transport";
 import type { KeyPair } from "@wha.ts/utils";
 import {
 	aesDecryptGCM,
@@ -18,7 +19,6 @@ import {
 	utf8ToBytes,
 } from "@wha.ts/utils";
 import { NOISE_MODE, WHATSAPP_ROOT_CA_PUBLIC_KEY } from "../defaults";
-import type { ILogger } from "./types";
 
 export interface NoiseState {
 	handshakeHash: Uint8Array;
@@ -65,16 +65,16 @@ export class NoiseProcessor extends EventTarget {
 		);
 
 		this.state = {
-			handshakeHash,
-			salt,
-			encryptionKey,
 			decryptionKey,
-			readCounter: 0n,
-			writeCounter: 0n,
+			encryptionKey,
+			handshakeHash,
 			isHandshakeFinished: false,
-			routingInfo,
-			noisePrologue,
 			logger,
+			noisePrologue,
+			readCounter: 0n,
+			routingInfo,
+			salt,
+			writeCounter: 0n,
 		};
 	}
 
@@ -118,17 +118,17 @@ export class NoiseProcessor extends EventTarget {
 		);
 
 		const key = hkdf(inputKeyMaterial, 64, {
-			salt: this.state.salt,
 			info: "",
+			salt: this.state.salt,
 		});
 		const newSalt = key.subarray(0, 32);
 		const keyUpdate = key.subarray(32);
 		this.state = {
 			...this.state,
-			salt: newSalt,
-			encryptionKey: keyUpdate,
 			decryptionKey: keyUpdate,
+			encryptionKey: keyUpdate,
 			readCounter: 0n,
+			salt: newSalt,
 			writeCounter: 0n,
 		};
 	}
@@ -179,19 +179,19 @@ export class NoiseProcessor extends EventTarget {
 		this.logger.debug("Finalizing handshake, switching to transport mode");
 
 		const key = hkdf(new Uint8Array(0), 64, {
-			salt: this.state.salt,
 			info: "",
+			salt: this.state.salt,
 		});
 		const finalWriteKey = key.subarray(0, 32);
 		const finalReadKey = key.subarray(32);
 		this.state = {
 			...this.state,
-			encryptionKey: finalWriteKey,
 			decryptionKey: finalReadKey,
+			encryptionKey: finalWriteKey,
 			handshakeHash: new Uint8Array(0),
+			isHandshakeFinished: true,
 			readCounter: 0n,
 			writeCounter: 0n,
-			isHandshakeFinished: true,
 		};
 	}
 

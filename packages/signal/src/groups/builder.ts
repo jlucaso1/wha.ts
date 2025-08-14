@@ -15,15 +15,15 @@ export class GroupSessionBuilder {
 		const record = result[senderKeyName] ?? { senderKeyStates: [] };
 
 		const newKeyState: SenderKeyState = {
-			senderKeyId: message.id,
 			senderChainKey: {
 				iteration: message.iteration,
 				seed: message.chainKey,
 			},
+			senderKeyId: message.id,
+			senderMessageKeys: [],
 			senderSigningKey: {
 				public: message.signingKey,
 			},
-			senderMessageKeys: [],
 		};
 
 		// Add the new state to the front and manage the record size

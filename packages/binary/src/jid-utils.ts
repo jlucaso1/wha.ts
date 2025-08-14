@@ -47,10 +47,10 @@ export const jidDecode = (jid: string | undefined): FullJid | undefined => {
 	const user = userAgent?.split("_")[0];
 
 	return {
+		device: device ? +device : undefined,
+		domainType: server === "lid" ? 1 : 0,
 		server: server as JidServer,
 		user,
-		domainType: server === "lid" ? 1 : 0,
-		device: device ? +device : undefined,
 	};
 };
 

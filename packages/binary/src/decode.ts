@@ -204,9 +204,9 @@ const decodeDecompressedBinaryNode = (reader: BinaryReader): BinaryNode => {
 	}
 
 	return {
-		tag: tag as SINGLE_BYTE_TOKENS_TYPE,
 		attrs,
 		content,
+		tag: tag as SINGLE_BYTE_TOKENS_TYPE,
 	};
 };
 

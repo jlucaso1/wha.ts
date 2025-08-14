@@ -1,7 +1,7 @@
 import "./client-events";
 import { create, toBinary } from "@bufbuild/protobuf";
 import type { BinaryNode } from "@wha.ts/binary";
-import { jidDecode } from "@wha.ts/binary";
+import { getBinaryNodeChild, jidDecode } from "@wha.ts/binary";
 import {
 	Message_ExtendedTextMessageSchema,
 	MessageSchema,
@@ -17,13 +17,15 @@ import {
 	type TypedCustomEvent,
 	TypedEventTarget,
 } from "@wha.ts/types/generics/typed-event-target";
-import { generateMdTagPrefix, padRandomMax16 } from "@wha.ts/utils";
+import type { ILogger } from "@wha.ts/types/transport";
+import { generateMdTagPrefix, Mutex, padRandomMax16 } from "@wha.ts/utils";
 import { Authenticator } from "./core/authenticator";
 import type {
 	ConnectionUpdatePayload,
 	CredsUpdatePayload,
 } from "./core/authenticator-events";
 import { ConnectionManager } from "./core/connection";
+import type { SyncReceivedPayload } from "./core/connection-events";
 import type { IConnectionActions } from "./core/types";
 import { DEFAULT_BROWSER, DEFAULT_SOCKET_CONFIG, WA_VERSION } from "./defaults";
 import { MessageProcessor } from "./messaging/message-processor";
@@ -31,7 +33,8 @@ import { PluginManager } from "./plugins/plugin-manager";
 import { PreKeyManager } from "./prekeys";
 import { PresenceManager } from "./presence";
 import { SignalProtocolStoreAdapter } from "./signal/signal-store";
-import type { ILogger, WebSocketConfig } from "./transport/types";
+import { appStateSync } from "./state/appstate-sync";
+import type { WebSocketConfig } from "./transport/types";
 
 interface ClientConfig<
 	_TStorage,
@@ -71,10 +74,12 @@ export class WhaTSClient<
 	protected connectionManager: ConnectionManager;
 	private authenticator: Authenticator;
 	private epoch = 0;
+	private iqEpoch = 0;
 	private pluginManager: PluginManager;
 	public signalStore: SignalProtocolStoreAdapter;
 	private preKeyManager: PreKeyManager;
 	private presenceManager: PresenceManager;
+	private appStateSyncMutexes = new Map<string, Mutex>();
 
 	constructor(config: ClientConfig<_TStorage, TPlugins>) {
 		super();
@@ -83,19 +88,19 @@ export class WhaTSClient<
 
 		this.config = {
 			auth: config.auth,
-			logger: logger,
-			version: config.version || WA_VERSION,
 			browser: config.browser || DEFAULT_BROWSER,
+			logger: logger,
+			plugins: config.plugins,
+			version: config.version || WA_VERSION,
 			wsOptions: {
 				...DEFAULT_SOCKET_CONFIG,
 				...(config.wsOptions || {}),
+				logger: logger,
 				url: new URL(
 					config.wsOptions?.url?.toString() ||
 						DEFAULT_SOCKET_CONFIG.waWebSocketUrl,
 				),
-				logger: logger,
 			},
-			plugins: config.plugins,
 		} satisfies ClientConfig<_TStorage, TPlugins>;
 
 		this.auth = this.config.auth;
@@ -160,8 +165,8 @@ export class WhaTSClient<
 		);
 
 		const connectionActions: IConnectionActions = {
-			sendNode: (node) => this.connectionManager.sendNode(node),
 			closeConnection: (error) => this.connectionManager.close(error),
+			sendNode: (node) => this.connectionManager.sendNode(node),
 		};
 
 		this.authenticator = new Authenticator(
@@ -228,6 +233,42 @@ export class WhaTSClient<
 			"node.sent",
 			(event: TypedCustomEvent<ClientEventMap["node.sent"]>) => {
 				this.dispatchTypedEvent("node.sent", event.detail);
+			},
+		);
+
+		this.connectionManager.addEventListener(
+			"sync.received",
+			async (event: TypedCustomEvent<SyncReceivedPayload>) => {
+				const { name } = event.detail;
+				this.dispatchTypedEvent("sync.received", event.detail);
+
+				if (!this.appStateSyncMutexes.has(name)) {
+					this.appStateSyncMutexes.set(name, new Mutex());
+				}
+
+				const mutex = this.appStateSyncMutexes.get(name);
+
+				if (!mutex) {
+					this.logger.error(
+						{ name },
+						`Mutex for app state '${name}' not found`,
+					);
+					return;
+				}
+
+				await mutex.runExclusive(async () => {
+					this.logger.info(
+						`[AppState] Acquired lock for '${name}', starting sync.`,
+					);
+					try {
+						await appStateSync(this, name, false);
+					} catch (err) {
+						this.logger.error(
+							{ collection: name, err },
+							`[AppState] Sync for '${name}' failed.`,
+						);
+					}
+				});
 			},
 		);
 	}
@@ -302,22 +343,22 @@ export class WhaTSClient<
 				const { user, server } = jidDecode(jid) || {};
 				const recipientJid = `${user}@${server}`;
 				const messageNode: BinaryNode = {
-					tag: "message",
 					attrs: {
-						to: recipientJid,
 						id: msgId,
+						to: recipientJid,
 						type: "text",
 					},
 					content: [
 						{
-							tag: "enc",
 							attrs: {
-								v: "2",
 								type: encType,
+								v: "2",
 							},
 							content: encryptedResult.body,
+							tag: "enc",
 						},
 					],
+					tag: "message",
 				};
 				nodesToSend.push(messageNode);
 			} catch (error) {
@@ -337,7 +378,7 @@ export class WhaTSClient<
 		}
 
 		this.logger.info(
-			{ count: nodesToSend.length, userId, msgId },
+			{ count: nodesToSend.length, msgId, userId },
 			"Sending message nodes for device fanout",
 		);
 
@@ -357,22 +398,19 @@ export class WhaTSClient<
 
 		try {
 			const ackNode = await this.waitForMessageAck(msgId);
-			return { messageId: msgId, ack: ackNode };
+			return { ack: ackNode, messageId: msgId };
 		} catch (ackError) {
 			this.logger.warn(
 				{ err: ackError, msgId, to: jid },
 				"Error while waiting for message ack, or ack contained an error.",
 			);
 			return {
-				messageId: msgId,
 				error: ackError instanceof Error ? ackError.message : String(ackError),
+				messageId: msgId,
 			};
 		}
 	}
 
-	/**
-	 * Waits for an ACK node matching the given messageId, or rejects on error/timeout.
-	 */
 	private waitForMessageAck(messageId: string, timeoutMs = 15000) {
 		return new Promise<BinaryNode>((resolve, reject) => {
 			const timeoutId = setTimeout(() => {
@@ -427,6 +465,55 @@ export class WhaTSClient<
 
 	async reconnect(): Promise<void> {
 		return this.connectionManager.reconnect();
+	}
+
+	public async sendIQ(iq: BinaryNode, timeoutMs = 15000): Promise<BinaryNode> {
+		const msgId = iq.attrs.id || `${generateMdTagPrefix()}-${this.iqEpoch++}`;
+		iq.attrs.id = msgId;
+
+		const responsePromise = new Promise<BinaryNode>((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				cleanup();
+				reject(
+					new Error(
+						`Timeout waiting for IQ response to ${msgId} after ${timeoutMs}ms`,
+					),
+				);
+			}, timeoutMs);
+
+			const listener = (event: TypedCustomEvent<{ node: BinaryNode }>) => {
+				const responseNode = event.detail.node;
+				if (responseNode.tag === "iq" && responseNode.attrs.id === msgId) {
+					cleanup();
+					if (responseNode.attrs.type === "error") {
+						const errorNode = getBinaryNodeChild(responseNode, "error");
+						const errorText =
+							errorNode?.attrs.text ||
+							`IQ error code ${errorNode?.attrs.code || "unknown"}`;
+						reject(new Error(`IQ request ${msgId} failed: ${errorText}`));
+					} else {
+						resolve(responseNode);
+					}
+				}
+			};
+
+			const cleanup = () => {
+				clearTimeout(timeoutId);
+				this.connectionManager.removeEventListener(
+					"node.received",
+					listener as EventListener,
+				);
+			};
+
+			this.connectionManager.addEventListener(
+				"node.received",
+				listener as EventListener,
+			);
+		});
+
+		await this.connectionManager.sendNode(iq);
+
+		return responsePromise;
 	}
 
 	public async sendPresenceUpdate(

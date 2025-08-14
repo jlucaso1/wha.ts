@@ -1,29 +1,29 @@
 {
-	"name": "@wha.ts/signal",
-	"version": "0.1.1",
+	"dependencies": {
+		"@bufbuild/protobuf": "^2.2.5",
+		"@wha.ts/proto": "workspace:*",
+		"@wha.ts/utils": "workspace:*"
+	},
 	"description": "Signal protocol implementation for WhatsApp communication",
-	"type": "module",
-	"main": "./dist/index.js",
-	"module": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"files": [
-		"dist"
-	],
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
 			"development": "./src/index.ts",
-			"import": "./dist/index.js"
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
 		},
 		"./package.json": "./package.json"
 	},
+	"files": [
+		"dist"
+	],
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"name": "@wha.ts/signal",
+	"private": true,
 	"scripts": {
 		"build": "tsup src/index.ts --format=esm --dts"
 	},
-	"private": true,
-	"dependencies": {
-		"@wha.ts/utils": "workspace:*",
-		"@wha.ts/proto": "workspace:*",
-		"@bufbuild/protobuf": "^2.2.5"
-	}
+	"type": "module",
+	"types": "./dist/index.d.ts",
+	"version": "0.1.1"
 }

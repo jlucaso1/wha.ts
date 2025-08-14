@@ -1,39 +1,5 @@
 {
-	"name": "@wha.ts/core",
-	"version": "0.1.1",
-	"description": "Core functionality for WhatsApp communication",
-	"type": "module",
-	"main": "./dist/index.js",
-	"module": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"files": [
-		"dist"
-	],
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"development": "./src/index.ts",
-			"import": "./dist/index.js"
-		},
-		"./package.json": "./package.json"
-	},
-	"keywords": [
-		"whatsapp",
-		"typescript",
-		"api"
-	],
 	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/jlucaso1/wha.ts.git"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"scripts": {
-		"build": "tsup src/index.ts --format=esm --dts"
-	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.2.5",
 		"@wha.ts/binary": "workspace:*",
@@ -41,5 +7,39 @@
 		"@wha.ts/signal": "workspace:*",
 		"@wha.ts/types": "workspace:*",
 		"@wha.ts/utils": "workspace:*"
-	}
+	},
+	"description": "Core functionality for WhatsApp communication",
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"keywords": [
+		"whatsapp",
+		"typescript",
+		"api"
+	],
+	"license": "MIT",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"name": "@wha.ts/core",
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jlucaso1/wha.ts.git"
+	},
+	"scripts": {
+		"build": "tsup src/index.ts --format=esm --dts"
+	},
+	"type": "module",
+	"types": "./dist/index.d.ts",
+	"version": "0.1.1"
 }

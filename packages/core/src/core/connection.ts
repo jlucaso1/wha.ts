@@ -7,6 +7,7 @@ import {
 	HandshakeMessageSchema,
 } from "@wha.ts/proto";
 import type { AuthenticationCreds } from "@wha.ts/types";
+import type { ILogger } from "@wha.ts/types/transport";
 import { bytesToHex, utf8ToBytes } from "@wha.ts/utils";
 import {
 	type TypedCustomEvent,
@@ -16,7 +17,7 @@ import { DEFAULT_SOCKET_CONFIG, NOISE_WA_HEADER } from "../defaults";
 import type { MessageProcessor } from "../messaging/message-processor";
 import { FrameHandler } from "../transport/frame-handler";
 import { NoiseProcessor } from "../transport/noise-processor";
-import type { ILogger, WebSocketConfig } from "../transport/types";
+import type { WebSocketConfig } from "../transport/types";
 import { NativeWebSocketClient } from "../transport/websocket";
 import {
 	generateLoginPayload,
@@ -82,8 +83,8 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 		this.noiseProcessor = new NoiseProcessor({
 			localStaticKeyPair: this.creds.pairingEphemeralKeyPair,
-			noisePrologue: NOISE_WA_HEADER,
 			logger: this.logger,
+			noisePrologue: NOISE_WA_HEADER,
 			routingInfo: this.routingInfo,
 		});
 
@@ -97,10 +98,10 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 		this.nodeHandler = new IncomingNodeHandler(
 			{
-				setState: this.setState.bind(this),
-				sendNode: this.sendNode.bind(this),
 				close: this.close.bind(this),
 				dispatchTypedEvent: this.dispatchTypedEvent.bind(this),
+				sendNode: this.sendNode.bind(this),
+				setState: this.setState.bind(this),
 			},
 			this.messageProcessor,
 			this.logger,
@@ -145,7 +146,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 	private setState(newState: typeof this.state, error?: Error): void {
 		if (this.state !== newState) {
 			this.state = newState;
-			const payload: StateChangePayload = { state: newState, error };
+			const payload: StateChangePayload = { error, state: newState };
 			this.dispatchTypedEvent("state.change", payload);
 		}
 	}
@@ -215,8 +216,8 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 
 				const clientFinishMsg = create(HandshakeMessageSchema, {
 					clientFinish: {
-						static: clientFinishStatic,
 						payload: payloadEnc,
+						static: clientFinishStatic,
 					},
 				});
 
@@ -292,7 +293,7 @@ class ConnectionManager extends TypedEventTarget<ConnectionManagerEventMap> {
 				throw error;
 			}
 			this.logger.error(
-				{ err: error, data: bytesToHex(decryptedPayload) },
+				{ data: bytesToHex(decryptedPayload), err: error },
 				"Failed to decode BinaryNode from decrypted frame",
 			);
 			this.dispatchTypedEvent("error", { error });
