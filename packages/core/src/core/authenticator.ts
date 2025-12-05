@@ -7,11 +7,13 @@ import {
 } from "@wha.ts/binary";
 import {
 	ADVDeviceIdentitySchema,
+	type ADVKeyIndexList,
 	ADVKeyIndexListSchema,
 	type ADVSignedDeviceIdentity,
 	type ADVSignedDeviceIdentityHMAC,
 	ADVSignedDeviceIdentityHMACSchema,
 	ADVSignedDeviceIdentitySchema,
+	ADVSignedKeyIndexListSchema,
 	Message_AppStateSyncKeyShareSchema,
 } from "@wha.ts/proto";
 import { serialize } from "@wha.ts/storage/serialization";
@@ -168,13 +170,43 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 		}
 
 		try {
-			const keyIndexList = fromBinary(
-				ADVKeyIndexListSchema,
-				keyIndexListNode.content,
-			);
-			if (!keyIndexList.rawId) {
+			let keyIndexList: ADVKeyIndexList | undefined;
+			let decodedFrom: "plain" | "signed" | "unknown" = "unknown";
+
+			// Prefer the newer signed envelope; fall back to plain for backward compatibility.
+			try {
+				const signed = fromBinary(
+					ADVSignedKeyIndexListSchema,
+					keyIndexListNode.content,
+				);
+				if (signed.details) {
+					keyIndexList = fromBinary(ADVKeyIndexListSchema, signed.details);
+					decodedFrom = "signed";
+				}
+			} catch (_signedErr) {
+				try {
+					keyIndexList = fromBinary(
+						ADVKeyIndexListSchema,
+						keyIndexListNode.content,
+					);
+					decodedFrom = "plain";
+				} catch (_plainErr) {
+					decodedFrom = "unknown";
+				}
+			}
+
+			if (!keyIndexList?.rawId) {
+				if (decodedFrom === "unknown") {
+					this.logger.error(
+						"account_sync contained key-index-list but decoding failed with both signed and plain schemas",
+					);
+				}
 				this.logger.info("key-index-list was empty, no keys to fetch.");
 				return;
+			}
+
+			if (decodedFrom === "signed") {
+				this.logger.debug("Decoded key-index-list from signed envelope");
 			}
 
 			this.logger.info(

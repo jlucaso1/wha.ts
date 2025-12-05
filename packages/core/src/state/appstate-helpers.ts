@@ -7,6 +7,7 @@ import {
 	SyncdPatchSchema,
 } from "@wha.ts/proto";
 import { deserialize } from "@wha.ts/storage/serialization";
+import type { IPlugin } from "@wha.ts/types";
 import { aesDecrypt, bytesToUtf8, hmacSign, utf8ToBytes } from "@wha.ts/utils";
 import type { WhaTSClient } from "../client";
 import { getMutationKeys } from "./appstate-keys";
@@ -21,8 +22,11 @@ export interface AppStateIterationResult {
 	maxVersion: number;
 }
 
-async function getAppStateKey(
-	client: WhaTSClient<any, any>,
+async function getAppStateKey<
+	TStorage,
+	TPlugins extends readonly IPlugin[] = readonly [],
+>(
+	client: WhaTSClient<TStorage, TPlugins>,
 	keyId: Uint8Array,
 ): Promise<Uint8Array | undefined> {
 	const keyIdB64 = Buffer.from(keyId).toString("base64");
@@ -41,10 +45,10 @@ async function getAppStateKey(
 	return undefined;
 }
 
-export async function* iterateAppStateMutations(
-	collectionNode: BinaryNode,
-	client: WhaTSClient<any, any>,
-) {
+export async function* iterateAppStateMutations<
+	TStorage,
+	TPlugins extends readonly IPlugin[] = readonly [],
+>(collectionNode: BinaryNode, client: WhaTSClient<TStorage, TPlugins>) {
 	let maxVersion = 0;
 
 	const patchesNode = getBinaryNodeChild(collectionNode, "patches");
@@ -56,10 +60,14 @@ export async function* iterateAppStateMutations(
 
 	for (const patchChild of patchChildren) {
 		let patchContent: Uint8Array;
-		if (typeof patchChild.content !== "string") {
-			patchContent = new Uint8Array(Object.values(patchChild.content as any));
-		} else {
+		if (typeof patchChild.content === "string") {
 			patchContent = utf8ToBytes(patchChild.content);
+		} else {
+			const objectContent = patchChild.content as unknown as Record<
+				string,
+				number
+			>;
+			patchContent = new Uint8Array(Object.values(objectContent));
 		}
 
 		try {
