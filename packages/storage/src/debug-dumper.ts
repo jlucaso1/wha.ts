@@ -1,7 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { BinaryNode } from "@wha.ts/binary";
-import { BinaryNodeSchema } from "@wha.ts/binary/schemas";
 import { bytesToBase64 } from "@wha.ts/utils";
 import { z } from "zod/v4";
 import type { FileSystemStorageDatabase } from "./fs";
@@ -49,7 +48,7 @@ export async function dumpDecryptionData(
 
 export const DumpedAppStateSchema = z.object({
 	collectionName: z.string(),
-	node: BinaryNodeSchema,
+	node: z.any(),
 	timestamp: z.string(),
 	version: z.string(),
 });

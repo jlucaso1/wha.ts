@@ -1,19 +1,7 @@
-import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import type { IAuthStateProvider } from "@wha.ts/types";
 import type { ILogger } from "@wha.ts/types/transport";
 import type { ConnectionManager } from "./core/connection";
-
-type EnsureSubtype<Source, T extends Source> = T;
-
-export type PresenceState = EnsureSubtype<
-	SINGLE_BYTE_TOKENS_TYPE,
-	"available" | "unavailable"
->;
-
-export type ChatState = EnsureSubtype<
-	SINGLE_BYTE_TOKENS_TYPE,
-	"composing" | "paused"
->;
 
 export class PresenceManager {
 	constructor(
@@ -33,10 +21,7 @@ export class PresenceManager {
 		});
 	}
 
-	public async sendUpdate(
-		type: PresenceState | ChatState,
-		toJid?: string,
-	): Promise<void> {
+	public async sendUpdate(type: string, toJid?: string): Promise<void> {
 		const me = this.auth.creds.me;
 		if (!me) {
 			throw new Error(

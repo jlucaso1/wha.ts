@@ -2,7 +2,7 @@
 	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
 	"dependencies": {
 		"@wha.ts/utils": "workspace:*",
-		"fflate": "^0.8.2"
+		"whatsapp-rust-bridge": "^0.4.6"
 	},
 	"description": "Binary utilities for WhatsApp communication",
 	"exports": {

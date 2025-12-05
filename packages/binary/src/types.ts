@@ -1,4 +1,3 @@
-import type z from "zod";
-import type { BinaryNodeSchema } from "./schemas";
+import type { BinaryNode as BinaryNodeWasm } from "whatsapp-rust-bridge";
 
-export type BinaryNode = z.infer<typeof BinaryNodeSchema>;
+export type BinaryNode = BinaryNodeWasm;

@@ -1,5 +1,5 @@
 import { create, fromBinary, toBinary, toJson } from "@bufbuild/protobuf";
-import type { BinaryNode, SINGLE_BYTE_TOKENS_TYPE } from "@wha.ts/binary";
+import type { BinaryNode } from "@wha.ts/binary";
 import {
 	getBinaryNodeChild,
 	getBinaryNodeChildren,
@@ -491,10 +491,10 @@ class Authenticator extends TypedEventTarget<AuthenticatorEventMap> {
 						{
 							attrs: { "key-index": (deviceIdentity.keyIndex || 0).toString() },
 							content: accountEnc,
-							tag: "device-identity" as SINGLE_BYTE_TOKENS_TYPE,
+							tag: "device-identity",
 						},
 					],
-					tag: "pair-device-sign" as SINGLE_BYTE_TOKENS_TYPE,
+					tag: "pair-device-sign",
 				},
 			],
 			tag: "iq",
