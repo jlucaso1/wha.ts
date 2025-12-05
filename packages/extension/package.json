@@ -1,14 +1,14 @@
 {
 	"author": "João Lucas de Oliveira Lopes (jlucaso1)",
 	"dependencies": {
-		"@bufbuild/protobuf": "^2.6.2",
+		"@bufbuild/protobuf": "^2.10.1",
 		"@wha.ts/proto": "workspace:*",
 		"@wha.ts/utils": "workspace:*"
 	},
 	"description": "Browser extension for WhatsApp communication",
 	"devDependencies": {
-		"vite": "^7.0.6",
-		"vite-plugin-web-extension": "^4.4.5",
+		"vite": "^7.2.6",
+		"vite-plugin-web-extension": "^4.5.0",
 		"vite-tsconfig-paths": "^5.1.4"
 	},
 	"files": [

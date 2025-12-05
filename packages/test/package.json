@@ -1,6 +1,6 @@
 {
 	"dependencies": {
-		"@bufbuild/protobuf": "^2.2.5",
+		"@bufbuild/protobuf": "^2.10.1",
 		"@wha.ts/binary": "workspace:*",
 		"@wha.ts/core": "workspace:*",
 		"@wha.ts/proto": "workspace:*",
@@ -8,7 +8,7 @@
 		"@wha.ts/utils": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.2.19"
+		"@types/bun": "^1.3.3"
 	},
 	"name": "@wha.ts/test",
 	"scripts": {

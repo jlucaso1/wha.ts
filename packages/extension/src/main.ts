@@ -109,7 +109,9 @@ function tryDecodeWithKnownSchemas(
 	}
 	for (const schema of PROTO_SCHEMAS) {
 		try {
+			// @ts-expect-error
 			const message = fromBinary(schema, payloadBytes);
+			// @ts-expect-error
 			return { decoded: toJson(schema, message), schemaName: schema.typeName };
 		} catch {}
 	}

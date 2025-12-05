@@ -5,7 +5,7 @@ export {
 	equalBytes,
 	hexToBytes,
 	utf8ToBytes,
-} from "@noble/ciphers/utils";
+} from "@noble/ciphers/utils.js";
 
 export const bytesToBase64 = (bytes: Uint8Array): string => {
 	return btoa(String.fromCharCode(...bytes));

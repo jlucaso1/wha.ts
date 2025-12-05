@@ -1,8 +1,8 @@
-import { cbc, gcm } from "@noble/ciphers/aes";
-import { hkdf as nobleHkdf } from "@noble/hashes/hkdf";
-import { hmac as nobleHmac } from "@noble/hashes/hmac";
-import { sha256 as nobleSha256 } from "@noble/hashes/sha2";
-import { concatBytes, equalBytes } from "./bytes-utils";
+import { cbc, gcm } from "@noble/ciphers/aes.js";
+import { hkdf as nobleHkdf } from "@noble/hashes/hkdf.js";
+import { hmac as nobleHmac } from "@noble/hashes/hmac.js";
+import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
+import { concatBytes, equalBytes, utf8ToBytes } from "./bytes-utils";
 
 export function aesEncryptGCM(
 	plaintext: Uint8Array,
@@ -64,7 +64,13 @@ export function hkdf(
 	expandedLength: number,
 	info: { salt?: Uint8Array; info?: string },
 ): Uint8Array {
-	return nobleHkdf(nobleSha256, buffer, info.salt, info.info, expandedLength);
+	return nobleHkdf(
+		nobleSha256,
+		buffer,
+		info.salt,
+		info.info ? utf8ToBytes(info.info) : undefined,
+		expandedLength,
+	);
 }
 
 export function randomBytes(size: number): Uint8Array {

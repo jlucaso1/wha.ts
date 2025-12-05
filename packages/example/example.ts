@@ -9,7 +9,7 @@ import {
 	dumpDecryptionData,
 } from "@wha.ts/storage/debug-dumper";
 import type { IPlugin } from "@wha.ts/types";
-import { pino } from "pino";
+import pino from "pino";
 import { renderUnicodeCompact } from "uqr";
 
 function replacer(_key: string, value: unknown): unknown {
@@ -123,7 +123,7 @@ async function runExample() {
 	});
 
 	client.addListener("connection.update", (update) => {
-		logger.debug("[CONNECTION UPDATE]", JSON.stringify(update));
+		logger.debug(`[CONNECTION UPDATE]: ${JSON.stringify(update)}`);
 
 		const { connection, qr, isNewLogin, error } = update;
 
@@ -137,25 +137,25 @@ async function runExample() {
 
 		if (connection === "open") {
 			logger.info("✅ Connection successful!");
-			logger.info("   Your JID:", client.auth.creds.me?.id);
+			logger.info(`Your JID: ${client.auth.creds.me?.id}`);
 		}
 
 		if (isNewLogin) {
 			logger.info("✨ Pairing successful (new login)!");
 			logger.info(
-				"   Credentials saved. Waiting for server to close connection for restart...",
+				"Credentials saved. Waiting for server to close connection for restart...",
 			);
 		}
 
 		if (connection === "close") {
 			const reason = error?.message || "Unknown reason";
 
-			console.log(`❌ Connection closed. Reason: ${reason}`);
+			logger.warn(`❌ Connection closed. Reason: ${reason}`);
 		}
 	});
 
 	client.addListener("creds.update", () => {
-		logger.info("[CREDS UPDATE]", "Credentials were updated.");
+		logger.info("[CREDS UPDATE]: Credentials were updated.");
 	});
 
 	client.addListener("node.received", ({ node }) => {
@@ -200,7 +200,7 @@ async function runExample() {
 				await client.sendTextMessage(userJid, "test-reply");
 				logger.info("[Example] Sent reply successfully.");
 			} catch (error) {
-				logger.error("[Example] Failed to send reply:", error);
+				logger.error(`[Example] Failed to send reply: ${error}`);
 			}
 		}
 	});
@@ -211,7 +211,7 @@ async function runExample() {
 			"Connection process initiated. Waiting for events (QR code or login success)...",
 		);
 	} catch (error) {
-		logger.error("💥 Failed to initiate connection:", error);
+		logger.error(`💥 Failed to initiate connection: ${error}`);
 	}
 }
 

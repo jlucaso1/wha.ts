@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { fromBinary } from "@bufbuild/protobuf";
 import { jidDecode } from "@wha.ts/binary";
 import { SignalProtocolStoreAdapter } from "@wha.ts/core";
@@ -79,7 +79,7 @@ test("decrypts a message", async () => {
 	);
 });
 
-test("throws if skipped message keys storage limit is exceeded", () => {
+describe("throws if skipped message keys storage limit is exceeded", () => {
 	test("stores and consumes skipped message keys for out-of-order arrival", () => {
 		const chain = {
 			chainKey: { counter: 0, key: new Uint8Array(32) },
